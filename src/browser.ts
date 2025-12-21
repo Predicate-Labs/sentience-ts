@@ -19,8 +19,16 @@ export class SentienceBrowser {
   ) {}
 
   async start(): Promise<void> {
-    // Get extension source path
-    const repoRoot = path.resolve(__dirname, '../../..');
+    // Get extension source path (relative to project root)
+    // Handle both ts-node (src/) and compiled (dist/src/) cases
+    let repoRoot: string;
+    if (__dirname.includes('dist')) {
+      // Compiled: dist/src/ -> go up 3 levels to project root (Sentience/)
+      repoRoot = path.resolve(__dirname, '../../..');
+    } else {
+      // ts-node: src/ -> go up 2 levels to project root (Sentience/)
+      repoRoot = path.resolve(__dirname, '../..');
+    }
     const extensionSource = path.join(repoRoot, 'sentience-chrome');
 
     if (!fs.existsSync(extensionSource)) {
@@ -32,7 +40,7 @@ export class SentienceBrowser {
 
     // Create temporary extension bundle
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-ext-'));
-    this.extensionPath = tempDir;
+    this.extensionPath = tempDir; // tempDir is already a string
 
     // Copy extension files
     const filesToCopy = [
@@ -61,8 +69,8 @@ export class SentienceBrowser {
     this.browser = await chromium.launch({
       headless: this.headless,
       args: [
-        `--load-extension=${tempDir.name}`,
-        `--disable-extensions-except=${tempDir.name}`,
+        `--load-extension=${tempDir}`,
+        `--disable-extensions-except=${tempDir}`,
       ],
     });
 
@@ -74,8 +82,28 @@ export class SentienceBrowser {
     // Create page
     this.page = await this.context.newPage();
 
-    // Wait for extension
-    await this.waitForExtension();
+    // Navigate to a real page so extension can inject
+    // Extension content scripts only run on actual pages (not about:blank)
+    // Use a simple page that loads quickly
+    await this.page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
+
+    // Give extension time to initialize (WASM loading is async)
+    await this.page.waitForTimeout(1000);
+
+    // Wait for extension to load
+    if (!(await this.waitForExtension())) {
+      // Extension might need more time, try waiting a bit longer
+      await this.page.waitForTimeout(2000);
+      if (!(await this.waitForExtension())) {
+        throw new Error(
+          'Extension failed to load after navigation. Make sure:\n' +
+          '1. Extension is built (cd sentience-chrome && ./build.sh)\n' +
+          '2. All files are present (manifest.json, content.js, injected_api.js, pkg/)\n' +
+          '3. Check browser console for errors\n' +
+          `4. Extension path: ${tempDir}`
+        );
+      }
+    }
   }
 
   private copyDirectory(src: string, dest: string): void {
@@ -97,27 +125,36 @@ export class SentienceBrowser {
     }
   }
 
-  private async waitForExtension(timeout: number = 10000): Promise<boolean> {
+  private async waitForExtension(timeout: number = 15000): Promise<boolean> {
     if (!this.page) return false;
 
     const start = Date.now();
     while (Date.now() - start < timeout) {
       try {
         const result = await this.page.evaluate(() => {
-          return (
-            typeof (window as any).sentience !== 'undefined' &&
-            typeof (window as any).sentience.snapshot === 'function'
-          );
+          // Check if sentience API exists
+          if (typeof (window as any).sentience === 'undefined') {
+            return { ready: false, reason: 'window.sentience not defined' };
+          }
+          // Check if snapshot function exists
+          if (typeof (window as any).sentience.snapshot !== 'function') {
+            return { ready: false, reason: 'snapshot function not available' };
+          }
+          // Check if WASM module is loaded
+          if ((window as any).sentience_registry === undefined) {
+            return { ready: false, reason: 'registry not initialized' };
+          }
+          return { ready: true };
         });
 
-        if (result) {
+        if (result && (result as any).ready) {
           return true;
         }
       } catch (e) {
-        // Ignore errors during initialization
+        // Continue waiting on errors
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
     return false;

@@ -2,7 +2,7 @@
  * Day 3 Example: Basic snapshot functionality
  */
 
-import { SentienceBrowser, snapshot } from '../src';
+import { SentienceBrowser, snapshot } from '../src/index';
 import * as fs from 'fs';
 
 async function main() {

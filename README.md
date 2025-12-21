@@ -10,6 +10,9 @@ TypeScript SDK for Sentience AI Agent Browser Automation.
 cd sdk-ts
 npm install
 npm run build
+
+# Install Playwright browsers (required)
+npx playwright install chromium
 ```
 
 ## Quick Start
@@ -40,6 +43,29 @@ async function main() {
     await browser.close();
   }
 }
+```
+
+## Running Examples
+
+**⚠️ Important**: You cannot use `node` directly to run TypeScript files. Use one of these methods:
+
+**Option 1: Using npm scripts (recommended)**
+```bash
+npm run example:hello
+npm run example:basic
+```
+
+**Option 2: Using ts-node directly**
+```bash
+npx ts-node examples/hello.ts
+# or if ts-node is installed globally:
+ts-node examples/hello.ts
+```
+
+**Option 3: Compile then run (not recommended for examples)**
+```bash
+npm run build
+# Examples would need to be compiled separately
 ```
 
 ## Features
@@ -77,12 +103,6 @@ See `examples/` directory:
 - `basic-agent.ts` - Basic snapshot
 - `query-demo.ts` - Query engine
 - `wait-and-click.ts` - Wait and actions
-
-Run examples:
-```bash
-npm run example:hello
-npm run example:basic
-```
 
 ## Testing
 

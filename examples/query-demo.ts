@@ -2,7 +2,7 @@
  * Day 4 Example: Query engine demonstration
  */
 
-import { SentienceBrowser, snapshot, query, find } from '../src';
+import { SentienceBrowser, snapshot, query, find } from '../src/index';
 
 async function main() {
   const browser = new SentienceBrowser(undefined, false);
