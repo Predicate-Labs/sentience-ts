@@ -7,51 +7,37 @@ import { Snapshot, Element, QuerySelector, QuerySelectorObject } from './types';
 export function parseSelector(selector: string): QuerySelectorObject {
   const query: QuerySelectorObject = {};
 
-  // Split by spaces (preserve quoted strings)
-  const parts = selector.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  // Match patterns like: key=value, key~'value', key!="value"
+  // This regex matches: key, operator (=, ~, !=), and value (quoted or unquoted)
+  const pattern = /(\w+)([=~!]+)((?:'[^']+'|"[^"]+"|[^\s]+))/g;
+  let match;
 
-  for (const part of parts) {
-    // Handle negation
-    if (part.includes('!=')) {
-      const [key, value] = part.split('!=', 2);
-      const cleanKey = key.trim();
-      const cleanValue = value.trim().replace(/^["']|["']$/g, '');
+  while ((match = pattern.exec(selector)) !== null) {
+    const key = match[1];
+    const op = match[2];
+    let value = match[3];
 
-      if (cleanKey === 'role') {
-        // For negation, we'll handle in matchElement
-        (query as any).role_exclude = cleanValue;
-      } else if (cleanKey === 'clickable') {
+    // Remove quotes from value
+    value = value.replace(/^["']|["']$/g, '');
+
+    if (op === '!=') {
+      if (key === 'role') {
+        (query as any).role_exclude = value;
+      } else if (key === 'clickable') {
         query.clickable = false;
       }
-      continue;
-    }
-
-    // Handle = (exact match)
-    if (part.includes('=')) {
-      const [key, value] = part.split('=', 2);
-      const cleanKey = key.trim();
-      const cleanValue = value.trim().replace(/^["']|["']$/g, '');
-
-      if (cleanKey === 'role') {
-        query.role = cleanValue;
-      } else if (cleanKey === 'clickable') {
-        query.clickable = cleanValue.toLowerCase() === 'true';
-      } else if (cleanKey === 'name' || cleanKey === 'text') {
-        query.text = cleanValue;
+    } else if (op === '~') {
+      if (key === 'text' || key === 'name') {
+        (query as any).text_contains = value;
       }
-      continue;
-    }
-
-    // Handle ~ (contains match)
-    if (part.includes('~')) {
-      const [key, value] = part.split('~', 2);
-      const cleanKey = key.trim();
-      const cleanValue = value.trim().replace(/^["']|["']$/g, '');
-
-      if (cleanKey === 'text' || cleanKey === 'name') {
-        (query as any).text_contains = cleanValue;
+    } else if (op === '=') {
+      if (key === 'role') {
+        query.role = value;
+      } else if (key === 'clickable') {
+        query.clickable = value.toLowerCase() === 'true';
+      } else if (key === 'name' || key === 'text') {
+        query.text = value;
       }
-      continue;
     }
   }
 

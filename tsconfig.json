@@ -12,10 +12,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "types": ["node"]
+    "types": ["node", "jest"],
+    "esModuleInterop": true
   },
-  "include": ["src/**/*", "examples/**/*"],
-  "exclude": ["node_modules", "dist", "tests"],
+  "include": ["src/**/*", "examples/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"],
   "ts-node": {
     "compilerOptions": {
       "lib": ["ES2020", "DOM"]
