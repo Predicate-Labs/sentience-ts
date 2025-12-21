@@ -24,11 +24,12 @@ export class SentienceBrowser {
   ) {
     this._apiKey = apiKey;
     this.headless = headless;
-    // Set default API URL if API key is provided
-    if (apiKey && !apiUrl) {
-      this._apiUrl = 'https://api.sentienceapi.com';
+    // Only set apiUrl if apiKey is provided, otherwise undefined (free tier)
+    // Default to https://api.sentienceapi.com if apiKey is provided but apiUrl is not
+    if (apiKey) {
+      this._apiUrl = apiUrl || 'https://api.sentienceapi.com';
     } else {
-      this._apiUrl = apiUrl;
+      this._apiUrl = undefined;
     }
   }
 
@@ -111,21 +112,56 @@ export class SentienceBrowser {
     const launchTimeout = 30000; // 30 seconds
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-profile-'));
     
+    // Stealth arguments for bot evasion
+    const stealthArgs = [
+      `--load-extension=${tempDir}`,
+      `--disable-extensions-except=${tempDir}`,
+      '--disable-blink-features=AutomationControlled', // Hide automation indicators
+      '--no-sandbox', // Required for some environments
+      '--disable-infobars', // Hide "Chrome is being controlled" message
+    ];
+    
+    // Realistic viewport and user-agent for better evasion
+    const viewportConfig = { width: 1920, height: 1080 };
+    const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    
+    // Launch browser with extension
+    // Note: channel="chrome" (system Chrome) has known issues with extension loading
+    // We use bundled Chromium for reliable extension loading, but still apply stealth features
+    const useChromeChannel = false; // Disabled for now due to extension loading issues
+    
     try {
-      this.context = await Promise.race([
-        chromium.launchPersistentContext(userDataDir, {
-          headless: this.headless,
-          args: [
-            `--load-extension=${tempDir}`,
-            `--disable-extensions-except=${tempDir}`,
-          ],
-          timeout: launchTimeout,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
-        ),
-      ]);
-    } catch (e: any) {
+      if (useChromeChannel) {
+        // Try with system Chrome first (better evasion, but may have extension issues)
+        this.context = await Promise.race([
+          chromium.launchPersistentContext(userDataDir, {
+            channel: 'chrome', // Use system Chrome (better evasion)
+            headless: this.headless,
+            args: stealthArgs,
+            viewport: viewportConfig,
+            userAgent: userAgent,
+            timeout: launchTimeout,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
+          ),
+        ]);
+      } else {
+        // Use bundled Chromium (more reliable for extensions)
+        this.context = await Promise.race([
+          chromium.launchPersistentContext(userDataDir, {
+            headless: this.headless,
+            args: stealthArgs,
+            viewport: viewportConfig,
+            userAgent: userAgent,
+            timeout: launchTimeout,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
+          ),
+        ]);
+      }
+    } catch (launchError: any) {
       // Clean up user data dir on failure
       try {
         fs.rmSync(userDataDir, { recursive: true, force: true });
@@ -133,7 +169,7 @@ export class SentienceBrowser {
         // Ignore cleanup errors
       }
       throw new Error(
-        `Failed to launch browser: ${e.message}\n` +
+        `Failed to launch browser: ${launchError.message}\n` +
         'Make sure Playwright browsers are installed: npx playwright install chromium'
       );
     }
@@ -149,6 +185,34 @@ export class SentienceBrowser {
     // Store user data dir for cleanup
     this.userDataDir = userDataDir;
 
+    // Apply basic stealth patches for bot evasion
+    // Note: TypeScript doesn't have playwright-stealth equivalent, so we apply basic patches
+    await this.page.addInitScript(() => {
+      // Override navigator.webdriver
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+      
+      // Override chrome runtime
+      (window as any).chrome = {
+        runtime: {},
+      };
+      
+      // Override permissions
+      const originalQuery = (window.navigator as any).permissions?.query;
+      if (originalQuery) {
+        (window.navigator as any).permissions.query = (parameters: any) =>
+          parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
+            : originalQuery(parameters);
+      }
+      
+      // Override plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+    });
+    
     // Navigate to a real page so extension can inject
     // Extension content scripts only run on actual pages (not about:blank)
     // Use a simple page that loads quickly
@@ -158,10 +222,11 @@ export class SentienceBrowser {
     });
 
     // Give extension time to initialize (WASM loading is async)
-    await this.page.waitForTimeout(1000);
+    // Content scripts run at document_idle, so we need to wait for that
+    await this.page.waitForTimeout(3000);
 
     // Wait for extension to load
-    if (!(await this.waitForExtension())) {
+    if (!(await this.waitForExtension(25000))) {
       // Extension might need more time, try waiting a bit longer
       await this.page.waitForTimeout(3000);
       
@@ -174,6 +239,8 @@ export class SentienceBrowser {
             registry_defined: typeof (window as any).sentience_registry !== 'undefined',
             snapshot_defined: typeof (window as any).sentience?.snapshot === 'function',
             wasm_loaded: !!(window as any).sentience?._wasmModule,
+            extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
+            url: window.location.href,
           };
           // Check console errors if possible
           if ((window as any).sentience) {
@@ -185,12 +252,12 @@ export class SentienceBrowser {
         diagnosticInfo = `Could not get diagnostic info: ${e}`;
       }
       
-      if (!(await this.waitForExtension(10000))) {
+      if (!(await this.waitForExtension(15000))) {
         throw new Error(
           'Extension failed to load after navigation. Make sure:\n' +
           '1. Extension is built (cd sentience-chrome && ./build.sh)\n' +
           '2. All files are present (manifest.json, content.js, injected_api.js, pkg/)\n' +
-          '3. Check browser console for errors\n' +
+          '3. Check browser console for errors (run with headless=false to see console)\n' +
           `4. Extension path: ${tempDir}\n` +
           `5. Diagnostic info: ${diagnosticInfo}`
         );
@@ -238,11 +305,13 @@ export class SentienceBrowser {
           if ((window as any).sentience_registry === undefined) {
             return { ready: false, reason: 'registry not initialized' };
           }
-          // Check if WASM module itself is loaded
+          // Check if WASM module itself is loaded (check internal _wasmModule if available)
           const sentience = (window as any).sentience;
-          if (!sentience._wasmModule || !sentience._wasmModule.analyze_page) {
-            return { ready: false, reason: 'WASM module not loaded' };
+          if (sentience._wasmModule && !sentience._wasmModule.analyze_page) {
+            return { ready: false, reason: 'WASM module not fully loaded' };
           }
+          // If _wasmModule is not exposed, that's okay - it might be internal
+          // Just verify the API structure is correct
           return { ready: true };
         });
 

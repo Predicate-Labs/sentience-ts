@@ -8,7 +8,7 @@ import { SentienceBrowser } from '../src';
  * Creates a browser instance and starts it with better error handling
  */
 export async function createTestBrowser(headless: boolean = false): Promise<SentienceBrowser> {
-  const browser = new SentienceBrowser(undefined, headless);
+  const browser = new SentienceBrowser(undefined, undefined, headless);
   try {
     await browser.start();
     return browser;

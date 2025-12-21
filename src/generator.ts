@@ -42,7 +42,7 @@ export class ScriptGenerator {
       "import { SentienceBrowser, snapshot, find, click, typeText, press } from './src';",
       '',
       'async function main() {',
-      '  const browser = new SentienceBrowser(undefined, false);',
+      '  const browser = new SentienceBrowser(undefined, undefined, false);',
       '',
       '  try {',
       '    await browser.start();',

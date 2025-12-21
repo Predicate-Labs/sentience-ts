@@ -86,7 +86,7 @@ import { SentienceBrowser, inspect } from '../src';
 
 describe('Inspector', () => {
   it('should start and stop', async () => {
-    const browser = new SentienceBrowser(undefined, false);
+    const browser = new SentienceBrowser(undefined, undefined, false);
     await browser.start();
     
     try {
@@ -121,7 +121,7 @@ import { SentienceBrowser, record } from '../src';
 
 describe('Recorder', () => {
   it('should record click events', async () => {
-    const browser = new SentienceBrowser(undefined, false);
+    const browser = new SentienceBrowser(undefined, undefined, false);
     await browser.start();
     
     try {

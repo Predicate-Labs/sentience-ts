@@ -6,7 +6,7 @@ import { SentienceBrowser, snapshot } from '../src/index';
 import * as fs from 'fs';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, false);
+  const browser = new SentienceBrowser(undefined, undefined, false);
   
   try {
     await browser.start();
