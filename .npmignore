@@ -1,0 +1,45 @@
+# Source files
+src/
+examples/
+tests/
+*.ts
+!*.d.ts
+
+# Build artifacts (keep dist/)
+*.map
+*.js.map
+*.d.ts.map
+
+# Development files
+.git/
+.github/
+node_modules/
+*.log
+.DS_Store
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+coverage/
+.nyc_output/
+jest.config.js
+tsconfig.json
+
+# Documentation (keep README.md)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Temporary files
+*.tmp
+*.temp
+

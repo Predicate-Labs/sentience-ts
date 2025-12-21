@@ -7,6 +7,8 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test && npm run build",
     "example:hello": "ts-node examples/hello.ts",
     "example:basic": "ts-node examples/basic-agent.ts",
     "cli": "ts-node src/cli.ts"
@@ -25,5 +27,30 @@
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "spec",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "browser-automation",
+    "playwright",
+    "ai-agent",
+    "web-automation",
+    "sentience"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SentienceAPI/sentience-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SentienceAPI/sentience-ts/issues"
+  },
+  "homepage": "https://github.com/SentienceAPI/sentience-ts#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

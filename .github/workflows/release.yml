@@ -1,0 +1,85 @@
+name: Release to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        registry-url: 'https://registry.npmjs.org'
+        
+    - name: Extract version from tag or input
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${VERSION#refs/tags/}
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+        
+    - name: Update version in package.json
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        npm version $VERSION --no-git-tag-version
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+      
+    - name: Install Playwright browsers
+      run: |
+        npx playwright install chromium
+        
+    - name: Run tests
+      run: |
+        npm test
+      env:
+        CI: true
+        
+    - name: Build package
+      run: |
+        npm run build
+        
+    - name: Publish to npm
+      run: |
+        npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+    - name: Create GitHub Release
+      if: github.event_name == 'workflow_dispatch'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: Release v${{ steps.version.outputs.version }}
+        body: |
+          Release v${{ steps.version.outputs.version }} of sentience-ts
+          
+          ## Installation
+          ```bash
+          npm install sentience-ts@${{ steps.version.outputs.version }}
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
