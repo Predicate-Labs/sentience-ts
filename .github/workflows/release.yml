@@ -46,9 +46,9 @@ jobs:
         npm ci
       
     - name: Install Playwright Browsers
-      uses: microsoft/playwright-github-action@v1
-      with:
-        browsers: chromium
+      run: |
+        npx playwright install chromium
+        npx playwright install-deps chromium || true
         
     - name: Run tests
       run: |
