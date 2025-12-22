@@ -18,7 +18,8 @@ describe('read', () => {
       expect(result.format).toBe('text');
       expect(result.content).toBeDefined();
       expect(result.length).toBeGreaterThan(0);
-      expect(result.url).toBe('https://example.com');
+      // Browser may normalize URL with trailing slash
+      expect(result.url).toMatch(/^https:\/\/example\.com\/?$/);
     } finally {
       await browser.close();
     }
@@ -36,7 +37,8 @@ describe('read', () => {
       expect(result.format).toBe('markdown');
       expect(result.content).toBeDefined();
       expect(result.length).toBeGreaterThan(0);
-      expect(result.url).toBe('https://example.com');
+      // Browser may normalize URL with trailing slash
+      expect(result.url).toMatch(/^https:\/\/example\.com\/?$/);
     } finally {
       await browser.close();
     }
@@ -51,7 +53,7 @@ describe('read', () => {
       // Test with enhancement (default)
       const resultEnhanced = await read(browser, {
         format: 'markdown',
-        enhance_markdown: true,
+        enhanceMarkdown: true,
       });
 
       expect(resultEnhanced.status).toBe('success');
@@ -61,7 +63,7 @@ describe('read', () => {
       // Test without enhancement
       const resultBasic = await read(browser, {
         format: 'markdown',
-        enhance_markdown: false,
+        enhanceMarkdown: false,
       });
 
       expect(resultBasic.status).toBe('success');

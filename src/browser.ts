@@ -23,15 +23,17 @@ export class SentienceBrowser {
     headless?: boolean
   ) {
     this._apiKey = apiKey;
-    // Default to headless=True in CI (no X server), headless=False locally
+    
+    // Determine headless mode
     if (headless === undefined) {
+      // Default to true in CI, false locally
       const ci = process.env.CI?.toLowerCase();
       this.headless = ci === 'true' || ci === '1' || ci === 'yes';
     } else {
       this.headless = headless;
     }
-    // Only set apiUrl if apiKey is provided, otherwise undefined (free tier)
-    // Default to https://api.sentienceapi.com if apiKey is provided but apiUrl is not
+
+    // Configure API URL
     if (apiKey) {
       this._apiUrl = apiUrl || 'https://api.sentienceapi.com';
     } else {
@@ -40,332 +42,121 @@ export class SentienceBrowser {
   }
 
   async start(): Promise<void> {
-    // Try to find extension in multiple locations:
-    // 1. Embedded extension (src/extension/) - for production/CI
-    // 2. Development mode (../sentience-chrome/) - for local development
+    // 1. Resolve Extension Path
+    // Handle: src/extension (local dev), dist/extension (prod), or ../sentience-chrome (monorepo)
+    let extensionSource = '';
     
-    // Handle both ts-node (src/) and compiled (dist/src/) cases
-    let sdkRoot: string;
-    let repoRoot: string;
-    if (__dirname.includes('dist')) {
-      // Compiled: dist/src/ -> go up 2 levels to sdk-ts/
-      sdkRoot = path.resolve(__dirname, '../..');
-      // Go up 1 more level to project root (Sentience/)
-      repoRoot = path.resolve(sdkRoot, '..');
-    } else {
-      // ts-node: src/ -> go up 1 level to sdk-ts/
-      sdkRoot = path.resolve(__dirname, '..');
-      // Go up 1 more level to project root (Sentience/)
-      repoRoot = path.resolve(sdkRoot, '..');
-    }
-    
-    // Check for embedded extension first (production/CI)
-    const embeddedExtension = path.join(sdkRoot, 'src', 'extension');
-    
-    // Check for development extension (local development)
-    const devExtension = path.join(repoRoot, 'sentience-chrome');
-    
-    // Prefer embedded extension, fall back to dev extension
-    let extensionSource: string;
-    if (fs.existsSync(embeddedExtension) && fs.existsSync(path.join(embeddedExtension, 'manifest.json'))) {
-      extensionSource = embeddedExtension;
-    } else if (fs.existsSync(devExtension) && fs.existsSync(path.join(devExtension, 'manifest.json'))) {
-      extensionSource = devExtension;
-    } else {
-      throw new Error(
-        `Extension not found. Checked:\n` +
-        `  1. ${embeddedExtension}\n` +
-        `  2. ${devExtension}\n` +
-        'Make sure extension files are available. ' +
-        'For development: cd ../sentience-chrome && ./build.sh'
-      );
-    }
-
-    // Create temporary extension bundle
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-ext-'));
-    this.extensionPath = tempDir; // tempDir is already a string
-
-    // Copy extension files
-    const filesToCopy = [
-      'manifest.json',
-      'content.js',
-      'background.js',
-      'injected_api.js',
+    const candidates = [
+        // Production / Installed Package
+        path.resolve(__dirname, '../extension'),
+        path.resolve(__dirname, 'extension'),
+        // Local Monorepo Dev
+        path.resolve(__dirname, '../../sentience-chrome'),
+        path.resolve(__dirname, '../../../sentience-chrome'),
+        // CI Artifact
+        path.resolve(process.cwd(), 'extension')
     ];
 
-    const missingFiles: string[] = [];
-    for (const file of filesToCopy) {
-      const src = path.join(extensionSource, file);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(tempDir, file));
-      } else {
-        missingFiles.push(file);
+    for (const loc of candidates) {
+      if (fs.existsSync(path.join(loc, 'manifest.json'))) {
+        extensionSource = loc;
+        break;
       }
     }
 
-    if (missingFiles.length > 0) {
-      throw new Error(
-        `Missing required extension files: ${missingFiles.join(', ')}\n` +
-        `Extension source: ${extensionSource}`
-      );
-    }
-
-    // Copy pkg directory (WASM)
-    const pkgSource = path.join(extensionSource, 'pkg');
-    if (!fs.existsSync(pkgSource)) {
-      throw new Error(
-        `WASM package directory not found at ${pkgSource}\n` +
-        'Make sure extension files are available. ' +
-        'For development: cd ../sentience-chrome && ./build.sh'
-      );
-    }
-    
-    // Verify WASM files exist
-    const wasmJs = path.join(pkgSource, 'sentience_core.js');
-    const wasmBinary = path.join(pkgSource, 'sentience_core_bg.wasm');
-    if (!fs.existsSync(wasmJs) || !fs.existsSync(wasmBinary)) {
-      throw new Error(
-        `WASM files not found. Expected:\n` +
-        `  - ${wasmJs}\n` +
-        `  - ${wasmBinary}\n` +
-        'Make sure extension files are available. ' +
-        'For development: cd ../sentience-chrome && ./build.sh'
-      );
-    }
-    
-    const pkgDest = path.join(tempDir, 'pkg');
-    fs.mkdirSync(pkgDest, { recursive: true });
-    this.copyDirectory(pkgSource, pkgDest);
-
-    // Use launchPersistentContext for better extension support
-    // Extensions load more reliably with persistent contexts
-    const launchTimeout = 30000; // 30 seconds
-    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-profile-'));
-    
-    // Stealth arguments for bot evasion
-    const stealthArgs = [
-      `--load-extension=${tempDir}`,
-      `--disable-extensions-except=${tempDir}`,
-      '--disable-blink-features=AutomationControlled', // Hide automation indicators
-      '--no-sandbox', // Required for some environments
-      '--disable-infobars', // Hide "Chrome is being controlled" message
-    ];
-    
-    // Realistic viewport and user-agent for better evasion
-    const viewportConfig = { width: 1920, height: 1080 };
-    const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    
-    // Launch browser with extension
-    // Note: channel="chrome" (system Chrome) has known issues with extension loading
-    // We use bundled Chromium for reliable extension loading, but still apply stealth features
-    const useChromeChannel = false; // Disabled for now due to extension loading issues
-    
-    try {
-      if (useChromeChannel) {
-        // Try with system Chrome first (better evasion, but may have extension issues)
-        this.context = await Promise.race([
-          chromium.launchPersistentContext(userDataDir, {
-            channel: 'chrome', // Use system Chrome (better evasion)
-            headless: this.headless,
-            args: stealthArgs,
-            viewport: viewportConfig,
-            userAgent: userAgent,
-            timeout: launchTimeout,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
-          ),
-        ]);
-      } else {
-        // Use bundled Chromium (more reliable for extensions)
-        this.context = await Promise.race([
-          chromium.launchPersistentContext(userDataDir, {
-            headless: this.headless,
-            args: stealthArgs,
-            viewport: viewportConfig,
-            userAgent: userAgent,
-            timeout: launchTimeout,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
-          ),
-        ]);
-      }
-    } catch (launchError: any) {
-      // Clean up user data dir on failure
-      try {
-        fs.rmSync(userDataDir, { recursive: true, force: true });
-      } catch (cleanupError) {
-        // Ignore cleanup errors
-      }
-      throw new Error(
-        `Failed to launch browser: ${launchError.message}\n` +
-        'Make sure Playwright browsers are installed: npx playwright install chromium'
-      );
-    }
-
-    // Get first page or create new one
-    const pages = this.context.pages();
-    if (pages.length > 0) {
-      this.page = pages[0];
-    } else {
-      this.page = await this.context.newPage();
-    }
-    
-    // Store user data dir for cleanup
-    this.userDataDir = userDataDir;
-
-    // Apply basic stealth patches for bot evasion
-    // Note: TypeScript doesn't have playwright-stealth equivalent, so we apply basic patches
-    await this.page.addInitScript(() => {
-      // Override navigator.webdriver
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-      
-      // Override chrome runtime
-      (window as any).chrome = {
-        runtime: {},
-      };
-      
-      // Override permissions
-      const originalQuery = (window.navigator as any).permissions?.query;
-      if (originalQuery) {
-        (window.navigator as any).permissions.query = (parameters: any) =>
-          parameters.name === 'notifications'
-            ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
-            : originalQuery(parameters);
-      }
-      
-      // Override plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      });
-    });
-    
-    // Navigate to a real page so extension can inject
-    // Extension content scripts only run on actual pages (not about:blank)
-    // Use a simple page that loads quickly
-    await this.page.goto('https://example.com', {
-      waitUntil: 'domcontentloaded',
-      timeout: 15000, // 15 second timeout for navigation
-    });
-
-    // Give extension time to initialize (WASM loading is async)
-    // Content scripts run at document_idle, so we need to wait for that
-    await this.page.waitForTimeout(3000);
-
-    // Wait for extension to load
-    if (!(await this.waitForExtension(25000))) {
-      // Extension might need more time, try waiting a bit longer
-      await this.page.waitForTimeout(3000);
-      
-      // Try to get more diagnostic info
-      let diagnosticInfo = '';
-      try {
-        diagnosticInfo = await this.page.evaluate(() => {
-          const info: any = {
-            sentience_defined: typeof (window as any).sentience !== 'undefined',
-            registry_defined: typeof (window as any).sentience_registry !== 'undefined',
-            snapshot_defined: typeof (window as any).sentience?.snapshot === 'function',
-            wasm_loaded: !!(window as any).sentience?._wasmModule,
-            extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
-            url: window.location.href,
-          };
-          // Check console errors if possible
-          if ((window as any).sentience) {
-            info.sentience_keys = Object.keys((window as any).sentience);
-          }
-          return JSON.stringify(info, null, 2);
-        });
-      } catch (e) {
-        diagnosticInfo = `Could not get diagnostic info: ${e}`;
-      }
-      
-      if (!(await this.waitForExtension(15000))) {
+    if (!extensionSource) {
         throw new Error(
-          'Extension failed to load after navigation. Make sure:\n' +
-          '1. Extension is built (cd sentience-chrome && ./build.sh)\n' +
-          '2. All files are present (manifest.json, content.js, injected_api.js, pkg/)\n' +
-          '3. Check browser console for errors (run with headless=false to see console)\n' +
-          `4. Extension path: ${tempDir}\n` +
-          `5. Diagnostic info: ${diagnosticInfo}`
+            `Sentience extension not found. Checked:\n${candidates.map(c => `- ${c}`).join('\n')}\n` +
+            'Ensure the extension is built/downloaded.'
         );
-      }
+    }
+
+    // 2. Setup Temp Profile (Avoids locking issues)
+    this.userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-ts-'));
+    this.extensionPath = path.join(this.userDataDir, 'extension');
+    
+    // Copy extension to temp dir
+    this._copyRecursive(extensionSource, this.extensionPath);
+
+    // 3. Build Args
+    const args = [
+      `--disable-extensions-except=${this.extensionPath}`,
+      `--load-extension=${this.extensionPath}`,
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+      '--disable-infobars',
+    ];
+
+    // CRITICAL: Headless Extensions Support
+    // headless: true -> NO extensions.
+    // headless: false + args: '--headless=new' -> YES extensions.
+    if (this.headless) {
+        args.push('--headless=new');
+    }
+
+    // 4. Launch Browser
+    this.context = await chromium.launchPersistentContext(this.userDataDir, {
+      headless: false, // Must be false here, handled via args above
+      args: args,
+      viewport: { width: 1920, height: 1080 },
+      // Clean User-Agent to avoid "HeadlessChrome" detection
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    });
+
+    this.page = this.context.pages()[0] || await this.context.newPage();
+
+    // 5. Apply Stealth (Basic)
+    await this.page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
+    
+    // Inject API Key if present
+    if (this._apiKey) {
+        await this.page.addInitScript((key) => {
+            (window as any).__SENTIENCE_API_KEY__ = key;
+        }, this._apiKey);
+    }
+
+    // Wait for extension background pages to spin up
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  async goto(url: string): Promise<void> {
+    const page = this.getPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    
+    if (!(await this.waitForExtension(15000))) {
+       // Gather Debug Info
+       const diag = await page.evaluate(() => ({
+         sentience_global: typeof (window as any).sentience !== 'undefined',
+         wasm_ready: (window as any).sentience && (window as any).sentience._wasmModule !== null,
+         ext_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
+         url: window.location.href
+       })).catch(e => ({ error: String(e) }));
+
+       throw new Error(
+        'Extension failed to load after navigation.\n' +
+        `Path: ${this.extensionPath}\n` +
+        `Diagnostics: ${JSON.stringify(diag, null, 2)}`
+      );
     }
   }
 
-  private copyDirectory(src: string, dest: string): void {
-    if (!fs.existsSync(dest)) {
-      fs.mkdirSync(dest, { recursive: true });
-    }
-
-    const entries = fs.readdirSync(src, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const srcPath = path.join(src, entry.name);
-      const destPath = path.join(dest, entry.name);
-
-      if (entry.isDirectory()) {
-        this.copyDirectory(srcPath, destPath);
-      } else {
-        fs.copyFileSync(srcPath, destPath);
-      }
-    }
-  }
-
-  private async waitForExtension(timeout: number = 20000): Promise<boolean> {
-    if (!this.page) return false;
-
+  private async waitForExtension(timeoutMs: number): Promise<boolean> {
     const start = Date.now();
-    let lastError: string | null = null;
-    
-    while (Date.now() - start < timeout) {
+    while (Date.now() - start < timeoutMs) {
       try {
-        const result = await this.page.evaluate(() => {
-          // Check if sentience API exists
-          if (typeof (window as any).sentience === 'undefined') {
-            return { ready: false, reason: 'window.sentience not defined' };
-          }
-          // Check if snapshot function exists
-          if (typeof (window as any).sentience.snapshot !== 'function') {
-            return { ready: false, reason: 'snapshot function not available' };
-          }
-          // Check if WASM module is loaded
-          if ((window as any).sentience_registry === undefined) {
-            return { ready: false, reason: 'registry not initialized' };
-          }
-          // Check if WASM module itself is loaded (check internal _wasmModule if available)
-          const sentience = (window as any).sentience;
-          if (sentience._wasmModule && !sentience._wasmModule.analyze_page) {
-            return { ready: false, reason: 'WASM module not fully loaded' };
-          }
-          // If _wasmModule is not exposed, that's okay - it might be internal
-          // Just verify the API structure is correct
-          return { ready: true };
+        const ready = await this.page!.evaluate(() => {
+          // Check for API AND Wasm Module (set by injected_api.js)
+          const s = (window as any).sentience;
+          return s && s._wasmModule !== null; // Strict check for null (it's initialized as null)
         });
-
-        if (result && (result as any).ready) {
-          return true;
-        }
-        
-        // Track the last error for debugging
-        if (result && (result as any).reason) {
-          lastError = (result as any).reason;
-        }
-      } catch (e: any) {
-        lastError = `Evaluation error: ${e.message}`;
-        // Continue waiting on errors
+        if (ready) return true;
+      } catch (e) {
+        // Context invalid errors expected during navigation
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise(r => setTimeout(r, 100));
     }
-
-    // Log the last error for debugging
-    if (lastError) {
-      console.warn(`Extension wait timeout. Last status: ${lastError}`);
-    }
-    
     return false;
   }
 
@@ -374,6 +165,18 @@ export class SentienceBrowser {
       throw new Error('Browser not started. Call start() first.');
     }
     return this.page;
+  }
+
+  // Helper for recursive copy (fs.cp is Node 16.7+)
+  private _copyRecursive(src: string, dest: string) {
+    if (fs.statSync(src).isDirectory()) {
+      if (!fs.existsSync(dest)) fs.mkdirSync(dest);
+      fs.readdirSync(src).forEach(child => {
+        this._copyRecursive(path.join(src, child), path.join(dest, child));
+      });
+    } else {
+      fs.copyFileSync(src, dest);
+    }
   }
 
   // Expose API configuration (read-only)
@@ -430,8 +233,5 @@ export class SentienceBrowser {
       }
       this.userDataDir = null;
     }
-    
-    this.page = null;
   }
 }
-
