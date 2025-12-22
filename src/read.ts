@@ -7,6 +7,7 @@ import TurndownService from 'turndown';
 
 export interface ReadOptions {
   format?: 'raw' | 'text' | 'markdown';
+  enhanceMarkdown?: boolean;
 }
 
 export interface ReadResult {
@@ -46,69 +47,64 @@ export async function read(
 ): Promise<ReadResult> {
   const page = browser.getPage();
   const format = options.format || 'raw'; // Default to 'raw' for Turndown compatibility
+  const enhanceMarkdown = options.enhanceMarkdown !== false; // Default to true
 
-  // For markdown format, get raw HTML first, then convert with Turndown
-  if (format === 'markdown') {
-    // Get raw HTML from extension
-    const rawResult = (await page.evaluate(
+  if (format === 'markdown' && enhanceMarkdown) {
+    // Get raw HTML from the extension first
+    const rawHtmlResult = (await page.evaluate(
       (opts) => {
         return (window as any).sentience.read(opts);
       },
       { format: 'raw' }
     )) as ReadResult;
 
-    if (rawResult.status !== 'success') {
-      return rawResult;
+    if (rawHtmlResult.status === 'success') {
+      const htmlContent = rawHtmlResult.content;
+      try {
+        const turndownService = new TurndownService({
+          headingStyle: 'atx',
+          hr: '---',
+          bulletListMarker: '-',
+          codeBlockStyle: 'fenced',
+          emDelimiter: '*',
+        });
+
+        // Add custom rules for better markdown
+        turndownService.addRule('strikethrough', {
+          filter: (node) => ['s', 'del', 'strike'].includes(node.nodeName.toLowerCase()),
+          replacement: function (content) {
+            return '~~' + content + '~~';
+          },
+        });
+
+        // Optionally strip certain tags entirely
+        turndownService.remove(['script', 'style', 'noscript', 'iframe'] as any);
+
+        const markdownContent = turndownService.turndown(htmlContent);
+        return {
+          status: 'success',
+          url: rawHtmlResult.url,
+          format: 'markdown',
+          content: markdownContent,
+          length: markdownContent.length,
+        };
+      } catch (e: any) {
+        console.warn(`Turndown conversion failed: ${e.message}, falling back to extension's markdown.`);
+        // Fallback to extension's markdown if Turndown fails
+      }
+    } else {
+      console.warn(`Failed to get raw HTML from extension: ${rawHtmlResult.error}, falling back to extension's markdown.`);
+      // Fallback to extension's markdown if getting raw HTML fails
     }
-
-    // Convert to markdown using Turndown
-    try {
-      const turndownService = new TurndownService({
-        headingStyle: 'atx', // Use # for headings
-        bulletListMarker: '-', // Use - for lists
-        codeBlockStyle: 'fenced', // Use ``` for code blocks
-      });
-
-      // Add custom rules for better conversion
-      turndownService.addRule('strikethrough', {
-        filter: ['del', 's', 'strike'] as any,
-        replacement: (content: string) => `~~${content}~~`,
-      });
-
-      // Strip unwanted tags
-      turndownService.remove(['script', 'style', 'nav', 'footer', 'header', 'noscript']);
-
-      const htmlContent = rawResult.content;
-      const markdownContent = turndownService.turndown(htmlContent);
-
-      // Return result with markdown content
-      return {
-        status: 'success',
-        url: rawResult.url,
-        format: 'markdown',
-        content: markdownContent,
-        length: markdownContent.length,
-      };
-    } catch (e) {
-      // If conversion fails, return error
-      return {
-        status: 'error',
-        url: rawResult.url,
-        format: 'markdown',
-        content: '',
-        length: 0,
-        error: `Markdown conversion failed: ${e}`,
-      };
-    }
-  } else {
-    // For "raw" or "text", call extension directly
-    const result = (await page.evaluate(
-      (opts) => {
-        return (window as any).sentience.read(opts);
-      },
-      { format }
-    )) as ReadResult;
-
-    return result;
   }
+
+  // If not enhanced markdown, or fallback, call extension with requested format
+  const result = (await page.evaluate(
+    (opts) => {
+      return (window as any).sentience.read(opts);
+    },
+    { format }
+  )) as ReadResult;
+
+  return result;
 }
