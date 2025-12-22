@@ -16,7 +16,7 @@
     "esModuleInterop": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "examples", "tests"],
+  "exclude": ["node_modules", "dist", "examples", "tests", "src/extension"],
   "ts-node": {
     "compilerOptions": {
       "lib": ["ES2020", "DOM"]
