@@ -62,14 +62,27 @@ jobs:
         mkdir -p extension-temp
         cd extension-temp
         
-        # Download each file from release
+        # Download individual files from release (reliable method)
+        echo "📁 Downloading individual files from release..."
         curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
           "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-          jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | .browser_download_url' | \
-          while read url; do
-            filename=$(basename "$url")
-            curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$filename"
+          jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | "\(.browser_download_url)|\(.name)"' | \
+          while IFS='|' read -r url name; do
+            if [ -n "$url" ] && [ "$url" != "null" ] && [ -n "$name" ]; then
+              # Preserve directory structure from asset name
+              # If name contains '/', create directories
+              dir=$(dirname "$name")
+              if [ "$dir" != "." ]; then
+                mkdir -p "$dir"
+              fi
+              echo "  Downloading $name..."
+              curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$name"
+            fi
           done
+        
+        # Verify downloaded files
+        echo "📋 Downloaded files:"
+        ls -la
         
     - name: Copy extension files
       if: steps.release.outputs.skip != 'true'
@@ -77,16 +90,63 @@ jobs:
         # Create extension directory structure
         mkdir -p src/extension/pkg
         
-        # Copy extension files
-        cp extension-temp/manifest.json src/extension/ 2>/dev/null || echo "manifest.json not found in release"
-        cp extension-temp/content.js src/extension/ 2>/dev/null || echo "content.js not found in release"
-        cp extension-temp/background.js src/extension/ 2>/dev/null || echo "background.js not found in release"
-        cp extension-temp/injected_api.js src/extension/ 2>/dev/null || echo "injected_api.js not found in release"
+        # Copy extension files (handle both root and extension-package/ subdirectory)
+        # Check root first, then extension-package/ subdirectory
+        if [ -f "extension-temp/manifest.json" ]; then
+          cp extension-temp/manifest.json src/extension/
+        elif [ -f "extension-temp/extension-package/manifest.json" ]; then
+          cp extension-temp/extension-package/manifest.json src/extension/
+        else
+          echo "⚠️ manifest.json not found"
+        fi
         
-        # Copy WASM files
-        cp extension-temp/pkg/sentience_core.js src/extension/pkg/ 2>/dev/null || echo "sentience_core.js not found"
-        cp extension-temp/pkg/sentience_core_bg.wasm src/extension/pkg/ 2>/dev/null || echo "sentience_core_bg.wasm not found"
-        cp extension-temp/pkg/*.d.ts src/extension/pkg/ 2>/dev/null || echo "Type definitions not found"
+        if [ -f "extension-temp/content.js" ]; then
+          cp extension-temp/content.js src/extension/
+        elif [ -f "extension-temp/extension-package/content.js" ]; then
+          cp extension-temp/extension-package/content.js src/extension/
+        else
+          echo "⚠️ content.js not found"
+        fi
+        
+        if [ -f "extension-temp/background.js" ]; then
+          cp extension-temp/background.js src/extension/
+        elif [ -f "extension-temp/extension-package/background.js" ]; then
+          cp extension-temp/extension-package/background.js src/extension/
+        else
+          echo "⚠️ background.js not found"
+        fi
+        
+        if [ -f "extension-temp/injected_api.js" ]; then
+          cp extension-temp/injected_api.js src/extension/
+        elif [ -f "extension-temp/extension-package/injected_api.js" ]; then
+          cp extension-temp/extension-package/injected_api.js src/extension/
+        else
+          echo "⚠️ injected_api.js not found"
+        fi
+        
+        # Copy WASM files (check both locations)
+        if [ -f "extension-temp/pkg/sentience_core.js" ]; then
+          cp extension-temp/pkg/sentience_core.js src/extension/pkg/
+        elif [ -f "extension-temp/extension-package/pkg/sentience_core.js" ]; then
+          cp extension-temp/extension-package/pkg/sentience_core.js src/extension/pkg/
+        else
+          echo "⚠️ sentience_core.js not found"
+        fi
+        
+        if [ -f "extension-temp/pkg/sentience_core_bg.wasm" ]; then
+          cp extension-temp/pkg/sentience_core_bg.wasm src/extension/pkg/
+        elif [ -f "extension-temp/extension-package/pkg/sentience_core_bg.wasm" ]; then
+          cp extension-temp/extension-package/pkg/sentience_core_bg.wasm src/extension/pkg/
+        else
+          echo "⚠️ sentience_core_bg.wasm not found"
+        fi
+        
+        # Copy TypeScript definitions
+        if [ -d "extension-temp/pkg" ]; then
+          cp extension-temp/pkg/*.d.ts src/extension/pkg/ 2>/dev/null || echo "⚠️ Type definitions not found"
+        elif [ -d "extension-temp/extension-package/pkg" ]; then
+          cp extension-temp/extension-package/pkg/*.d.ts src/extension/pkg/ 2>/dev/null || echo "⚠️ Type definitions not found"
+        fi
         
     - name: Check for changes
       if: steps.release.outputs.skip != 'true'
