@@ -195,6 +195,7 @@ const firstRow = query(snap, 'bbox.y<600');
 
 ### Actions - Interact with Elements
 - **`click(browser, elementId)`** - Click element by ID
+- **`clickRect(browser, rect)`** - Click at center of rectangle (coordinate-based)
 - **`typeText(browser, elementId, text)`** - Type into input fields
 - **`press(browser, key)`** - Press keyboard keys (Enter, Escape, Tab, etc.)
 
@@ -209,17 +210,54 @@ console.log(`Duration: ${result.duration_ms}ms`);
 console.log(`URL changed: ${result.url_changed}`);
 ```
 
+**Coordinate-based clicking:**
+```typescript
+import { clickRect } from './src';
+
+// Click at center of rectangle (x, y, width, height)
+await clickRect(browser, { x: 100, y: 200, w: 50, h: 30 });
+
+// With visual highlight (default: red border for 2 seconds)
+await clickRect(browser, { x: 100, y: 200, w: 50, h: 30 }, true, 2.0);
+
+// Using element's bounding box
+const snap = await snapshot(browser);
+const element = find(snap, 'role=button');
+if (element) {
+  await clickRect(browser, {
+    x: element.bbox.x,
+    y: element.bbox.y,
+    w: element.bbox.width,
+    h: element.bbox.height
+  });
+}
+```
+
 ### Wait & Assertions
-- **`waitFor(browser, selector, timeout?)`** - Wait for element to appear
+- **`waitFor(browser, selector, timeout?, interval?, useApi?)`** - Wait for element to appear
 - **`expect(browser, selector)`** - Assertion helper with fluent API
 
 **Examples:**
 ```typescript
-// Wait for element
+// Wait for element (auto-detects optimal interval based on API usage)
 const result = await waitFor(browser, 'role=button text="Submit"', 10000);
 if (result.found) {
   console.log(`Found after ${result.duration_ms}ms`);
 }
+
+// Use local extension with fast polling (250ms interval)
+const result = await waitFor(browser, 'role=button', 5000, undefined, false);
+
+// Use remote API with network-friendly polling (1500ms interval)
+const result = await waitFor(browser, 'role=button', 5000, undefined, true);
+
+// Custom interval override
+const result = await waitFor(browser, 'role=button', 5000, 500, false);
+
+// Semantic wait conditions
+await waitFor(browser, 'clickable=true', 5000);  // Wait for clickable element
+await waitFor(browser, 'importance>100', 5000);  // Wait for important element
+await waitFor(browser, 'role=link visible=true', 5000);  // Wait for visible link
 
 // Assertions
 await expect(browser, 'role=button text="Submit"').toExist(5000);
