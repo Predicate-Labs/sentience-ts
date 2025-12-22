@@ -15,7 +15,6 @@ export class SentienceBrowser {
   private userDataDir: string | null = null;
   private _apiKey?: string;
   private _apiUrl?: string;
-  private headless: boolean;
 
   constructor(
     apiKey?: string,
@@ -23,12 +22,11 @@ export class SentienceBrowser {
     headless?: boolean
   ) {
     this._apiKey = apiKey;
-    // Default to headless=True in CI (no X server), headless=False locally
-    if (headless === undefined) {
-      const ci = process.env.CI?.toLowerCase();
-      this.headless = ci === 'true' || ci === '1' || ci === 'yes';
-    } else {
-      this.headless = headless;
+    // Note: headless parameter is accepted but ignored for extensions
+    // Extensions REQUIRE --headless=new mode which is set in browser args
+    // We keep the parameter for API compatibility
+    if (headless !== undefined) {
+      console.log('[Sentience] Note: headless parameter ignored for extensions (using --headless=new)');
     }
     // Only set apiUrl if apiKey is provided, otherwise undefined (free tier)
     // Default to https://api.sentienceapi.com if apiKey is provided but apiUrl is not
@@ -141,56 +139,39 @@ export class SentienceBrowser {
     // Extensions load more reliably with persistent contexts
     const launchTimeout = 30000; // 30 seconds
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-profile-'));
-    
+    this.userDataDir = userDataDir;
+
     // Stealth arguments for bot evasion
+    // IMPORTANT: Always use --headless=new for extensions (required even when headless=false in config)
     const stealthArgs = [
       `--load-extension=${tempDir}`,
       `--disable-extensions-except=${tempDir}`,
+      '--headless=new', // Required for extensions to work
       '--disable-blink-features=AutomationControlled', // Hide automation indicators
       '--no-sandbox', // Required for some environments
       '--disable-infobars', // Hide "Chrome is being controlled" message
     ];
-    
+
     // Realistic viewport and user-agent for better evasion
     const viewportConfig = { width: 1920, height: 1080 };
     const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    
+
     // Launch browser with extension
-    // Note: channel="chrome" (system Chrome) has known issues with extension loading
-    // We use bundled Chromium for reliable extension loading, but still apply stealth features
-    const useChromeChannel = false; // Disabled for now due to extension loading issues
-    
+    // Note: We use bundled Chromium for reliable extension loading
+    // headless: false in config, but --headless=new in args ensures extension compatibility
     try {
-      if (useChromeChannel) {
-        // Try with system Chrome first (better evasion, but may have extension issues)
-        this.context = await Promise.race([
-          chromium.launchPersistentContext(userDataDir, {
-            channel: 'chrome', // Use system Chrome (better evasion)
-            headless: this.headless,
-            args: stealthArgs,
-            viewport: viewportConfig,
-            userAgent: userAgent,
-            timeout: launchTimeout,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
-          ),
-        ]);
-      } else {
-        // Use bundled Chromium (more reliable for extensions)
-        this.context = await Promise.race([
-          chromium.launchPersistentContext(userDataDir, {
-            headless: this.headless,
-            args: stealthArgs,
-            viewport: viewportConfig,
-            userAgent: userAgent,
-            timeout: launchTimeout,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
-          ),
-        ]);
-      }
+      this.context = await Promise.race([
+        chromium.launchPersistentContext(userDataDir, {
+          headless: false, // Must be false for extensions, but we pass --headless=new in args
+          args: stealthArgs,
+          viewport: viewportConfig,
+          userAgent: userAgent,
+          timeout: launchTimeout,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Browser launch timed out after ${launchTimeout}ms. Make sure Playwright browsers are installed: npx playwright install chromium`)), launchTimeout)
+        ),
+      ]);
     } catch (launchError: any) {
       // Clean up user data dir on failure
       try {
@@ -319,7 +300,7 @@ export class SentienceBrowser {
 
     const start = Date.now();
     let lastError: string | null = null;
-    
+
     while (Date.now() - start < timeout) {
       try {
         const result = await this.page.evaluate(() => {
@@ -335,20 +316,26 @@ export class SentienceBrowser {
           if ((window as any).sentience_registry === undefined) {
             return { ready: false, reason: 'registry not initialized' };
           }
-          // Check if WASM module itself is loaded (check internal _wasmModule if available)
+          // IMPORTANT: Check if WASM module is actually loaded (not null)
           const sentience = (window as any).sentience;
-          if (sentience._wasmModule && !sentience._wasmModule.analyze_page) {
-            return { ready: false, reason: 'WASM module not fully loaded' };
+          if (sentience._wasmModule === null) {
+            return { ready: false, reason: 'WASM module is null (still loading)' };
           }
-          // If _wasmModule is not exposed, that's okay - it might be internal
-          // Just verify the API structure is correct
+          if (sentience._wasmModule === undefined) {
+            return { ready: false, reason: 'WASM module not initialized' };
+          }
+          // Verify WASM module has required function
+          if (sentience._wasmModule && !sentience._wasmModule.analyze_page) {
+            return { ready: false, reason: 'WASM module missing analyze_page function' };
+          }
+          // Everything is ready
           return { ready: true };
         });
 
         if (result && (result as any).ready) {
           return true;
         }
-        
+
         // Track the last error for debugging
         if (result && (result as any).reason) {
           lastError = (result as any).reason;
@@ -365,7 +352,7 @@ export class SentienceBrowser {
     if (lastError) {
       console.warn(`Extension wait timeout. Last status: ${lastError}`);
     }
-    
+
     return false;
   }
 
