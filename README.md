@@ -78,6 +78,14 @@ npm run build
 - `snapshot(browser, options)` - Capture page state
 - TypeScript types for type safety
 
+### Content Reading & Screenshots
+- `read(browser, options)` - Read page content as text or markdown
+  - Enhanced markdown conversion using `turndown` (better than extension's lightweight conversion)
+  - Supports `enhance_markdown` option to use improved conversion
+- `screenshot(browser, options)` - Capture standalone screenshot
+  - Returns base64-encoded data URL
+  - Supports PNG and JPEG formats with quality control
+
 ### Day 4: Query Engine
 - `query(snapshot, selector)` - Find elements matching selector
 - `find(snapshot, selector)` - Find single best match
@@ -104,6 +112,50 @@ See `examples/` directory:
 - `basic-agent.ts` - Basic snapshot
 - `query-demo.ts` - Query engine
 - `wait-and-click.ts` - Wait and actions
+
+### Content Reading Example
+
+```typescript
+import { SentienceBrowser, read } from './src';
+
+const browser = new SentienceBrowser();
+await browser.start();
+
+await browser.getPage().goto('https://example.com');
+await browser.getPage().waitForLoadState('networkidle');
+
+// Read as enhanced markdown (better quality)
+const result = await read(browser, { 
+  format: 'markdown', 
+  enhance_markdown: true 
+});
+console.log(result.content);  // High-quality markdown
+
+await browser.close();
+```
+
+### Screenshot Example
+
+```typescript
+import { SentienceBrowser, screenshot } from './src';
+import { writeFileSync } from 'fs';
+
+const browser = new SentienceBrowser();
+await browser.start();
+
+await browser.getPage().goto('https://example.com');
+await browser.getPage().waitForLoadState('networkidle');
+
+// Capture PNG screenshot
+const dataUrl = await screenshot(browser, { format: 'png' });
+
+// Save to file
+const base64Data = dataUrl.split(',')[1];
+const imageData = Buffer.from(base64Data, 'base64');
+writeFileSync('screenshot.png', imageData);
+
+await browser.close();
+```
 
 ## Testing
 
