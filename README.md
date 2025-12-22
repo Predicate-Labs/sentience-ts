@@ -82,6 +82,7 @@ npm run build
 - `query(snapshot, selector)` - Find elements matching selector
 - `find(snapshot, selector)` - Find single best match
 - String DSL: `"role=button text~'Sign in'"`
+- **📖 [Complete DSL Query Guide](docs/QUERY_DSL.md)** - Comprehensive documentation with all operators, fields, and examples
 
 ### Day 5: Actions
 - `click(browser, elementId)` - Click element
@@ -112,5 +113,6 @@ npm test
 
 ## Documentation
 
+- **📖 [Query DSL Guide](docs/QUERY_DSL.md)** - Complete guide to the semantic query language
 - API Contract: `../spec/SNAPSHOT_V1.md`
 - Type Definitions: `../spec/sdk-types.md`
