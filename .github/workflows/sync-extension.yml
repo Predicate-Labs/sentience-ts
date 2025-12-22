@@ -75,11 +75,19 @@ jobs:
           jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | "\(.browser_download_url)|\(.name)"' | \
           while IFS='|' read -r url name; do
             if [ -n "$url" ] && [ "$url" != "null" ] && [ -n "$name" ]; then
-              # Handle asset names that might have paths like "pkg/sentience_core.js"
+              # Handle asset names that might have paths like "pkg/sentience_core.js" or "extension-package/manifest.json"
               # GitHub releases might preserve directory structure in asset names
-              # If name starts with "pkg/", we want to preserve that structure
-              # If name is just a filename, put it at root
-              if [[ "$name" == pkg/* ]]; then
+              # Strip "extension-package/" prefix if present, as we'll handle it in copy step
+              if [[ "$name" == extension-package/* ]]; then
+                # Asset name is "extension-package/manifest.json" - strip prefix
+                filename="${name#extension-package/}"
+                dir=$(dirname "$filename")
+                if [ "$dir" != "." ]; then
+                  mkdir -p "$dir"
+                fi
+                echo "  Downloading $name -> $filename"
+                curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$filename"
+              elif [[ "$name" == pkg/* ]]; then
                 # Asset name is "pkg/sentience_core.js" - create pkg directory
                 mkdir -p pkg
                 filename=$(basename "$name")
