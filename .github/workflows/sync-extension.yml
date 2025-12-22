@@ -44,7 +44,7 @@ jobs:
           TAG=$(curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
             "https://api.github.com/repos/${{ secrets.SENTIENCE_CHROME_REPO }}/releases/latest" | jq -r '.tag_name // empty')
           
-          # Check if we already processed this tag (check if branch exists)
+          # Check if we already processed this tag
           if git ls-remote --exit-code --heads origin "sync-extension-$TAG"; then
             echo "Branch for $TAG already exists, skipping."
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -70,19 +70,26 @@ jobs:
         mkdir -p extension-temp
         cd extension-temp
         
-        echo "⬇️ Fetching release assets for $TAG from $REPO..."
+        echo "⬇️ Fetching release info for $TAG from $REPO..."
         
-        # 1. Get the URL for 'extension-files.tar.gz' specifically
-        # We query the release assets API and filter by name
-        ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
-          "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-          jq -r '.assets[] | select(.name == "extension-files.tar.gz") | .browser_download_url')
+        # Capture response to file for debugging
+        curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
+          "https://api.github.com/repos/$REPO/releases/tags/$TAG" > release.json
+          
+        # Check if we got a valid release object
+        if grep -q "Not Found" release.json; then
+          echo "❌ Critical Error: Release tag $TAG not found in repo $REPO"
+          cat release.json
+          exit 1
+        fi
+
+        # Robust extraction
+        ASSET_URL=$(cat release.json | jq -r '.assets[]? | select(.name == "extension-files.tar.gz") | .browser_download_url')
           
         if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" == "null" ]; then
           echo "❌ Critical Error: extension-files.tar.gz not found in release assets!"
-          echo "Debug: Listing available assets..."
-          curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
-            "https://api.github.com/repos/$REPO/releases/tags/$TAG" | jq -r '.assets[].name'
+          echo "Available assets:"
+          cat release.json | jq -r '.assets[].name' || echo "No assets found or invalid JSON"
           exit 1
         fi
 
@@ -137,7 +144,6 @@ jobs:
       run: |
         git add sentience-chrome/
         
-        # Check if anything actually changed
         if git diff --staged --quiet; then
           echo "No changes detected."
           echo "changed=false" >> $GITHUB_OUTPUT
@@ -145,7 +151,7 @@ jobs:
           echo "Changes detected."
           echo "changed=true" >> $GITHUB_OUTPUT
           
-          # Show staged files to verify binary files are included
+          # Show staged files
           echo "📊 Staged file sizes:"
           git diff --staged --name-only | while read file; do
             if [ -f "$file" ]; then
@@ -159,7 +165,6 @@ jobs:
       if: steps.release.outputs.skip != 'true' && steps.changes.outputs.changed == 'true'
       uses: peter-evans/create-pull-request@v5
       with:
-        # Use PR_TOKEN if available, otherwise GITHUB_TOKEN
         token: ${{ secrets.PR_TOKEN || secrets.GITHUB_TOKEN }}
         commit-message: "chore: sync extension files from sentience-chrome ${{ steps.release.outputs.tag }}"
         title: "Sync Extension: ${{ steps.release.outputs.tag }}"
