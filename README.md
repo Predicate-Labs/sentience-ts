@@ -97,6 +97,28 @@ npm run build
   - `.toHaveText(text)`
   - `.toHaveCount(n)`
 
+### Content Reading
+- `read(browser, options)` - Read page content
+  - **Default format: `"raw"`** - Returns HTML suitable for Turndown
+  - `format: "raw"` - Get cleaned HTML
+  - `format: "markdown"` - Get high-quality markdown (uses Turndown internally)
+  - `format: "text"` - Get plain text
+  
+  **Examples:**
+  ```typescript
+  import { read } from './src';
+  
+  // Get raw HTML (default)
+  const result = await read(browser);
+  const html = result.content;
+  
+  // Get high-quality markdown (uses Turndown automatically)
+  const result = await read(browser, { format: 'markdown' });
+  const markdown = result.content;
+  ```
+  
+  See `examples/read-markdown.ts` for complete examples.
+
 ## Examples
 
 See `examples/` directory:
@@ -104,6 +126,7 @@ See `examples/` directory:
 - `basic-agent.ts` - Basic snapshot
 - `query-demo.ts` - Query engine
 - `wait-and-click.ts` - Wait and actions
+- `read-markdown.ts` - Reading page content and converting to markdown
 
 ## Testing
 

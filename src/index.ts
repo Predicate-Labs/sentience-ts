@@ -11,5 +11,6 @@ export { expect, Expectation } from './expect';
 export { Inspector, inspect } from './inspector';
 export { Recorder, Trace, TraceStep, record } from './recorder';
 export { ScriptGenerator, generate } from './generator';
+export { read, ReadOptions, ReadResult } from './read';
 export * from './types';
 
