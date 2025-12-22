@@ -1,12 +1,15 @@
 /**
- * Day 3 Example: Basic snapshot functionality
+ * Example: Basic snapshot functionality
  */
 
 import { SentienceBrowser, snapshot } from '../src/index';
 import * as fs from 'fs';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  // Get API key from environment variable (optional - uses free tier if not set)
+  const apiKey = process.env.SENTIENCE_API_KEY as string | undefined;
+
+  const browser = new SentienceBrowser(apiKey, undefined, false);
   
   try {
     await browser.start();

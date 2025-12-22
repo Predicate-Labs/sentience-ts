@@ -1,11 +1,14 @@
 /**
- * Day 4 Example: Query engine demonstration
+ * Example: Query engine demonstration
  */
 
 import { SentienceBrowser, snapshot, query, find } from '../src/index';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  // Get API key from environment variable (optional - uses free tier if not set)
+  const apiKey = process.env.SENTIENCE_API_KEY as string | undefined;
+
+  const browser = new SentienceBrowser(apiKey, undefined, false);
   
   try {
     await browser.start();

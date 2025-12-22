@@ -9,8 +9,11 @@ import { SentienceBrowser, read } from '../src';
 import TurndownService from 'turndown';
 
 async function main() {
+  // Get API key from environment variable (optional - uses free tier if not set)
+  const apiKey = process.env.SENTIENCE_API_KEY as string | undefined;
+
   // Initialize browser
-  const browser = new SentienceBrowser();
+  const browser = new SentienceBrowser(apiKey);
   await browser.start();
 
   try {

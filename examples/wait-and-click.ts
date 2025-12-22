@@ -1,11 +1,14 @@
 /**
- * Day 5-6 Example: Wait for element and click
+ * Example: Wait for element and click
  */
 
 import { SentienceBrowser, snapshot, find, waitFor, click, expect } from '../src/index';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  // Get API key from environment variable (optional - uses free tier if not set)
+  const apiKey = process.env.SENTIENCE_API_KEY as string | undefined;
+
+  const browser = new SentienceBrowser(apiKey, undefined, false);
   
   try {
     await browser.start();
