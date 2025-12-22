@@ -58,71 +58,69 @@ jobs:
       run: |
         TAG="${{ steps.release.outputs.tag }}"
         REPO="${{ secrets.SENTIENCE_CHROME_REPO }}"
-        
-        # Download release assets
+
+        # Download extension-files.tar.gz from release
         mkdir -p extension-temp
         cd extension-temp
-        
-        # Download individual files from release (reliable method - no zip)
-        echo "📁 Downloading individual files from release..."
-        echo "Available release assets:"
-        curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
+
+        echo "📁 Downloading extension-files.tar.gz from release..."
+
+        # Get the download URL for extension-files.tar.gz
+        TARBALL_URL=$(curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
           "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-          jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | .name' || true
-        
+          jq -r '.assets[] | select(.name=="extension-files.tar.gz") | .browser_download_url')
+
+        if [ -z "$TARBALL_URL" ] || [ "$TARBALL_URL" == "null" ]; then
+          echo "❌ extension-files.tar.gz not found in release assets"
+          echo "Available assets:"
+          curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
+            jq -r '.assets[].name'
+          exit 1
+        fi
+
+        echo "  Downloading from: $TARBALL_URL"
         curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
-          "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-          jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | "\(.browser_download_url)|\(.name)"' | \
-          while IFS='|' read -r url name; do
-            if [ -n "$url" ] && [ "$url" != "null" ] && [ -n "$name" ]; then
-              # Handle asset names that might have paths like "pkg/sentience_core.js" or "extension-package/manifest.json"
-              # GitHub releases might preserve directory structure in asset names
-              # Strip "extension-package/" prefix if present, as we'll handle it in copy step
-              if [[ "$name" == extension-package/* ]]; then
-                # Asset name is "extension-package/manifest.json" - strip prefix
-                filename="${name#extension-package/}"
-                dir=$(dirname "$filename")
-                if [ "$dir" != "." ]; then
-                  mkdir -p "$dir"
-                fi
-                echo "  Downloading $name -> $filename"
-                curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$filename"
-              elif [[ "$name" == pkg/* ]]; then
-                # Asset name is "pkg/sentience_core.js" - create pkg directory
-                mkdir -p pkg
-                filename=$(basename "$name")
-                echo "  Downloading $name -> pkg/$filename"
-                curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "pkg/$filename"
-              else
-                # Asset name is just "manifest.json" - put at root
-                dir=$(dirname "$name")
-                if [ "$dir" != "." ]; then
-                  mkdir -p "$dir"
-                fi
-                echo "  Downloading $name"
-                curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$name"
-              fi
-            fi
-          done
-        
-        # Verify downloaded files
-        echo "📋 Downloaded files structure:"
-        find . -type f -name "*.js" -o -name "*.wasm" -o -name "*.json" | sort
-        echo ""
-        echo "Directory structure:"
-        ls -laR . | head -50
+          "$TARBALL_URL" -o extension-files.tar.gz
+
+        # Verify download
+        if [ ! -f "extension-files.tar.gz" ]; then
+          echo "❌ Failed to download extension-files.tar.gz"
+          exit 1
+        fi
+
+        TARBALL_SIZE=$(wc -c < extension-files.tar.gz)
+        echo "✅ Downloaded extension-files.tar.gz ($TARBALL_SIZE bytes)"
+
+        # Extract tar.gz (preserves directory structure)
+        echo "📦 Extracting extension-files.tar.gz..."
+        tar -xzf extension-files.tar.gz
+        rm extension-files.tar.gz
+
+        # Verify extracted files
+        echo "📋 Extracted files structure:"
+        find . -type f | sort
         echo ""
         echo "🔍 Verifying critical files:"
         if [ -f "manifest.json" ]; then
-          echo "✅ manifest.json found ($(wc -c < manifest.json) bytes)"
+          size=$(wc -c < manifest.json)
+          echo "✅ manifest.json found ($size bytes)"
+          if [ "$size" -lt 100 ]; then
+            echo "⚠️  manifest.json seems too small, showing content:"
+            cat manifest.json
+            exit 1
+          fi
           head -5 manifest.json
         else
           echo "❌ manifest.json NOT FOUND"
+          exit 1
         fi
         if [ -d "pkg" ]; then
           echo "✅ pkg directory found with $(ls -1 pkg | wc -l) files"
+          ls -lh pkg/
         else
           echo "❌ pkg directory NOT FOUND"
+          exit 1
         fi
         
     - name: Copy extension files
