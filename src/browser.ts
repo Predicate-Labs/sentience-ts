@@ -20,10 +20,16 @@ export class SentienceBrowser {
   constructor(
     apiKey?: string,
     apiUrl?: string,
-    headless: boolean = false
+    headless?: boolean
   ) {
     this._apiKey = apiKey;
-    this.headless = headless;
+    // Default to headless=True in CI (no X server), headless=False locally
+    if (headless === undefined) {
+      const ci = process.env.CI?.toLowerCase();
+      this.headless = ci === 'true' || ci === '1' || ci === 'yes';
+    } else {
+      this.headless = headless;
+    }
     // Only set apiUrl if apiKey is provided, otherwise undefined (free tier)
     // Default to https://api.sentienceapi.com if apiKey is provided but apiUrl is not
     if (apiKey) {

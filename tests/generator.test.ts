@@ -10,7 +10,7 @@ import { createTestBrowser } from './test-utils';
 
 describe('ScriptGenerator', () => {
   it('should generate Python code', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -37,7 +37,7 @@ describe('ScriptGenerator', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should generate TypeScript code', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -63,7 +63,7 @@ describe('ScriptGenerator', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should save Python script', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -90,7 +90,7 @@ describe('ScriptGenerator', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should save TypeScript script', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');

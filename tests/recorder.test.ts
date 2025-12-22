@@ -10,7 +10,7 @@ import { createTestBrowser } from './test-utils';
 
 describe('Recorder', () => {
   it('should start and stop', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -29,7 +29,7 @@ describe('Recorder', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should record click events', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -53,7 +53,7 @@ describe('Recorder', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should record type events', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -77,7 +77,7 @@ describe('Recorder', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should mask sensitive text', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -99,7 +99,7 @@ describe('Recorder', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should save and load trace', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');

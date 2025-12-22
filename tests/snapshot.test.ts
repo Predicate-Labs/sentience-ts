@@ -7,7 +7,7 @@ import { createTestBrowser } from './test-utils';
 
 describe('Snapshot', () => {
   it('should take a basic snapshot', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
@@ -25,7 +25,7 @@ describe('Snapshot', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 
   it('should have valid element structure', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');

@@ -15,7 +15,8 @@ describe('Stealth Mode / Bot Evasion', () => {
   let browser: SentienceBrowser;
 
   beforeAll(async () => {
-    browser = new SentienceBrowser(undefined, undefined, false);
+    // Auto-detect headless mode (headless in CI, headed locally)
+    browser = new SentienceBrowser(undefined, undefined, undefined);
     await browser.start();
   });
 

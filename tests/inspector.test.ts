@@ -7,7 +7,7 @@ import { createTestBrowser } from './test-utils';
 
 describe('Inspector', () => {
   it('should start and stop', async () => {
-    const browser = await createTestBrowser(false);
+    const browser = await createTestBrowser();
 
     try {
       await browser.getPage().goto('https://example.com');
