@@ -37,6 +37,8 @@ jobs:
         npm run build
         
     - name: Build extension (if needed)
+      if: runner.os != 'Windows'
+      shell: bash
       run: |
         if [ -d "../sentience-chrome" ]; then
           cd ../sentience-chrome && ./build.sh || echo "Extension build skipped (may not be available in CI)"
