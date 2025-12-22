@@ -20,14 +20,34 @@
     window.sentience_registry = [];
     let wasmModule = null;
 
-    // --- HELPER: Deep Walker ---
+    // --- HELPER: Deep Walker with Native Filter ---
     function getAllElements(root = document) {
         const elements = [];
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+        // FILTER: Skip Script, Style, Comments, Metadata tags during traversal
+        // This prevents collecting them in the first place, saving memory and CPU
+        const filter = {
+            acceptNode: function(node) {
+                // Skip metadata and script/style tags
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'META', 'LINK', 'HEAD'].includes(node.tagName)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                // Skip deep SVG children (keep root <svg> only, unless you need path data)
+                // This reduces noise from complex SVG graphics while preserving icon containers
+                if (node.parentNode && node.parentNode.tagName === 'SVG' && node.tagName !== 'SVG') {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        };
+        
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, filter);
         while(walker.nextNode()) {
             const node = walker.currentNode;
-            elements.push(node);
-            if (node.shadowRoot) elements.push(...getAllElements(node.shadowRoot));
+            // Pre-check: Don't even process empty/detached nodes
+            if (node.isConnected) {
+                elements.push(node);
+                if (node.shadowRoot) elements.push(...getAllElements(node.shadowRoot));
+            }
         }
         return elements;
     }
@@ -38,6 +58,15 @@
         if (el.tagName === 'INPUT') return el.value || el.placeholder || '';
         if (el.tagName === 'IMG') return el.alt || '';
         return (el.innerText || '').replace(/\s+/g, ' ').trim().substring(0, 100);
+    }
+
+    // --- HELPER: Safe Class Name Extractor ---
+    // Fixes the SVGAnimatedString error by ensuring we always get a primitive string
+    function getClassName(el) {
+        if (typeof el.className === 'string') return el.className;
+        // Handle SVGAnimatedString (has baseVal and animVal)
+        if (el.className && typeof el.className.baseVal === 'string') return el.className.baseVal;
+        return '';
     }
 
     // --- HELPER: Viewport Check (NEW) ---
@@ -287,13 +316,13 @@
         
         // Verify functions are available
         if (!wasmModule.analyze_page) {
-            console.error('[SentienceAPI.com] WASM functions not available');
+            console.error('[SentienceAPI.com] available');
         } else {
-            console.log('[SentienceAPI.com] ✓ API Ready!');
+            console.log('[SentienceAPI.com] ✓ Ready!');
             console.log('[SentienceAPI.com] Available functions:', Object.keys(wasmModule).filter(k => k.startsWith('analyze')));
         }
     } catch (e) {
-        console.error('[SentienceAPI.com] WASM Load Failed:', e);
+        console.error('[SentienceAPI.com] Extension Load Failed:', e);
     }
 
     // REMOVED: Headless detection - no longer needed (license system removed)
@@ -332,19 +361,20 @@
                         display: style.display,
                         visibility: style.visibility,
                         opacity: style.opacity,
-                        z_index: style.zIndex || "0",
+                        z_index: String(style.zIndex || "auto"),  // Force string conversion
                         bg_color: style.backgroundColor,
                         color: style.color,
                         cursor: style.cursor,
-                        font_weight: style.fontWeight,
+                        font_weight: String(style.fontWeight),  // Force string conversion
                         font_size: style.fontSize
                     },
                     attributes: {
                         role: el.getAttribute('role'),
                         type_: el.getAttribute('type'),
                         aria_label: el.getAttribute('aria-label'),
-                        href: el.href,
-                        class: el.className
+                        // Convert SVGAnimatedString to string for SVG elements
+                        href: el.href?.baseVal || el.href || null,
+                        class: getClassName(el) || null
                     },
                     // Pass to WASM
                     text: textVal || null,
@@ -353,10 +383,6 @@
                 });
             });
 
-            // FREE TIER: No license checks - extension provides basic geometry data
-            // Pro/Enterprise tiers will be handled server-side (future work)
-            
-            // 1. Get Geometry from WASM
             let result;
             try {
                 if (options.limit || options.filter) {
@@ -368,24 +394,33 @@
                 return { status: "error", error: e.message };
             }
 
-            // Hydration step removed as WASM now returns populated structs
-
+            // Hydration step removed
             // Capture Screenshot
             let screenshot = null;
             if (options.screenshot) {
                 screenshot = await captureScreenshot(options.screenshot);
             }
 
-            // C. Clean up null/undefined fields to save tokens (Your existing cleaner)
+            // C. Clean up null/undefined fields to save tokens
             const cleanElement = (obj) => {
                 if (Array.isArray(obj)) {
                     return obj.map(cleanElement);
-                } else if (obj !== null && typeof obj === 'object') {
+                }
+                if (obj !== null && typeof obj === 'object') {
                     const cleaned = {};
                     for (const [key, value] of Object.entries(obj)) {
-                        // Keep boolean false for critical flags if desired, or remove to match Rust defaults
+                        // Explicitly skip null AND undefined
                         if (value !== null && value !== undefined) {
-                            cleaned[key] = cleanElement(value);
+                            // Recursively clean objects
+                            if (typeof value === 'object') {
+                                const deepClean = cleanElement(value);
+                                // Only keep object if it's not empty (optional optimization)
+                                if (Object.keys(deepClean).length > 0) {
+                                    cleaned[key] = deepClean;
+                                }
+                            } else {
+                                cleaned[key] = value;
+                            }
                         }
                     }
                     return cleaned;
@@ -395,11 +430,20 @@
 
             const cleanedElements = cleanElement(result);
 
+            // DEBUG: Check rawData before pruning
+            // console.log(`[DEBUG] rawData length BEFORE pruning: ${rawData.length}`);
+            // Prune raw elements using WASM before sending to API
+            // This prevents 413 errors on large sites (Amazon: 5000+ -> ~200-400)
+            const prunedRawData = wasmModule.prune_for_api(rawData);
+            
+            // Clean up null/undefined fields in raw_elements as well
+            const cleanedRawElements = cleanElement(prunedRawData);
+
             return {
                 status: "success",
                 url: window.location.href,
                 elements: cleanedElements,
-                raw_elements: rawData,  // Include raw data for server-side processing (safe to expose - no proprietary value)
+                raw_elements: cleanedRawElements,  // Send cleaned pruned data to prevent 413 errors
                 screenshot: screenshot
             };
         },
