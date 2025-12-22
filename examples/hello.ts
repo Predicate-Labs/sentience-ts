@@ -1,11 +1,14 @@
 /**
- * Day 2 Example: Verify extension bridge is loaded
+ * Example: Verify extension bridge is loaded
  */
 
 import { SentienceBrowser } from '../src/index';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  // Get API key from environment variable (optional - uses free tier if not set)
+  const apiKey = process.env.SENTIENCE_API_KEY as string | undefined;
+
+  const browser = new SentienceBrowser(apiKey, undefined, false);
   
   try {
     await browser.start();

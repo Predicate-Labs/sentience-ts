@@ -19,7 +19,8 @@
   "exclude": ["node_modules", "dist", "examples", "tests", "src/extension"],
   "ts-node": {
     "compilerOptions": {
-      "lib": ["ES2020", "DOM"]
+      "lib": ["ES2020", "DOM"],
+      "types": ["node"]
     }
   }
 }
