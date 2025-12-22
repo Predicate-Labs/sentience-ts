@@ -1,6 +1,6 @@
 # Sentience TypeScript SDK
 
-**Status**: ✅ Week 1 Complete
+**📜 License**: Apache License 2.0
 
 TypeScript SDK for Sentience AI Agent Browser Automation.
 
