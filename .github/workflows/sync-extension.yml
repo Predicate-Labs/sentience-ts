@@ -25,6 +25,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0  # Fetch all history for proper branching
         
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -62,14 +63,38 @@ jobs:
         mkdir -p extension-temp
         cd extension-temp
         
-        # Download each file from release
-        curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
+        # First, try to download the zip archive if available
+        ZIP_URL=$(curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
           "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-          jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | .browser_download_url' | \
-          while read url; do
-            filename=$(basename "$url")
-            curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$filename"
-          done
+          jq -r '.assets[] | select(.name == "extension-package.zip") | .browser_download_url')
+        
+        if [ -n "$ZIP_URL" ] && [ "$ZIP_URL" != "null" ]; then
+          echo "📦 Downloading extension-package.zip..."
+          curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$ZIP_URL" -o extension-package.zip
+          unzip -q extension-package.zip -d .
+          # Files should now be in extension-temp/extension-package/ or extension-temp/
+          if [ -d "extension-package" ]; then
+            mv extension-package/* . 2>/dev/null || true
+            rmdir extension-package 2>/dev/null || true
+          fi
+        else
+          echo "📁 Downloading individual files from release..."
+          # Download each file from release
+          curl -s -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
+            jq -r '.assets[] | select(.name | endswith(".js") or endswith(".wasm") or endswith(".json") or endswith(".d.ts")) | .browser_download_url' | \
+            while read url; do
+              if [ -n "$url" ] && [ "$url" != "null" ]; then
+                filename=$(basename "$url")
+                echo "  Downloading $filename..."
+                curl -L -H "Authorization: token ${{ secrets.SENTIENCE_CHROME_TOKEN }}" "$url" -o "$filename"
+              fi
+            done
+        fi
+        
+        # Verify files were downloaded
+        echo "📋 Downloaded files:"
+        ls -la
         
     - name: Copy extension files
       if: steps.release.outputs.skip != 'true'
@@ -77,16 +102,40 @@ jobs:
         # Create extension directory structure
         mkdir -p src/extension/pkg
         
-        # Copy extension files
-        cp extension-temp/manifest.json src/extension/ 2>/dev/null || echo "manifest.json not found in release"
-        cp extension-temp/content.js src/extension/ 2>/dev/null || echo "content.js not found in release"
-        cp extension-temp/background.js src/extension/ 2>/dev/null || echo "background.js not found in release"
-        cp extension-temp/injected_api.js src/extension/ 2>/dev/null || echo "injected_api.js not found in release"
+        # Copy extension files (check both root and pkg subdirectory)
+        cp extension-temp/manifest.json src/extension/ 2>/dev/null || echo "⚠️ manifest.json not found in release"
+        cp extension-temp/content.js src/extension/ 2>/dev/null || echo "⚠️ content.js not found in release"
+        cp extension-temp/background.js src/extension/ 2>/dev/null || echo "⚠️ background.js not found in release"
+        cp extension-temp/injected_api.js src/extension/ 2>/dev/null || echo "⚠️ injected_api.js not found in release"
         
-        # Copy WASM files
-        cp extension-temp/pkg/sentience_core.js src/extension/pkg/ 2>/dev/null || echo "sentience_core.js not found"
-        cp extension-temp/pkg/sentience_core_bg.wasm src/extension/pkg/ 2>/dev/null || echo "sentience_core_bg.wasm not found"
-        cp extension-temp/pkg/*.d.ts src/extension/pkg/ 2>/dev/null || echo "Type definitions not found"
+        # Copy WASM files (check both root and pkg subdirectory)
+        if [ -f "extension-temp/pkg/sentience_core.js" ]; then
+          cp extension-temp/pkg/sentience_core.js src/extension/pkg/
+        elif [ -f "extension-temp/sentience_core.js" ]; then
+          cp extension-temp/sentience_core.js src/extension/pkg/
+        else
+          echo "⚠️ sentience_core.js not found"
+        fi
+        
+        if [ -f "extension-temp/pkg/sentience_core_bg.wasm" ]; then
+          cp extension-temp/pkg/sentience_core_bg.wasm src/extension/pkg/
+        elif [ -f "extension-temp/sentience_core_bg.wasm" ]; then
+          cp extension-temp/sentience_core_bg.wasm src/extension/pkg/
+        else
+          echo "⚠️ sentience_core_bg.wasm not found"
+        fi
+        
+        # Copy TypeScript definitions
+        if [ -d "extension-temp/pkg" ]; then
+          cp extension-temp/pkg/*.d.ts src/extension/pkg/ 2>/dev/null || echo "⚠️ Type definitions not found"
+        elif [ -d "extension-temp" ]; then
+          cp extension-temp/*.d.ts src/extension/pkg/ 2>/dev/null || echo "⚠️ Type definitions not found"
+        fi
+        
+        # Verify copied files
+        echo "📋 Copied files:"
+        ls -la src/extension/
+        ls -la src/extension/pkg/ 2>/dev/null || echo "⚠️ pkg directory not created"
         
     - name: Check for changes
       if: steps.release.outputs.skip != 'true'
@@ -107,7 +156,9 @@ jobs:
       if: steps.release.outputs.skip != 'true' && steps.changes.outputs.changed == 'true'
       uses: peter-evans/create-pull-request@v5
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        # Use GITHUB_TOKEN (built-in) if repository allows PR creation, otherwise use PR_TOKEN (PAT)
+        # To use PAT: create secret named PR_TOKEN with a Personal Access Token that has 'repo' scope
+        token: ${{ secrets.PR_TOKEN || secrets.GITHUB_TOKEN }}
         commit-message: "chore: sync extension files from sentience-chrome ${{ steps.release.outputs.tag }}"
         title: "Sync Extension: ${{ steps.release.outputs.tag }}"
         body: |
@@ -117,7 +168,10 @@ jobs:
           - Extension manifest and scripts
           - WASM binary and bindings
           
-          **Source:** [sentience-chrome release ${{ steps.release.outputs.tag }}](${{ secrets.SENTIENCE_CHROME_REPO }}/releases/tag/${{ steps.release.outputs.tag }})
+          **Source:** [sentience-chrome release ${{ steps.release.outputs.tag }}](https://github.com/${{ secrets.SENTIENCE_CHROME_REPO }}/releases/tag/${{ steps.release.outputs.tag }})
         branch: sync-extension-${{ steps.release.outputs.tag }}
         delete-branch: true
+        labels: |
+          automated
+          extension-sync
 
