@@ -1,9 +1,5 @@
 # Sentience TypeScript SDK
 
-**📜 License**: Apache License 2.0
-
-TypeScript/JavaScript SDK for Sentience AI Agent Browser Automation. Build intelligent web automation agents that can see, understand, and interact with web pages like humans do.
-
 ## Installation
 
 ```bash
@@ -492,8 +488,21 @@ npm run example:hello
 
 ## License
 
-**📜 License**
+📜 **License**
 
-This SDK is licensed under the Apache License 2.0.
+This SDK is licensed under the **Elastic License 2.0 (ELv2)**.
 
-Note: The SDK communicates with proprietary Sentience services and browser components that are not open source. Access to those components is governed by Sentience's Terms of Service.
+The Elastic License 2.0 allows you to use, modify, and distribute this SDK for internal, research, and non-competitive purposes. It **does not permit offering this SDK or a derivative as a hosted or managed service**, nor using it to build a competing product or service.
+
+### Important Notes
+
+- This SDK is a **client-side library** that communicates with proprietary Sentience services and browser components.
+
+- The Sentience backend services (including semantic geometry grounding, ranking, visual cues, and trace processing) are **not open source** and are governed by Sentience’s Terms of Service.
+
+- Use of this SDK does **not** grant rights to operate, replicate, or reimplement Sentience’s hosted services.
+
+For commercial usage, hosted offerings, or enterprise deployments, please contact Sentience to obtain a commercial license.
+
+See the full license text in [`LICENSE`](./LICENSE.md).
+
