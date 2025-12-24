@@ -14,11 +14,40 @@ npx playwright install chromium
 
 ## Quick Start: Choose Your Abstraction Level
 
-Sentience SDK offers **3 levels of abstraction** - choose based on your needs:
+Sentience SDK offers **4 levels of abstraction** - choose based on your needs:
 
-### 🤖 Level 3: Agent (Natural Language) - **Recommended for Most Users**
+### 🗣️ Level 4: Conversational (Full Natural Language) - **Perfect for Chatbots & End Users**
 
-Zero coding knowledge needed. Just write what you want in plain English:
+Complete natural language conversation. ONE command does everything:
+
+```typescript
+import { SentienceBrowser, ConversationalAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o');
+const agent = new ConversationalAgent(browser, llm);
+
+await browser.getPage().goto('https://www.amazon.com');
+
+// ONE natural language command - agent plans and executes everything!
+const response = await agent.execute(
+  'Search for wireless mouse and add the cheapest one to my cart'
+);
+console.log(response);
+// → "I searched for wireless mouse, found the Logitech M185 for $12.99,
+//    and added it to your cart."
+
+await browser.close();
+```
+
+**When to use:** Chatbots, voice assistants, end-user tools
+**Code reduction:** 99% less code (350 lines → 3 lines!)
+**Features:** Auto-planning, natural I/O, conversation memory
+**Requirements:** OpenAI API key (GPT-4o recommended for complex planning)
+
+### 🤖 Level 3: Agent (Technical Commands) - **Best for AI Developers**
+
+Natural language commands with more control:
 
 ```typescript
 import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';
@@ -29,7 +58,7 @@ const agent = new SentienceAgent(browser, llm);
 
 await browser.getPage().goto('https://www.amazon.com');
 
-// Just natural language commands - agent handles everything!
+// Technical natural language commands - you control the steps
 await agent.act('Click the search box');
 await agent.act("Type 'wireless mouse' into the search field");
 await agent.act('Press Enter key');
@@ -40,8 +69,9 @@ console.log(`Tokens used: ${agent.getTokenStats().totalTokens}`);
 await browser.close();
 ```
 
-**When to use:** Quick automation, non-technical users, rapid prototyping
-**Code reduction:** 95-98% less code vs manual approach
+**When to use:** AI agents, automation scripts, rapid prototyping
+**Code reduction:** 95% less code vs manual approach
+**Features:** Technical control, retry logic, token tracking
 **Requirements:** OpenAI API key (or Anthropic for Claude)
 
 ### 🔧 Level 2: Direct SDK (Technical Control)
@@ -94,7 +124,58 @@ await browser.close();
 
 ## Agent Layer Examples
 
-### Google Search (6 lines of code)
+### Level 4: Conversational Agent (Full Natural Language)
+
+#### One Command Does Everything
+
+```typescript
+import { SentienceBrowser, ConversationalAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: apiKey });
+const llm = new OpenAIProvider(openaiKey, 'gpt-4o');
+const agent = new ConversationalAgent(browser, llm);
+
+await browser.getPage().goto('https://www.google.com');
+
+// ONE command handles search, click, and extraction!
+const response = await agent.execute(
+  'Search for best mechanical keyboards 2024 and tell me what you find'
+);
+console.log(response);
+// → "I searched for 'best mechanical keyboards 2024' and found several comprehensive guides.
+//    The top result is from rtings.com with an in-depth keyboard buying guide."
+
+await browser.close();
+```
+
+**99% code reduction:** 350 lines → 3 lines!
+
+**See full examples:**
+- [examples/conversational-google-search.ts](examples/conversational-google-search.ts)
+- [examples/conversational-amazon-shopping.ts](examples/conversational-amazon-shopping.ts)
+
+#### Conversation with Context Memory
+
+```typescript
+// First interaction
+await agent.execute('Go to google.com');
+// → "I've navigated to google.com"
+
+// Contextual follow-up (agent remembers where it is)
+await agent.execute('Search for laptops');
+// → "I searched for 'laptops' and found results from various retailers"
+
+// Get session summary
+const summary = await agent.getSummary();
+// → "During this session, I navigated to Google and searched for laptops,
+//    finding results from Amazon, Best Buy, and other major retailers."
+```
+
+---
+
+### Level 3: SentienceAgent (Technical Commands)
+
+#### Google Search (6 lines of code)
 
 ```typescript
 import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';

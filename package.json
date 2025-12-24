@@ -1,6 +1,6 @@
 {
   "name": "sentience-ts",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Sentience AI Agent Browser Automation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,6 +14,8 @@
     "example:agent-google": "ts-node examples/agent-google-search.ts",
     "example:agent-amazon": "ts-node examples/agent-amazon-shopping.ts",
     "example:agent-claude": "ts-node examples/agent-with-anthropic.ts",
+    "example:conversational-google": "ts-node examples/conversational-google-search.ts",
+    "example:conversational-amazon": "ts-node examples/conversational-amazon-shopping.ts",
     "cli": "ts-node src/cli.ts"
   },
   "bin": {
