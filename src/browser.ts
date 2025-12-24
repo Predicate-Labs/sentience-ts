@@ -104,8 +104,92 @@ export class SentienceBrowser {
     });
 
     this.page = this.context.pages()[0] || await this.context.newPage();
+    
+    // Apply context-level stealth patches (runs on every new page)
+    await this.context.addInitScript(() => {
+        // Early webdriver hiding - runs before any page script
+        // Use multiple strategies to completely hide webdriver
+        
+        // Strategy 1: Try to delete it first
+        try {
+            delete (navigator as any).webdriver;
+        } catch (e) {
+            // Property might not be deletable
+        }
+        
+        // Strategy 2: Redefine to return undefined and hide from enumeration
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+            configurable: true,
+            enumerable: false,
+            writable: false
+        });
+        
+        // Strategy 3: Override 'in' operator check
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop: string | number | symbol) {
+            if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+                return false;
+            }
+            return originalHasOwnProperty.call(this, prop);
+        };
+    });
 
     // 5. Apply Comprehensive Stealth Patches
+    // Use both CDP (earlier) and addInitScript (backup) for maximum coverage
+    
+    // Strategy A: Use CDP to inject at the earliest possible moment
+    const client = await this.page.context().newCDPSession(this.page);
+    await client.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        // Aggressive webdriver hiding - must run before ANY page script
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined,
+          configurable: true,
+          enumerable: false
+        });
+        
+        // Override Object.getOwnPropertyDescriptor
+        const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+        Object.getOwnPropertyDescriptor = function(obj, prop) {
+          if (obj === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+            return undefined;
+          }
+          return originalGetOwnPropertyDescriptor(obj, prop);
+        };
+        
+        // Override Object.keys
+        const originalKeys = Object.keys;
+        Object.keys = function(obj) {
+          const keys = originalKeys(obj);
+          if (obj === navigator) {
+            return keys.filter(k => k !== 'webdriver' && k !== 'Webdriver');
+          }
+          return keys;
+        };
+        
+        // Override Object.getOwnPropertyNames
+        const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
+        Object.getOwnPropertyNames = function(obj) {
+          const names = originalGetOwnPropertyNames(obj);
+          if (obj === navigator) {
+            return names.filter(n => n !== 'webdriver' && n !== 'Webdriver');
+          }
+          return names;
+        };
+        
+        // Override 'in' operator check
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop) {
+          if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+            return false;
+          }
+          return originalHasOwnProperty.call(this, prop);
+        };
+      `
+    });
+    
+    // Strategy B: Also use addInitScript as backup (runs after CDP but before page scripts)
     await this.page.addInitScript(() => {
         // 1. Hide navigator.webdriver (comprehensive approach for advanced detection)
         // Advanced detection checks for property descriptor, so we need multiple strategies
@@ -131,18 +215,37 @@ export class SentienceBrowser {
             if (obj === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
                 return undefined;
             }
-            return originalGetOwnPropertyDescriptor.call(this, obj, prop);
+            return originalGetOwnPropertyDescriptor(obj, prop);
         } as any;
         
         // Strategy 4: Hide from Object.keys() and Object.getOwnPropertyNames()
         const originalKeys = Object.keys;
         Object.keys = function(obj: any) {
-            const keys = originalKeys.call(this, obj);
+            const keys = originalKeys(obj);
             if (obj === navigator) {
                 return keys.filter(k => k !== 'webdriver' && k !== 'Webdriver');
             }
             return keys;
         } as any;
+        
+        // Strategy 5: Hide from Object.getOwnPropertyNames()
+        const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
+        Object.getOwnPropertyNames = function(obj: any) {
+            const names = originalGetOwnPropertyNames(obj);
+            if (obj === navigator) {
+                return names.filter(n => n !== 'webdriver' && n !== 'Webdriver');
+            }
+            return names;
+        } as any;
+        
+        // Strategy 6: Override hasOwnProperty to hide from 'in' operator checks
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop: string | number | symbol) {
+            if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+                return false;
+            }
+            return originalHasOwnProperty.call(this, prop);
+        };
 
         // 2. Inject window.chrome object (required for Chrome detection)
         if (typeof (window as any).chrome === 'undefined') {
