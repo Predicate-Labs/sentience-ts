@@ -28,4 +28,13 @@ export {
   HistoryEntry,
   TokenStats
 } from './agent';
+export {
+  ConversationalAgent,
+  ExecutionPlan,
+  PlanStep,
+  StepResult,
+  ConversationEntry,
+  ActionType,
+  ActionParameters
+} from './conversational-agent';
 
