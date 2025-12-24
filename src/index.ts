@@ -15,3 +15,28 @@ export { read, ReadOptions, ReadResult } from './read';
 export { screenshot, ScreenshotOptions } from './screenshot';
 export * from './types';
 
+// Agent Layer (v0.2.0+)
+export {
+  LLMProvider,
+  LLMResponse,
+  OpenAIProvider,
+  AnthropicProvider
+} from './llm-provider';
+export {
+  SentienceAgent,
+  AgentActResult,
+  HistoryEntry,
+  TokenStats
+} from './agent';
+
+// Conversational Agent Layer (v0.3.0+)
+export {
+  ConversationalAgent,
+  ExecutionPlan,
+  PlanStep,
+  StepResult,
+  ConversationEntry,
+  ActionType,
+  ActionParameters
+} from './conversational-agent';
+

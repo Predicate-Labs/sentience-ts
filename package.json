@@ -1,6 +1,6 @@
 {
   "name": "sentience-ts",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Sentience AI Agent Browser Automation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,6 +11,11 @@
     "prepublishOnly": "npm test && npm run build",
     "example:hello": "ts-node examples/hello.ts",
     "example:basic": "ts-node examples/basic-agent.ts",
+    "example:agent-google": "ts-node examples/agent-google-search.ts",
+    "example:agent-amazon": "ts-node examples/agent-amazon-shopping.ts",
+    "example:agent-claude": "ts-node examples/agent-with-anthropic.ts",
+    "example:conversational-google": "ts-node examples/conversational-google-search.ts",
+    "example:conversational-amazon": "ts-node examples/conversational-amazon-shopping.ts",
     "cli": "ts-node src/cli.ts"
   },
   "bin": {
@@ -29,6 +34,10 @@
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "openai": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.20.0"
   },
   "files": [
     "dist",

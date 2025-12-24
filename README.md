@@ -12,7 +12,194 @@ npm run build
 npx playwright install chromium
 ```
 
-## Quick Start
+## Quick Start: Choose Your Abstraction Level
+
+Sentience SDK offers **4 levels of abstraction** - choose based on your needs:
+
+### 💬 Level 4: Conversational Agent (Highest Abstraction) - **NEW in v0.3.0**
+
+Complete automation with natural conversation. Just describe what you want, and the agent plans and executes everything:
+
+```typescript
+import { SentienceBrowser, ConversationalAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o');
+const agent = new ConversationalAgent({ llmProvider: llm, browser });
+
+// Navigate to starting page
+await browser.getPage().goto('https://amazon.com');
+
+// ONE command does it all - automatic planning and execution!
+const response = await agent.execute(
+  "Search for 'wireless mouse' and tell me the price of the top result"
+);
+console.log(response); // "I found the top result for wireless mouse on Amazon. It's priced at $24.99..."
+
+// Follow-up questions maintain context
+const followUp = await agent.chat("Add it to cart");
+console.log(followUp);
+
+await browser.close();
+```
+
+**When to use:** Complex multi-step tasks, conversational interfaces, maximum convenience
+**Code reduction:** 99% less code - describe goals in natural language
+**Requirements:** OpenAI or Anthropic API key
+
+### 🤖 Level 3: Agent (Natural Language Commands) - **Recommended for Most Users**
+
+Zero coding knowledge needed. Just write what you want in plain English:
+
+```typescript
+import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o-mini');
+const agent = new SentienceAgent(browser, llm);
+
+await browser.getPage().goto('https://www.amazon.com');
+
+// Just natural language commands - agent handles everything!
+await agent.act('Click the search box');
+await agent.act("Type 'wireless mouse' into the search field");
+await agent.act('Press Enter key');
+await agent.act('Click the first product result');
+
+// Automatic token tracking
+console.log(`Tokens used: ${agent.getTokenStats().totalTokens}`);
+await browser.close();
+```
+
+**When to use:** Quick automation, non-technical users, rapid prototyping
+**Code reduction:** 95-98% less code vs manual approach
+**Requirements:** OpenAI API key (or Anthropic for Claude)
+
+### 🔧 Level 2: Direct SDK (Technical Control)
+
+Full control with semantic selectors. For technical users who want precision:
+
+```typescript
+import { SentienceBrowser, snapshot, find, click, typeText, press } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+await browser.getPage().goto('https://www.amazon.com');
+
+// Get semantic snapshot
+const snap = await snapshot(browser);
+
+// Find elements using query DSL
+const searchBox = find(snap, 'role=textbox text~"search"');
+await click(browser, searchBox!.id);
+
+// Type and submit
+await typeText(browser, searchBox!.id, 'wireless mouse');
+await press(browser, 'Enter');
+
+await browser.close();
+```
+
+**When to use:** Need precise control, debugging, custom workflows
+**Code reduction:** Still 80% less code vs raw Playwright
+**Requirements:** Only Sentience API key
+
+### ⚙️ Level 1: Raw Playwright (Maximum Control)
+
+For when you need complete low-level control (rare):
+
+```typescript
+import { chromium } from 'playwright';
+
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.goto('https://www.amazon.com');
+await page.fill('#twotabsearchtextbox', 'wireless mouse');
+await page.press('#twotabsearchtextbox', 'Enter');
+await browser.close();
+```
+
+**When to use:** Very specific edge cases, custom browser configs
+**Tradeoffs:** No semantic intelligence, brittle selectors, more code
+
+---
+
+## Agent Layer Examples
+
+### Google Search (6 lines of code)
+
+```typescript
+import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = await SentienceBrowser.create({ apiKey: apiKey });
+const llm = new OpenAIProvider(openaiKey, 'gpt-4o-mini');
+const agent = new SentienceAgent(browser, llm);
+
+await browser.getPage().goto('https://www.google.com');
+await agent.act('Click the search box');
+await agent.act("Type 'mechanical keyboards' into the search field");
+await agent.act('Press Enter key');
+await agent.act('Click the first non-ad search result');
+
+await browser.close();
+```
+
+**See full example:** [examples/agent-google-search.ts](examples/agent-google-search.ts)
+
+### Using Anthropic Claude Instead of GPT
+
+```typescript
+import { SentienceAgent, AnthropicProvider } from 'sentience-ts';
+
+// Swap OpenAI for Anthropic - same API!
+const llm = new AnthropicProvider(
+  process.env.ANTHROPIC_API_KEY!,
+  'claude-3-5-sonnet-20241022'
+);
+
+const agent = new SentienceAgent(browser, llm);
+await agent.act('Click the search button'); // Works exactly the same
+```
+
+**BYOB (Bring Your Own Brain):** OpenAI, Anthropic, or implement `LLMProvider` for any model.
+
+**See full example:** [examples/agent-with-anthropic.ts](examples/agent-with-anthropic.ts)
+
+### Amazon Shopping (98% code reduction)
+
+**Before (manual approach):** 350 lines
+**After (agent layer):** 6 lines
+
+```typescript
+await agent.act('Click the search box');
+await agent.act("Type 'wireless mouse' into the search field");
+await agent.act('Press Enter key');
+await agent.act('Click the first visible product in the search results');
+await agent.act("Click the 'Add to Cart' button");
+```
+
+**See full example:** [examples/agent-amazon-shopping.ts](examples/agent-amazon-shopping.ts)
+
+---
+
+## Installation for Agent Layer
+
+```bash
+# Install core SDK
+npm install sentience-ts
+
+# Install LLM provider (choose one or both)
+npm install openai              # For GPT-4, GPT-4o, GPT-4o-mini
+npm install @anthropic-ai/sdk   # For Claude 3.5 Sonnet
+
+# Set API keys
+export SENTIENCE_API_KEY="your-sentience-key"
+export OPENAI_API_KEY="your-openai-key"        # OR
+export ANTHROPIC_API_KEY="your-anthropic-key"
+```
+
+---
+
+## Direct SDK Quick Start
 
 ```typescript
 import { SentienceBrowser, snapshot, find, click } from './src';
@@ -349,6 +536,12 @@ element.z_index         // CSS stacking order
 
 See the `examples/` directory for complete working examples:
 
+### Agent Layer (Level 3 - Natural Language)
+- **`agent-google-search.ts`** - Google search automation with natural language commands
+- **`agent-amazon-shopping.ts`** - Amazon shopping bot (6 lines vs 350 lines manual code)
+- **`agent-with-anthropic.ts`** - Using Anthropic Claude instead of OpenAI GPT
+
+### Direct SDK (Level 2 - Technical Control)
 - **`hello.ts`** - Extension bridge verification
 - **`basic-agent.ts`** - Basic snapshot and element inspection
 - **`query-demo.ts`** - Query engine demonstrations
