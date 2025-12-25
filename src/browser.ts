@@ -104,10 +104,251 @@ export class SentienceBrowser {
     });
 
     this.page = this.context.pages()[0] || await this.context.newPage();
+    
+    // Apply context-level stealth patches (runs on every new page)
+    await this.context.addInitScript(() => {
+        // Early webdriver hiding - runs before any page script
+        // Use multiple strategies to completely hide webdriver
+        
+        // Strategy 1: Try to delete it first
+        try {
+            delete (navigator as any).webdriver;
+        } catch (e) {
+            // Property might not be deletable
+        }
+        
+        // Strategy 2: Redefine to return undefined and hide from enumeration
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+            configurable: true,
+            enumerable: false,
+            writable: false
+        });
+        
+        // Strategy 3: Override 'in' operator check
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop: string | number | symbol) {
+            if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+                return false;
+            }
+            return originalHasOwnProperty.call(this, prop);
+        };
+    });
 
-    // 5. Apply Stealth (Basic)
+    // 5. Apply Comprehensive Stealth Patches
+    // Use both CDP (earlier) and addInitScript (backup) for maximum coverage
+    
+    // Strategy A: Use CDP to inject at the earliest possible moment
+    const client = await this.page.context().newCDPSession(this.page);
+    await client.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        // Aggressive webdriver hiding - must run before ANY page script
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined,
+          configurable: true,
+          enumerable: false
+        });
+        
+        // Override Object.getOwnPropertyDescriptor
+        const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+        Object.getOwnPropertyDescriptor = function(obj, prop) {
+          if (obj === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+            return undefined;
+          }
+          return originalGetOwnPropertyDescriptor(obj, prop);
+        };
+        
+        // Override Object.keys
+        const originalKeys = Object.keys;
+        Object.keys = function(obj) {
+          const keys = originalKeys(obj);
+          if (obj === navigator) {
+            return keys.filter(k => k !== 'webdriver' && k !== 'Webdriver');
+          }
+          return keys;
+        };
+        
+        // Override Object.getOwnPropertyNames
+        const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
+        Object.getOwnPropertyNames = function(obj) {
+          const names = originalGetOwnPropertyNames(obj);
+          if (obj === navigator) {
+            return names.filter(n => n !== 'webdriver' && n !== 'Webdriver');
+          }
+          return names;
+        };
+        
+        // Override 'in' operator check
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop) {
+          if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+            return false;
+          }
+          return originalHasOwnProperty.call(this, prop);
+        };
+      `
+    });
+    
+    // Strategy B: Also use addInitScript as backup (runs after CDP but before page scripts)
     await this.page.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        // 1. Hide navigator.webdriver (comprehensive approach for advanced detection)
+        // Advanced detection checks for property descriptor, so we need multiple strategies
+        try {
+            // Strategy 1: Try to delete the property
+            delete (navigator as any).webdriver;
+        } catch (e) {
+            // Property might not be deletable, continue with redefine
+        }
+        
+        // Strategy 2: Redefine to return undefined (better than false)
+        // Also set enumerable: false to hide from Object.keys() checks
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+            configurable: true,
+            enumerable: false
+        });
+        
+        // Strategy 3: Override Object.getOwnPropertyDescriptor only for navigator.webdriver
+        // This prevents advanced detection that checks the property descriptor
+        const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+        Object.getOwnPropertyDescriptor = function(obj: any, prop: string | symbol) {
+            if (obj === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+                return undefined;
+            }
+            return originalGetOwnPropertyDescriptor(obj, prop);
+        } as any;
+        
+        // Strategy 4: Hide from Object.keys() and Object.getOwnPropertyNames()
+        const originalKeys = Object.keys;
+        Object.keys = function(obj: any) {
+            const keys = originalKeys(obj);
+            if (obj === navigator) {
+                return keys.filter(k => k !== 'webdriver' && k !== 'Webdriver');
+            }
+            return keys;
+        } as any;
+        
+        // Strategy 5: Hide from Object.getOwnPropertyNames()
+        const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
+        Object.getOwnPropertyNames = function(obj: any) {
+            const names = originalGetOwnPropertyNames(obj);
+            if (obj === navigator) {
+                return names.filter(n => n !== 'webdriver' && n !== 'Webdriver');
+            }
+            return names;
+        } as any;
+        
+        // Strategy 6: Override hasOwnProperty to hide from 'in' operator checks
+        const originalHasOwnProperty = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function(prop: string | number | symbol) {
+            if (this === navigator && (prop === 'webdriver' || prop === 'Webdriver')) {
+                return false;
+            }
+            return originalHasOwnProperty.call(this, prop);
+        };
+
+        // 2. Inject window.chrome object (required for Chrome detection)
+        if (typeof (window as any).chrome === 'undefined') {
+            (window as any).chrome = {
+                runtime: {},
+                loadTimes: function() {},
+                csi: function() {},
+                app: {}
+            };
+        }
+
+        // 3. Patch navigator.plugins (should have length > 0)
+        // Only patch if plugins array is empty (headless mode issue)
+        const originalPlugins = navigator.plugins;
+        if (originalPlugins.length === 0) {
+            // Create a PluginArray-like object with minimal plugins
+            const fakePlugins = [
+                { 
+                    name: 'Chrome PDF Plugin', 
+                    filename: 'internal-pdf-viewer', 
+                    description: 'Portable Document Format',
+                    length: 1,
+                    item: function() { return null; },
+                    namedItem: function() { return null; }
+                },
+                { 
+                    name: 'Chrome PDF Viewer', 
+                    filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', 
+                    description: '',
+                    length: 0,
+                    item: function() { return null; },
+                    namedItem: function() { return null; }
+                },
+                { 
+                    name: 'Native Client', 
+                    filename: 'internal-nacl-plugin', 
+                    description: '',
+                    length: 0,
+                    item: function() { return null; },
+                    namedItem: function() { return null; }
+                }
+            ];
+            
+            // Create PluginArray-like object (array-like but not a real array)
+            // This needs to behave like the real PluginArray for detection to pass
+            const pluginArray: any = {};
+            fakePlugins.forEach((plugin, index) => {
+                Object.defineProperty(pluginArray, index.toString(), {
+                    value: plugin,
+                    enumerable: true,
+                    configurable: true
+                });
+            });
+            
+            Object.defineProperty(pluginArray, 'length', {
+                value: fakePlugins.length,
+                enumerable: false,
+                configurable: false
+            });
+            
+            pluginArray.item = function(index: number) { 
+                return this[index] || null; 
+            };
+            pluginArray.namedItem = function(name: string) { 
+                for (let i = 0; i < this.length; i++) {
+                    if (this[i] && this[i].name === name) return this[i];
+                }
+                return null;
+            };
+            
+            // Make it iterable (for for...of loops)
+            pluginArray[Symbol.iterator] = function*() {
+                for (let i = 0; i < this.length; i++) {
+                    yield this[i];
+                }
+            };
+            
+            // Make it array-like for Array.from() and spread
+            Object.setPrototypeOf(pluginArray, Object.create(null));
+            
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => pluginArray,
+                configurable: true,
+                enumerable: true
+            });
+        }
+
+        // 4. Ensure navigator.languages exists and has values
+        if (!navigator.languages || navigator.languages.length === 0) {
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en'],
+                configurable: true
+            });
+        }
+
+        // 5. Patch permissions API (should exist)
+        if (!navigator.permissions) {
+            (navigator as any).permissions = {
+                query: async (parameters: PermissionDescriptor) => {
+                    return { state: 'granted', onchange: null } as PermissionStatus;
+                }
+            };
+        }
     });
     
     // Inject API Key if present
