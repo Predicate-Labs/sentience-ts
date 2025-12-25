@@ -2,6 +2,7 @@
  * Snapshot functionality - calls window.sentience.snapshot() or server-side API
  */
 
+import './global';  // Import type definitions for window.sentience
 import { SentienceBrowser } from './browser';
 import { Snapshot } from './types';
 
@@ -44,6 +45,28 @@ async function snapshotViaExtension(
 ): Promise<Snapshot> {
   const page = browser.getPage();
 
+  // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
+  // The new architecture loads injected_api.js asynchronously, so window.sentience
+  // may not be immediately available after page load
+  try {
+    await page.waitForFunction(
+      () => typeof window.sentience !== 'undefined',
+      { timeout: 5000 }
+    );
+  } catch (e) {
+    // Gather diagnostics if wait fails
+    const diag = await page.evaluate(() => ({
+      sentience_defined: typeof window.sentience !== 'undefined',
+      extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
+      url: window.location.href
+    })).catch(() => ({ error: 'Could not gather diagnostics' }));
+
+    throw new Error(
+      `Sentience extension failed to inject window.sentience API. ` +
+      `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
+    );
+  }
+
   // Build options object
   const opts: any = {};
   if (options.screenshot !== undefined) {
@@ -56,9 +79,9 @@ async function snapshotViaExtension(
     opts.filter = options.filter;
   }
 
-  // Call extension API
+  // Call extension API (no 'as any' needed - types defined in global.d.ts)
   const result = await page.evaluate((opts) => {
-    return (window as any).sentience.snapshot(opts);
+    return window.sentience.snapshot(opts);
   }, opts);
 
   // Basic validation
@@ -76,6 +99,19 @@ async function snapshotViaApi(
   apiUrl: string
 ): Promise<Snapshot> {
   const page = browser.getPage();
+
+  // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
+  // Even for API mode, we need the extension to collect raw data locally
+  try {
+    await page.waitForFunction(
+      () => typeof (window as any).sentience !== 'undefined',
+      { timeout: 5000 }
+    );
+  } catch (e) {
+    throw new Error(
+      'Sentience extension failed to inject. Cannot collect raw data for API processing.'
+    );
+  }
 
   // Step 1: Get raw data from local extension (always happens locally)
   const rawOpts: any = {};
