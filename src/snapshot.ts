@@ -2,7 +2,6 @@
  * Snapshot functionality - calls window.sentience.snapshot() or server-side API
  */
 
-import './global';  // Import type definitions for window.sentience
 import { SentienceBrowser } from './browser';
 import { Snapshot } from './types';
 
