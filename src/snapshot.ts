@@ -5,6 +5,8 @@
 import './global';  // Import type definitions for window.sentience
 import { SentienceBrowser } from './browser';
 import { Snapshot } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface SnapshotOptions {
   screenshot?: boolean | { format: 'png' | 'jpeg'; quality?: number };
@@ -15,6 +17,30 @@ export interface SnapshotOptions {
     min_z_index?: number;
   };
   use_api?: boolean; // Force use of server-side API if True, local extension if False
+  save_trace?: boolean; // Save raw_elements to JSON for benchmarking/training
+  trace_path?: string; // Path to save trace file (default: "trace_{timestamp}.json")
+}
+
+/**
+ * Save raw_elements to a JSON file for benchmarking/training
+ *
+ * @param rawElements Raw elements data from snapshot
+ * @param tracePath Path to save trace file. If undefined, uses "trace_{timestamp}.json"
+ */
+function _saveTraceToFile(rawElements: any[], tracePath?: string): void {
+  // Default filename if none provided
+  const filename = tracePath || `trace_${Date.now()}.json`;
+
+  // Ensure directory exists
+  const dir = path.dirname(filename);
+  if (dir !== '.') {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Save the raw elements to JSON
+  fs.writeFileSync(filename, JSON.stringify(rawElements, null, 2));
+
+  console.log(`[SDK] Trace saved to: ${filename}`);
 }
 
 export async function snapshot(
@@ -84,6 +110,11 @@ async function snapshotViaExtension(
     return window.sentience.snapshot(opts);
   }, opts);
 
+  // Save trace if requested
+  if (options.save_trace && result.raw_elements) {
+    _saveTraceToFile(result.raw_elements, options.trace_path);
+  }
+
   // Basic validation
   if (result.status !== 'success' && result.status !== 'error') {
     throw new Error(`Invalid snapshot status: ${result.status}`);
@@ -122,6 +153,11 @@ async function snapshotViaApi(
   const rawResult = await page.evaluate((opts) => {
     return (window as any).sentience.snapshot(opts);
   }, rawOpts);
+
+  // Save trace if requested (save raw data before API processing)
+  if (options.save_trace && rawResult.raw_elements) {
+    _saveTraceToFile(rawResult.raw_elements, options.trace_path);
+  }
 
   // Step 2: Send to server for smart ranking/filtering
   // Use raw_elements (raw data) instead of elements (processed data)
