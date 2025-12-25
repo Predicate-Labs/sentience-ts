@@ -152,8 +152,17 @@ export class SentienceAgent {
           throw new Error(`Snapshot failed: ${snap.error}`);
         }
 
+        // Apply element filtering based on goal
+        const filteredElements = this.filterElements(snap, goal);
+
+        // Create filtered snapshot
+        const filteredSnap: Snapshot = {
+          ...snap,
+          elements: filteredElements
+        };
+
         // 2. GROUND: Format elements for LLM context
-        const context = this.buildContext(snap, goal);
+        const context = this.buildContext(filteredSnap, goal);
 
         // 3. THINK: Query LLM for next action
         const llmResponse = await this.queryLLM(context, goal);
@@ -169,7 +178,7 @@ export class SentienceAgent {
         const actionStr = llmResponse.content.trim();
 
         // 4. EXECUTE: Parse and run action
-        const result = await this.executeAction(actionStr, snap);
+        const result = await this.executeAction(actionStr, filteredSnap);
 
         const durationMs = Date.now() - startTime;
         result.durationMs = durationMs;
@@ -218,13 +227,77 @@ export class SentienceAgent {
   }
 
   /**
+   * Filter elements from snapshot based on goal context.
+   * Applies goal-based keyword matching to boost relevant elements and filters out irrelevant ones.
+   */
+  private filterElements(snap: Snapshot, goal: string): Element[] {
+    let elements = snap.elements;
+
+    // If no goal provided, return all elements (up to limit)
+    if (!goal) {
+      return elements.slice(0, this.snapshotLimit);
+    }
+
+    const goalLower = goal.toLowerCase();
+
+    // Extract keywords from goal
+    const keywords = this.extractKeywords(goalLower);
+
+    // Boost elements matching goal keywords
+    const scoredElements: Array<[number, Element]> = [];
+    for (const el of elements) {
+      let score = el.importance;
+
+      // Boost if element text matches goal
+      if (el.text && keywords.some(kw => el.text!.toLowerCase().includes(kw))) {
+        score += 0.3;
+      }
+
+      // Boost if role matches goal intent
+      if (goalLower.includes('click') && el.visual_cues.is_clickable) {
+        score += 0.2;
+      }
+      if (goalLower.includes('type') && (el.role === 'textbox' || el.role === 'searchbox')) {
+        score += 0.2;
+      }
+      if (goalLower.includes('search')) {
+        // Filter out non-interactive elements for search tasks
+        if ((el.role === 'link' || el.role === 'img') && !el.visual_cues.is_primary) {
+          score -= 0.5;
+        }
+      }
+
+      scoredElements.push([score, el]);
+    }
+
+    // Re-sort by boosted score
+    scoredElements.sort((a, b) => b[0] - a[0]);
+    elements = scoredElements.map(([, el]) => el);
+
+    return elements.slice(0, this.snapshotLimit);
+  }
+
+  /**
+   * Extract meaningful keywords from goal text
+   */
+  private extractKeywords(text: string): string[] {
+    const stopwords = new Set([
+      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+      'of', 'with', 'by', 'from', 'as', 'is', 'was'
+    ]);
+    const words = text.split(/\s+/);
+    return words.filter(w => !stopwords.has(w) && w.length > 2);
+  }
+
+  /**
    * Convert snapshot elements to token-efficient prompt string
    * Format: [ID] <role> "text" {cues} @ (x,y) (Imp:score)
+   * Note: elements are already filtered by filterElements() in act()
    */
   private buildContext(snap: Snapshot, goal: string): string {
     const lines: string[] = [];
 
-    for (const el of snap.elements.slice(0, this.snapshotLimit)) {
+    for (const el of snap.elements) {
       // Extract visual cues
       const cues: string[] = [];
       if (el.visual_cues.is_primary) cues.push('PRIMARY');
