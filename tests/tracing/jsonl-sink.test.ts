@@ -1,0 +1,148 @@
+/**
+ * Tests for JsonlTraceSink
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { JsonlTraceSink } from '../../src/tracing/jsonl-sink';
+
+describe('JsonlTraceSink', () => {
+  const testDir = path.join(__dirname, 'test-traces');
+  const testFile = path.join(testDir, 'test.jsonl');
+
+  beforeEach(() => {
+    // Clean up test directory
+    if (fs.existsSync(testDir)) {
+      fs.rmSync(testDir, { recursive: true });
+    }
+  });
+
+  afterEach(() => {
+    // Clean up test directory
+    if (fs.existsSync(testDir)) {
+      fs.rmSync(testDir, { recursive: true });
+    }
+  });
+
+  it('should create parent directories if they do not exist', () => {
+    const sink = new JsonlTraceSink(testFile);
+    expect(fs.existsSync(testDir)).toBe(true);
+    sink.close();
+  });
+
+  it('should emit events as JSON lines', async () => {
+    const sink = new JsonlTraceSink(testFile);
+
+    sink.emit({ type: 'test1', data: 'hello' });
+    sink.emit({ type: 'test2', data: 'world' });
+
+    await sink.close();
+
+    const content = fs.readFileSync(testFile, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    expect(lines.length).toBe(2);
+    expect(JSON.parse(lines[0])).toEqual({ type: 'test1', data: 'hello' });
+    expect(JSON.parse(lines[1])).toEqual({ type: 'test2', data: 'world' });
+  });
+
+  it('should append to existing file', async () => {
+    // Write first batch
+    const sink1 = new JsonlTraceSink(testFile);
+    sink1.emit({ seq: 1 });
+    await sink1.close();
+
+    // Write second batch
+    const sink2 = new JsonlTraceSink(testFile);
+    sink2.emit({ seq: 2 });
+    await sink2.close();
+
+    const content = fs.readFileSync(testFile, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    expect(lines.length).toBe(2);
+    expect(JSON.parse(lines[0])).toEqual({ seq: 1 });
+    expect(JSON.parse(lines[1])).toEqual({ seq: 2 });
+  });
+
+  it('should handle close() multiple times gracefully', async () => {
+    const sink = new JsonlTraceSink(testFile);
+    sink.emit({ test: true });
+
+    await sink.close();
+    await sink.close(); // Should not throw
+
+    expect(sink.isClosed()).toBe(true);
+  });
+
+  it('should warn when emitting after close', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+    const sink = new JsonlTraceSink(testFile);
+    await sink.close();
+
+    sink.emit({ test: true }); // Should warn
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Attempted to emit after close()')
+    );
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('should return correct sink type', () => {
+    const sink = new JsonlTraceSink(testFile);
+    expect(sink.getSinkType()).toBe(`JsonlTraceSink(${testFile})`);
+    sink.close();
+  });
+
+  it('should return file path', () => {
+    const sink = new JsonlTraceSink(testFile);
+    expect(sink.getPath()).toBe(testFile);
+    sink.close();
+  });
+
+  it('should handle write errors gracefully', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+    const sink = new JsonlTraceSink(testFile);
+
+    // Create a circular reference (will fail JSON.stringify)
+    const circular: any = { a: 1 };
+    circular.self = circular;
+
+    sink.emit(circular); // Should log error but not crash
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+    await sink.close();
+  });
+
+  it('should write valid JSON for complex objects', async () => {
+    const sink = new JsonlTraceSink(testFile);
+
+    const complexEvent = {
+      v: 1,
+      type: 'snapshot',
+      ts: '2025-12-26T10:00:00.000Z',
+      run_id: 'test-run',
+      seq: 1,
+      data: {
+        url: 'https://example.com',
+        elements: [
+          { id: 1, text: 'Hello', bbox: { x: 0, y: 0, width: 100, height: 50 } },
+          { id: 2, text: null, bbox: { x: 100, y: 0, width: 100, height: 50 } },
+        ],
+      },
+    };
+
+    sink.emit(complexEvent);
+    await sink.close();
+
+    const content = fs.readFileSync(testFile, 'utf-8');
+    const parsed = JSON.parse(content.trim());
+
+    expect(parsed).toEqual(complexEvent);
+  });
+});

@@ -40,3 +40,12 @@ export {
   ActionParameters
 } from './conversational-agent';
 
+// Tracing Layer (v0.3.1+)
+export {
+  Tracer,
+  TraceSink,
+  JsonlTraceSink,
+  TraceEvent,
+  TraceEventData
+} from './tracing';
+
