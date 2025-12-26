@@ -63,20 +63,59 @@
         return (el.innerText || '').replace(/\s+/g, ' ').trim().substring(0, 100);
     }
 
-    // --- HELPER: Safe Class Name Extractor ---
+    // --- HELPER: Safe Class Name Extractor (Handles SVGAnimatedString) ---
     function getClassName(el) {
+        if (!el || !el.className) return '';
+        
+        // Handle string (HTML elements)
         if (typeof el.className === 'string') return el.className;
-        if (el.className && typeof el.className.baseVal === 'string') return el.className.baseVal;
+        
+        // Handle SVGAnimatedString (SVG elements)
+        if (typeof el.className === 'object') {
+            if ('baseVal' in el.className && typeof el.className.baseVal === 'string') {
+                return el.className.baseVal;
+            }
+            if ('animVal' in el.className && typeof el.className.animVal === 'string') {
+                return el.className.animVal;
+            }
+            // Fallback: convert to string
+            try {
+                return String(el.className);
+            } catch (e) {
+                return '';
+            }
+        }
+        
         return '';
     }
 
-    // --- HELPER: Safe String Converter ---
+    // --- HELPER: Paranoid String Converter (Handles SVGAnimatedString) ---
     function toSafeString(value) {
         if (value === null || value === undefined) return null;
+        
+        // 1. If it's already a primitive string, return it
         if (typeof value === 'string') return value;
-        if (value && typeof value === 'object' && 'baseVal' in value) {
-            return typeof value.baseVal === 'string' ? value.baseVal : null;
+        
+        // 2. Handle SVG objects (SVGAnimatedString, SVGAnimatedNumber, etc.)
+        if (typeof value === 'object') {
+            // Try extracting baseVal (standard SVG property)
+            if ('baseVal' in value && typeof value.baseVal === 'string') {
+                return value.baseVal;
+            }
+            // Try animVal as fallback
+            if ('animVal' in value && typeof value.animVal === 'string') {
+                return value.animVal;
+            }
+            // Fallback: Force to string (prevents WASM crash even if data is less useful)
+            // This prevents the "Invalid Type" crash, even if the data is "[object SVGAnimatedString]"
+            try {
+                return String(value);
+            } catch (e) {
+                return null;
+            }
         }
+        
+        // 3. Last resort cast for primitives
         try {
             return String(value);
         } catch (e) {
@@ -128,13 +167,21 @@
     function processSnapshotInBackground(rawData, options) {
         return new Promise((resolve, reject) => {
             const requestId = Math.random().toString(36).substring(7);
+            const TIMEOUT_MS = 25000; // 25 seconds (longer than content.js timeout)
+            let resolved = false;
+
             const timeout = setTimeout(() => {
-                window.removeEventListener('message', listener);
-                reject(new Error('WASM processing timeout'));
-            }, 15000); // 15s timeout
+                if (!resolved) {
+                    resolved = true;
+                    window.removeEventListener('message', listener);
+                    reject(new Error('WASM processing timeout - extension may be unresponsive. Try reloading the extension.'));
+                }
+            }, TIMEOUT_MS);
 
             const listener = (e) => {
                 if (e.data.type === 'SENTIENCE_SNAPSHOT_RESULT' && e.data.requestId === requestId) {
+                    if (resolved) return; // Already handled
+                    resolved = true;
                     clearTimeout(timeout);
                     window.removeEventListener('message', listener);
 
@@ -151,12 +198,22 @@
             };
 
             window.addEventListener('message', listener);
-            window.postMessage({
-                type: 'SENTIENCE_SNAPSHOT_REQUEST',
-                requestId,
-                rawData,
-                options
-            }, '*');
+            
+            try {
+                window.postMessage({
+                    type: 'SENTIENCE_SNAPSHOT_REQUEST',
+                    requestId,
+                    rawData,
+                    options
+                }, '*');
+            } catch (error) {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', listener);
+                    reject(new Error(`Failed to send snapshot request: ${error.message}`));
+                }
+            }
         });
     }
 
@@ -343,6 +400,98 @@
         return obj;
     }
 
+    // --- HELPER: Extract Raw Element Data (for Golden Set) ---
+    function extractRawElementData(el) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        
+        return {
+            tag: el.tagName,
+            rect: {
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+            },
+            styles: {
+                cursor: style.cursor || null,
+                backgroundColor: style.backgroundColor || null,
+                color: style.color || null,
+                fontWeight: style.fontWeight || null,
+                fontSize: style.fontSize || null,
+                display: style.display || null,
+                position: style.position || null,
+                zIndex: style.zIndex || null,
+                opacity: style.opacity || null,
+                visibility: style.visibility || null
+            },
+            attributes: {
+                role: el.getAttribute('role') || null,
+                type: el.getAttribute('type') || null,
+                ariaLabel: el.getAttribute('aria-label') || null,
+                id: el.id || null,
+                className: el.className || null
+            }
+        };
+    }
+
+    // --- HELPER: Generate Unique CSS Selector (for Golden Set) ---
+    function getUniqueSelector(el) {
+        if (!el || !el.tagName) return '';
+        
+        // If element has a unique ID, use it
+        if (el.id) {
+            return `#${el.id}`;
+        }
+        
+        // Try data attributes or aria-label for uniqueness
+        for (const attr of el.attributes) {
+            if (attr.name.startsWith('data-') || attr.name === 'aria-label') {
+                const value = attr.value ? attr.value.replace(/"/g, '\\"') : '';
+                return `${el.tagName.toLowerCase()}[${attr.name}="${value}"]`;
+            }
+        }
+        
+        // Build path with classes and nth-child for uniqueness
+        const path = [];
+        let current = el;
+        
+        while (current && current !== document.body && current !== document.documentElement) {
+            let selector = current.tagName.toLowerCase();
+            
+            // If current element has ID, use it and stop
+            if (current.id) {
+                selector = `#${current.id}`;
+                path.unshift(selector);
+                break;
+            }
+            
+            // Add class if available
+            if (current.className && typeof current.className === 'string') {
+                const classes = current.className.trim().split(/\s+/).filter(c => c);
+                if (classes.length > 0) {
+                    // Use first class for simplicity
+                    selector += `.${classes[0]}`;
+                }
+            }
+            
+            // Add nth-of-type if needed for uniqueness
+            if (current.parentElement) {
+                const siblings = Array.from(current.parentElement.children);
+                const sameTagSiblings = siblings.filter(s => s.tagName === current.tagName);
+                const index = sameTagSiblings.indexOf(current);
+                if (index > 0 || sameTagSiblings.length > 1) {
+                    selector += `:nth-of-type(${index + 1})`;
+                }
+            }
+            
+            path.unshift(selector);
+            current = current.parentElement;
+        }
+        
+        return path.join(' > ') || el.tagName.toLowerCase();
+    }
+
     // --- GLOBAL API ---
     window.sentience = {
         // 1. Geometry snapshot (NEW ARCHITECTURE - No WASM in Main World!)
@@ -385,7 +534,7 @@
                             role: toSafeString(el.getAttribute('role')),
                             type_: toSafeString(el.getAttribute('type')),
                             aria_label: toSafeString(el.getAttribute('aria-label')),
-                            href: toSafeString(el.href),
+                            href: toSafeString(el.href || el.getAttribute('href') || null),
                             class: toSafeString(getClassName(el))
                         },
                         text: toSafeString(textVal),
@@ -458,6 +607,198 @@
                 return true;
             }
             return false;
+        },
+
+        // 4. Inspector Mode: Start Recording for Golden Set Collection
+        startRecording: (options = {}) => {
+            const {
+                highlightColor = '#ff0000',
+                successColor = '#00ff00',
+                autoDisableTimeout = 30 * 60 * 1000, // 30 minutes default
+                keyboardShortcut = 'Ctrl+Shift+I'
+            } = options;
+            
+            console.log("🔴 [Sentience] Recording Mode STARTED. Click an element to copy its Ground Truth JSON.");
+            console.log(`   Press ${keyboardShortcut} or call stopRecording() to stop.`);
+            
+            // Validate registry is populated
+            if (!window.sentience_registry || window.sentience_registry.length === 0) {
+                console.warn("⚠️ Registry empty. Call `await window.sentience.snapshot()` first to populate registry.");
+                alert("Registry empty. Run `await window.sentience.snapshot()` first!");
+                return () => {}; // Return no-op cleanup function
+            }
+            
+            // Create reverse mapping for O(1) lookup (fixes registry lookup bug)
+            window.sentience_registry_map = new Map();
+            window.sentience_registry.forEach((el, idx) => {
+                if (el) window.sentience_registry_map.set(el, idx);
+            });
+            
+            // Create highlight box overlay
+            let highlightBox = document.getElementById('sentience-highlight-box');
+            if (!highlightBox) {
+                highlightBox = document.createElement('div');
+                highlightBox.id = 'sentience-highlight-box';
+                highlightBox.style.cssText = `
+                    position: fixed;
+                    pointer-events: none;
+                    z-index: 2147483647;
+                    border: 2px solid ${highlightColor};
+                    background: rgba(255, 0, 0, 0.1);
+                    display: none;
+                    transition: all 0.1s ease;
+                    box-sizing: border-box;
+                `;
+                document.body.appendChild(highlightBox);
+            }
+            
+            // Create visual indicator (red border on page when recording)
+            let recordingIndicator = document.getElementById('sentience-recording-indicator');
+            if (!recordingIndicator) {
+                recordingIndicator = document.createElement('div');
+                recordingIndicator.id = 'sentience-recording-indicator';
+                recordingIndicator.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 3px;
+                    background: ${highlightColor};
+                    z-index: 2147483646;
+                    pointer-events: none;
+                `;
+                document.body.appendChild(recordingIndicator);
+            }
+            recordingIndicator.style.display = 'block';
+            
+            // Hover handler (visual feedback)
+            const mouseOverHandler = (e) => {
+                const el = e.target;
+                if (!el || el === highlightBox || el === recordingIndicator) return;
+                
+                const rect = el.getBoundingClientRect();
+                highlightBox.style.display = 'block';
+                highlightBox.style.top = (rect.top + window.scrollY) + 'px';
+                highlightBox.style.left = (rect.left + window.scrollX) + 'px';
+                highlightBox.style.width = rect.width + 'px';
+                highlightBox.style.height = rect.height + 'px';
+            };
+            
+            // Click handler (capture ground truth data)
+            const clickHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const el = e.target;
+                if (!el || el === highlightBox || el === recordingIndicator) return;
+                
+                // Use Map for reliable O(1) lookup
+                const sentienceId = window.sentience_registry_map.get(el);
+                if (sentienceId === undefined) {
+                    console.warn("⚠️ Element not found in Sentience Registry. Did you run snapshot() first?");
+                    alert("Element not in registry. Run `await window.sentience.snapshot()` first!");
+                    return;
+                }
+                
+                // Extract raw data (ground truth + raw signals, NOT model outputs)
+                const rawData = extractRawElementData(el);
+                const selector = getUniqueSelector(el);
+                const role = el.getAttribute('role') || el.tagName.toLowerCase();
+                const text = getText(el);
+                
+                // Build golden set JSON (ground truth + raw signals only)
+                const snippet = {
+                    task: `Interact with ${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`,
+                    url: window.location.href,
+                    timestamp: new Date().toISOString(),
+                    target_criteria: {
+                        id: sentienceId,
+                        selector: selector,
+                        role: role,
+                        text: text.substring(0, 50)
+                    },
+                    debug_snapshot: rawData
+                };
+                
+                // Copy to clipboard
+                const jsonString = JSON.stringify(snippet, null, 2);
+                navigator.clipboard.writeText(jsonString).then(() => {
+                    console.log("✅ Copied Ground Truth to clipboard:", snippet);
+                    
+                    // Flash green to indicate success
+                    highlightBox.style.border = `2px solid ${successColor}`;
+                    highlightBox.style.background = 'rgba(0, 255, 0, 0.2)';
+                    setTimeout(() => {
+                        highlightBox.style.border = `2px solid ${highlightColor}`;
+                        highlightBox.style.background = 'rgba(255, 0, 0, 0.1)';
+                    }, 500);
+                }).catch(err => {
+                    console.error("❌ Failed to copy to clipboard:", err);
+                    alert("Failed to copy to clipboard. Check console for JSON.");
+                });
+            };
+            
+            // Auto-disable timeout
+            let timeoutId = null;
+            
+            // Cleanup function to stop recording (defined before use)
+            const stopRecording = () => {
+                document.removeEventListener('mouseover', mouseOverHandler, true);
+                document.removeEventListener('click', clickHandler, true);
+                document.removeEventListener('keydown', keyboardHandler, true);
+                
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                
+                if (highlightBox) {
+                    highlightBox.style.display = 'none';
+                }
+                
+                if (recordingIndicator) {
+                    recordingIndicator.style.display = 'none';
+                }
+                
+                // Clean up registry map (optional, but good practice)
+                if (window.sentience_registry_map) {
+                    window.sentience_registry_map.clear();
+                }
+                
+                // Remove global reference
+                if (window.sentience_stopRecording === stopRecording) {
+                    delete window.sentience_stopRecording;
+                }
+                
+                console.log("⚪ [Sentience] Recording Mode STOPPED.");
+            };
+            
+            // Keyboard shortcut handler (defined after stopRecording)
+            const keyboardHandler = (e) => {
+                // Ctrl+Shift+I or Cmd+Shift+I
+                if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') {
+                    e.preventDefault();
+                    stopRecording();
+                }
+            };
+            
+            // Attach event listeners (use capture phase to intercept early)
+            document.addEventListener('mouseover', mouseOverHandler, true);
+            document.addEventListener('click', clickHandler, true);
+            document.addEventListener('keydown', keyboardHandler, true);
+            
+            // Set up auto-disable timeout
+            if (autoDisableTimeout > 0) {
+                timeoutId = setTimeout(() => {
+                    console.log("⏰ [Sentience] Recording Mode auto-disabled after timeout.");
+                    stopRecording();
+                }, autoDisableTimeout);
+            }
+            
+            // Store stop function globally for keyboard shortcut access
+            window.sentience_stopRecording = stopRecording;
+            
+            return stopRecording;
         }
     };
 
