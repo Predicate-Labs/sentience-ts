@@ -8,6 +8,8 @@ import { snapshot, SnapshotOptions } from './snapshot';
 import { click, typeText, press } from './actions';
 import { Snapshot, Element, ActionResult } from './types';
 import { LLMProvider, LLMResponse } from './llm-provider';
+import { Tracer } from './tracing/tracer';
+import { randomUUID } from 'crypto';
 
 /**
  * Execution result from agent.act()
@@ -82,6 +84,8 @@ export class SentienceAgent {
   private llm: LLMProvider;
   private snapshotLimit: number;
   private verbose: boolean;
+  private tracer?: Tracer;
+  private stepCount: number;
   private history: HistoryEntry[];
   private tokenUsage: TokenStats;
 
@@ -91,17 +95,21 @@ export class SentienceAgent {
    * @param llm - LLM provider (OpenAIProvider, AnthropicProvider, etc.)
    * @param snapshotLimit - Maximum elements to include in context (default: 50)
    * @param verbose - Print execution logs (default: true)
+   * @param tracer - Optional tracer for recording execution (default: undefined)
    */
   constructor(
     browser: SentienceBrowser,
     llm: LLMProvider,
     snapshotLimit: number = 50,
-    verbose: boolean = true
+    verbose: boolean = true,
+    tracer?: Tracer
   ) {
     this.browser = browser;
     this.llm = llm;
     this.snapshotLimit = snapshotLimit;
     this.verbose = verbose;
+    this.tracer = tracer;
+    this.stepCount = 0;
     this.history = [];
     this.tokenUsage = {
       totalPromptTokens: 0,
@@ -136,6 +144,16 @@ export class SentienceAgent {
       console.log('='.repeat(70));
     }
 
+    // Increment step counter and generate step ID
+    this.stepCount += 1;
+    const stepId = randomUUID();
+
+    // Emit step_start event
+    if (this.tracer) {
+      const currentUrl = this.browser.getPage().url();
+      this.tracer.emitStepStart(stepId, this.stepCount, goal, 0, currentUrl);
+    }
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         // 1. OBSERVE: Get refined semantic snapshot
@@ -161,6 +179,19 @@ export class SentienceAgent {
           elements: filteredElements
         };
 
+        // Emit snapshot event
+        if (this.tracer) {
+          this.tracer.emit('snapshot', {
+            url: filteredSnap.url,
+            elements: filteredSnap.elements.slice(0, 50).map(el => ({
+              id: el.id,
+              bbox: el.bbox,
+              role: el.role,
+              text: el.text?.substring(0, 100),
+            }))
+          }, stepId);
+        }
+
         // 2. GROUND: Format elements for LLM context
         const context = this.buildContext(filteredSnap, goal);
 
@@ -169,6 +200,16 @@ export class SentienceAgent {
 
         if (this.verbose) {
           console.log(`🧠 LLM Decision: ${llmResponse.content}`);
+        }
+
+        // Emit LLM response event
+        if (this.tracer) {
+          this.tracer.emit('llm_response', {
+            model: llmResponse.modelName,
+            prompt_tokens: llmResponse.promptTokens,
+            completion_tokens: llmResponse.completionTokens,
+            response_text: llmResponse.content.substring(0, 500),
+          }, stepId);
         }
 
         // Track token usage
@@ -184,6 +225,17 @@ export class SentienceAgent {
         result.durationMs = durationMs;
         result.attempt = attempt;
         result.goal = goal;
+
+        // Emit action event
+        if (this.tracer) {
+          this.tracer.emit('action', {
+            action_type: result.action,
+            element_id: result.elementId,
+            text: result.text,
+            key: result.key,
+            success: result.success,
+          }, stepId);
+        }
 
         // 5. RECORD: Track history
         this.history.push({
@@ -203,6 +255,11 @@ export class SentienceAgent {
         return result;
 
       } catch (error: any) {
+        // Emit error event
+        if (this.tracer) {
+          this.tracer.emitError(stepId, error.message, attempt);
+        }
+
         if (attempt < maxRetries) {
           if (this.verbose) {
             console.log(`⚠️  Retry ${attempt + 1}/${maxRetries}: ${error.message}`);
@@ -474,11 +531,28 @@ Examples:
    */
   clearHistory(): void {
     this.history = [];
+    this.stepCount = 0;
     this.tokenUsage = {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalTokens: 0,
       byAction: []
     };
+  }
+
+  /**
+   * Close the tracer and flush events to disk
+   */
+  async closeTracer(): Promise<void> {
+    if (this.tracer) {
+      await this.tracer.close();
+    }
+  }
+
+  /**
+   * Get the tracer instance (if any)
+   */
+  getTracer(): Tracer | undefined {
+    return this.tracer;
   }
 }

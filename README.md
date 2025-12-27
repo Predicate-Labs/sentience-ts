@@ -123,6 +123,136 @@ await browser.close();
 
 ---
 
+## Agent Execution Tracing (NEW in v0.3.1)
+
+Record complete agent execution traces for debugging, analysis, and replay. Traces capture every step, snapshot, LLM decision, and action in a structured JSONL format.
+
+### Quick Start: Agent with Tracing
+
+```typescript
+import {
+  SentienceBrowser,
+  SentienceAgent,
+  OpenAIProvider,
+  Tracer,
+  JsonlTraceSink
+} from 'sentience-ts';
+import { randomUUID } from 'crypto';
+
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o');
+
+// Create a tracer
+const runId = randomUUID();
+const sink = new JsonlTraceSink(`traces/${runId}.jsonl`);
+const tracer = new Tracer(runId, sink);
+
+// Create agent with tracer
+const agent = new SentienceAgent(browser, llm, 50, true, tracer);
+
+// Emit run_start
+tracer.emitRunStart('SentienceAgent', 'gpt-4o');
+
+try {
+  await browser.getPage().goto('https://google.com');
+
+  // Every action is automatically traced!
+  await agent.act('Click the search box');
+  await agent.act("Type 'sentience ai' into the search field");
+  await agent.act('Press Enter');
+
+  tracer.emitRunEnd(3);
+} finally {
+  // Flush trace to disk
+  await agent.closeTracer();
+  await browser.close();
+}
+
+console.log(`✅ Trace saved to: traces/${runId}.jsonl`);
+```
+
+### What Gets Traced
+
+Each agent action generates multiple events:
+
+1. **step_start** - Before action execution (goal, URL, attempt)
+2. **snapshot** - Page state with all interactive elements
+3. **llm_response** - LLM decision (model, tokens, response)
+4. **action** - Executed action (type, element ID, success)
+5. **error** - Any failures (error message, retry attempt)
+
+**Example trace output:**
+```jsonl
+{"v":1,"type":"run_start","ts":"2025-12-26T10:00:00.000Z","run_id":"abc-123","seq":1,"data":{"agent":"SentienceAgent","llm_model":"gpt-4o"}}
+{"v":1,"type":"step_start","ts":"2025-12-26T10:00:01.000Z","run_id":"abc-123","seq":2,"step_id":"step-1","data":{"step_index":1,"goal":"Click the search box","attempt":0,"url":"https://google.com"}}
+{"v":1,"type":"snapshot","ts":"2025-12-26T10:00:01.500Z","run_id":"abc-123","seq":3,"step_id":"step-1","data":{"url":"https://google.com","elements":[...]}}
+{"v":1,"type":"llm_response","ts":"2025-12-26T10:00:02.000Z","run_id":"abc-123","seq":4,"step_id":"step-1","data":{"model":"gpt-4o","prompt_tokens":250,"completion_tokens":10,"response_text":"CLICK(42)"}}
+{"v":1,"type":"action","ts":"2025-12-26T10:00:02.500Z","run_id":"abc-123","seq":5,"step_id":"step-1","data":{"action_type":"click","element_id":42,"success":true}}
+{"v":1,"type":"run_end","ts":"2025-12-26T10:00:03.000Z","run_id":"abc-123","seq":6,"data":{"steps":1}}
+```
+
+### Reading and Analyzing Traces
+
+```typescript
+import * as fs from 'fs';
+
+// Read trace file
+const content = fs.readFileSync(`traces/${runId}.jsonl`, 'utf-8');
+const events = content.trim().split('\n').map(JSON.parse);
+
+console.log(`Total events: ${events.length}`);
+
+// Analyze events
+events.forEach(event => {
+  console.log(`[${event.seq}] ${event.type} - ${event.ts}`);
+});
+
+// Filter by type
+const actions = events.filter(e => e.type === 'action');
+console.log(`Actions taken: ${actions.length}`);
+
+// Get token usage
+const llmEvents = events.filter(e => e.type === 'llm_response');
+const totalTokens = llmEvents.reduce((sum, e) => sum + (e.data.prompt_tokens || 0) + (e.data.completion_tokens || 0), 0);
+console.log(`Total tokens: ${totalTokens}`);
+```
+
+### Tracing Without Agent (Manual)
+
+You can also use the tracer directly for custom workflows:
+
+```typescript
+import { Tracer, JsonlTraceSink } from 'sentience-ts';
+import { randomUUID } from 'crypto';
+
+const runId = randomUUID();
+const sink = new JsonlTraceSink(`traces/${runId}.jsonl`);
+const tracer = new Tracer(runId, sink);
+
+// Emit custom events
+tracer.emit('custom_event', {
+  message: 'Something happened',
+  details: { foo: 'bar' }
+});
+
+// Use convenience methods
+tracer.emitRunStart('MyAgent', 'gpt-4o');
+tracer.emitStepStart('step-1', 1, 'Do something');
+tracer.emitError('step-1', 'Something went wrong');
+tracer.emitRunEnd(1);
+
+// Flush to disk
+await tracer.close();
+```
+
+### Schema Compatibility
+
+Traces are **100% compatible** with Python SDK traces - use the same tools to analyze traces from both TypeScript and Python agents!
+
+**See full example:** [examples/agent-with-tracing.ts](examples/agent-with-tracing.ts)
+
+---
+
 ## Agent Layer Examples
 
 ### Google Search (6 lines of code)
