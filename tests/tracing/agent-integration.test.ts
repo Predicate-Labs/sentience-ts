@@ -33,10 +33,11 @@ describe('Agent Integration with Tracing', () => {
   const testFile = path.join(testDir, 'agent-test.jsonl');
 
   beforeEach(() => {
-    // Clean up test directory
+    // Clean up and recreate test directory
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true });
     }
+    fs.mkdirSync(testDir, { recursive: true });
   });
 
   afterEach(() => {

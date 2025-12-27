@@ -14,10 +14,11 @@ describe('Tracer', () => {
   const testFile = path.join(testDir, 'tracer-test.jsonl');
 
   beforeEach(() => {
-    // Clean up test directory
+    // Clean up and recreate test directory
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true });
     }
+    fs.mkdirSync(testDir, { recursive: true });
   });
 
   afterEach(() => {
