@@ -33,11 +33,40 @@ describe('Agent Integration with Tracing', () => {
   const testFile = path.join(testDir, 'agent-test.jsonl');
 
   beforeEach(() => {
-    // Clean up and recreate test directory
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
+    // Clean up test files but keep the directory
+    // This prevents race conditions where directory deletion destroys writeStreams
+    // in parallel tests
+    
+    // Ensure directory exists first
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir, { recursive: true });
     }
-    fs.mkdirSync(testDir, { recursive: true });
+    
+    // Delete only the test file, not the directory
+    if (fs.existsSync(testFile)) {
+      try {
+        fs.unlinkSync(testFile);
+      } catch (err) {
+        // Ignore file deletion errors (file may be in use)
+      }
+    }
+    
+    // Clean up any other files in the directory (from previous test runs)
+    try {
+      const files = fs.readdirSync(testDir);
+      for (const file of files) {
+        try {
+          const filePath = path.join(testDir, file);
+          if (fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (err) {
+          // Ignore individual file deletion errors
+        }
+      }
+    } catch (err) {
+      // Ignore directory read errors
+    }
   });
 
   afterEach(async () => {
@@ -353,7 +382,8 @@ describe('Agent Integration with Tracing', () => {
         const currentWriteStream = (sink as any).writeStream;
         const streamDestroyed = currentWriteStream?.destroyed ?? true;
         const streamErrored = currentWriteStream?.errored ? String(currentWriteStream.errored) : null;
-        throw new Error(`Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}${streamErrored ? `, Stream error: ${streamErrored}` : ''}`);
+        const sinkClosed = sink.isClosed();
+        throw new Error(`Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}, Sink closed: ${sinkClosed}${streamErrored ? `, Stream error: ${streamErrored}` : ''}`);
       }
 
       // Read trace file - verify it exists one more time before reading
