@@ -1,7 +1,7 @@
 // injected_api.js - MAIN WORLD (NO WASM! CSP-Resistant!)
 // This script ONLY collects raw DOM data and sends it to background for processing
 (async () => {
-    console.log('[SentienceAPI] Initializing (CSP-Resistant Mode)...');
+    // console.log('[SentienceAPI] Initializing (CSP-Resistant Mode)...');
 
     // Wait for Extension ID from content.js
     const getExtensionId = () => document.documentElement.dataset.sentienceExtensionId;
@@ -22,7 +22,7 @@
         return;
     }
 
-    console.log('[SentienceAPI] Extension ID:', extId);
+    // console.log('[SentienceAPI] Extension ID:', extId);
 
     // Registry for click actions (still needed for click() function)
     window.sentience_registry = [];
@@ -802,5 +802,5 @@
         }
     };
 
-    console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
+    // console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
 })();

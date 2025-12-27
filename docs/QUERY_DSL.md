@@ -506,3 +506,4 @@ const center = query(snap, 'bbox.x>400 bbox.x<600 bbox.y>300 bbox.y<500');
 - [Type Definitions](../../spec/sdk-types.md)
 - [Snapshot Schema](../../spec/snapshot.schema.json)
 
+

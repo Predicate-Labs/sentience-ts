@@ -48,3 +48,4 @@ export async function screenshot(
   return `data:${mimeType};base64,${base64Data}`;
 }
 
+

@@ -75,3 +75,4 @@ export interface QuerySelectorObject {
 
 export type QuerySelector = string | QuerySelectorObject;
 
+
