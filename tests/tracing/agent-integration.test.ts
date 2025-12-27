@@ -42,24 +42,29 @@ describe('Agent Integration with Tracing', () => {
 
   afterEach(async () => {
     // Wait a bit for file handles to close (Windows needs this)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     
-    // Clean up test directory with retry logic for Windows
+    // Only delete the test file, not the directory
+    // This prevents race conditions where parallel tests delete the directory
+    // while another test is still using it
+    if (fs.existsSync(testFile)) {
+      try {
+        fs.unlinkSync(testFile);
+      } catch (err) {
+        // Ignore file deletion errors (file may still be in use)
+      }
+    }
+    
+    // Clean up test directory only if it's empty (safer for parallel tests)
     if (fs.existsSync(testDir)) {
-      // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
-        try {
-          fs.rmSync(testDir, { recursive: true, force: true });
-          break; // Success
-        } catch (err: any) {
-          if (i === 4) {
-            // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
-          } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
+      try {
+        const files = fs.readdirSync(testDir);
+        // Only delete directory if it's empty
+        if (files.length === 0) {
+          fs.rmdirSync(testDir);
         }
+      } catch (err) {
+        // Ignore directory deletion errors
       }
     }
   });
@@ -293,8 +298,18 @@ describe('Agent Integration with Tracing', () => {
 
       // Wait for file to be written and flushed (stream may be buffered)
       // Use a retry loop to handle slow CI environments
+      // Also ensure directory exists throughout (may be deleted by parallel tests)
       let fileExists = false;
       for (let i = 0; i < 30; i++) {
+        // Re-ensure directory exists (may have been deleted by parallel test cleanup)
+        if (!fs.existsSync(testDir)) {
+          try {
+            fs.mkdirSync(testDir, { recursive: true });
+          } catch (err) {
+            // Directory creation failed, continue trying
+          }
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 100));
         if (fs.existsSync(testFile)) {
           // Also check that file has content (not just empty file)
@@ -312,15 +327,29 @@ describe('Agent Integration with Tracing', () => {
 
       // Verify file exists before reading with better diagnostics
       if (!fileExists) {
-        const dirExists = fs.existsSync(testDir);
-        const dirWritable = dirExists ? (() => {
+        // Re-check directory state (may have changed during wait)
+        let dirExists = fs.existsSync(testDir);
+        let dirWritable = false;
+        
+        // If directory doesn't exist, try to recreate it for diagnostics
+        if (!dirExists) {
+          try {
+            fs.mkdirSync(testDir, { recursive: true });
+            dirExists = true;
+            fs.accessSync(testDir, fs.constants.W_OK);
+            dirWritable = true;
+          } catch (err) {
+            // Directory creation/access failed
+          }
+        } else {
           try {
             fs.accessSync(testDir, fs.constants.W_OK);
-            return true;
+            dirWritable = true;
           } catch {
-            return false;
+            // Directory not writable
           }
-        })() : false;
+        }
+        
         const currentWriteStream = (sink as any).writeStream;
         const streamDestroyed = currentWriteStream?.destroyed ?? true;
         const streamErrored = currentWriteStream?.errored ? String(currentWriteStream.errored) : null;
