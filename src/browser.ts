@@ -6,6 +6,7 @@ import { chromium, BrowserContext, Page, Browser } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { URL } from 'url';
 
 export class SentienceBrowser {
   private context: BrowserContext | null = null;
@@ -16,11 +17,13 @@ export class SentienceBrowser {
   private _apiKey?: string;
   private _apiUrl?: string;
   private headless: boolean;
+  private _proxy?: string;
 
   constructor(
     apiKey?: string,
     apiUrl?: string,
-    headless?: boolean
+    headless?: boolean,
+    proxy?: string
   ) {
     this._apiKey = apiKey;
     
@@ -39,6 +42,9 @@ export class SentienceBrowser {
     } else {
       this._apiUrl = undefined;
     }
+
+    // Support proxy from parameter or environment variable
+    this._proxy = proxy || process.env.SENTIENCE_PROXY;
   }
 
   async start(): Promise<void> {
@@ -94,13 +100,26 @@ export class SentienceBrowser {
         args.push('--headless=new');
     }
 
-    // 4. Launch Browser
+    // CRITICAL: WebRTC leak protection for datacenter usage with proxies
+    // Prevents WebRTC from leaking the real IP address even when using proxies
+    if (this._proxy) {
+      args.push('--disable-features=WebRtcHideLocalIpsWithMdns');
+      args.push('--force-webrtc-ip-handling-policy=disable_non_proxied_udp');
+    }
+
+    // 4. Parse proxy configuration
+    const proxyConfig = this.parseProxy(this._proxy);
+
+    // 5. Launch Browser
     this.context = await chromium.launchPersistentContext(this.userDataDir, {
       headless: false, // Must be false here, handled via args above
       args: args,
       viewport: { width: 1920, height: 1080 },
       // Clean User-Agent to avoid "HeadlessChrome" detection
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      proxy: proxyConfig, // Pass proxy configuration
+      // CRITICAL: Ignore HTTPS errors when using proxy (proxies often use self-signed certs)
+      ignoreHTTPSErrors: proxyConfig !== undefined
     });
 
     this.page = this.context.pages()[0] || await this.context.newPage();
@@ -427,6 +446,51 @@ export class SentienceBrowser {
 
   getApiUrl(): string | undefined {
     return this._apiUrl;
+  }
+
+  /**
+   * Parse proxy connection string into Playwright format.
+   * 
+   * @param proxyString - Standard format "http://username:password@host:port"
+   *                    or "socks5://user:pass@host:port"
+   * @returns Playwright proxy object or undefined if invalid
+   */
+  private parseProxy(proxyString?: string): { server: string; username?: string; password?: string } | undefined {
+    if (!proxyString) {
+      return undefined;
+    }
+
+    try {
+      const parsed = new URL(proxyString);
+      
+      // Validate scheme
+      const validSchemes = ['http:', 'https:', 'socks5:'];
+      if (!validSchemes.includes(parsed.protocol)) {
+        throw new Error(`Unsupported proxy scheme: ${parsed.protocol}`);
+      }
+
+      // Validate host and port
+      if (!parsed.hostname || !parsed.port) {
+        throw new Error('Proxy URL must include hostname and port');
+      }
+
+      // Build Playwright proxy object
+      const proxyConfig: { server: string; username?: string; password?: string } = {
+        server: `${parsed.protocol}//${parsed.hostname}:${parsed.port}`
+      };
+
+      // Add credentials if present
+      if (parsed.username && parsed.password) {
+        proxyConfig.username = parsed.username;
+        proxyConfig.password = parsed.password;
+      }
+
+      return proxyConfig;
+    } catch (e: any) {
+      console.warn(`⚠️  [Sentience] Invalid proxy configuration: ${e.message}`);
+      console.warn('   Expected format: http://username:password@host:port');
+      return undefined;
+    }
   }
 
   async close(): Promise<void> {
