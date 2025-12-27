@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { SentienceAgent } from '../../src/agent';
 import { Tracer } from '../../src/tracing/tracer';
 import { JsonlTraceSink } from '../../src/tracing/jsonl-sink';
@@ -29,71 +30,50 @@ const mockLLM: any = {
 };
 
 describe('Agent Integration with Tracing', () => {
-  const testDir = path.join(__dirname, 'test-traces');
-  const testFile = path.join(testDir, 'agent-test.jsonl');
+  // FIX: Create a unique temporary directory for this specific test execution
+  // This prevents collision with other test files running in parallel
+  let testDir: string;
+  let testFile: string;
+
+  beforeAll(() => {
+    // Create a unique temp dir prefix
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-agent-test-'));
+    testFile = path.join(testDir, 'agent-test.jsonl');
+  });
+
+  afterAll(() => {
+    // Safe cleanup of the unique directory
+    if (fs.existsSync(testDir)) {
+      try {
+        fs.rmSync(testDir, { recursive: true, force: true });
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+  });
 
   beforeEach(() => {
-    // Clean up test files but keep the directory
-    // This prevents race conditions where directory deletion destroys writeStreams
-    // in parallel tests
-    
-    // Ensure directory exists first
-    if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir, { recursive: true });
-    }
-    
-    // Delete only the test file, not the directory
+    // Just ensure the file is gone, but the DIR exists from beforeAll
     if (fs.existsSync(testFile)) {
       try {
         fs.unlinkSync(testFile);
-      } catch (err) {
-        // Ignore file deletion errors (file may be in use)
+      } catch (e) {
+        // Ignore file deletion errors
       }
-    }
-    
-    // Clean up any other files in the directory (from previous test runs)
-    try {
-      const files = fs.readdirSync(testDir);
-      for (const file of files) {
-        try {
-          const filePath = path.join(testDir, file);
-          if (fs.statSync(filePath).isFile()) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (err) {
-          // Ignore individual file deletion errors
-        }
-      }
-    } catch (err) {
-      // Ignore directory read errors
     }
   });
 
   afterEach(async () => {
     // Wait a bit for file handles to close (Windows needs this)
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     // Only delete the test file, not the directory
-    // This prevents race conditions where parallel tests delete the directory
-    // while another test is still using it
+    // The directory is unique to this test file and will be cleaned up in afterAll
     if (fs.existsSync(testFile)) {
       try {
         fs.unlinkSync(testFile);
       } catch (err) {
         // Ignore file deletion errors (file may still be in use)
-      }
-    }
-    
-    // Clean up test directory only if it's empty (safer for parallel tests)
-    if (fs.existsSync(testDir)) {
-      try {
-        const files = fs.readdirSync(testDir);
-        // Only delete directory if it's empty
-        if (files.length === 0) {
-          fs.rmdirSync(testDir);
-        }
-      } catch (err) {
-        // Ignore directory deletion errors
       }
     }
   });
