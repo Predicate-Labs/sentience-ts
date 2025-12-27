@@ -164,6 +164,12 @@ describe('Agent Integration with Tracing', () => {
       const tracer = new Tracer('test-run', sink);
       const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
 
+      // Verify sink initialized properly (writeStream should exist)
+      const writeStream = (sink as any).writeStream;
+      if (!writeStream) {
+        throw new Error('JsonlTraceSink failed to initialize writeStream');
+      }
+
       // Mock snapshot to fail
       const mockSnapshot = jest.spyOn(require('../../src/snapshot'), 'snapshot');
       mockSnapshot.mockRejectedValue(new Error('Snapshot failed'));
@@ -174,17 +180,32 @@ describe('Agent Integration with Tracing', () => {
         // Expected to fail
       }
 
+      // Close tracer to flush any buffered writes
       await agent.closeTracer();
       mockSnapshot.mockRestore();
 
-      // Ensure file exists before reading
+      // Wait a bit for file to be written (stream may be buffered)
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Check if file exists - if not, the sink may have failed to initialize
+      // or no events were emitted. In that case, verify the sink was created.
       if (!fs.existsSync(testFile)) {
-        throw new Error(`Trace file not created: ${testFile}`);
+        // If file doesn't exist, check if sink initialized properly
+        // The sink should create the file on first write, so if it doesn't exist,
+        // either no events were emitted or the sink failed to initialize
+        // For this test, we expect at least step_start to be emitted
+        throw new Error(`Trace file not created: ${testFile}. This suggests no events were written to the trace.`);
       }
 
       // Read trace file
       const content = fs.readFileSync(testFile, 'utf-8');
-      const lines = content.trim().split('\n');
+      const lines = content.trim().split('\n').filter(line => line.length > 0);
+      
+      // If no lines, no events were written
+      if (lines.length === 0) {
+        throw new Error(`Trace file exists but is empty: ${testFile}`);
+      }
+      
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
       // Should have step_start and error events
