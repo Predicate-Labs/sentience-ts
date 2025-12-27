@@ -17,10 +17,27 @@ describe('JsonlTraceSink', () => {
     }
   });
 
-  afterEach(() => {
-    // Clean up test directory
+  afterEach(async () => {
+    // Wait a bit for file handles to close (Windows needs this)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Clean up test directory with retry logic for Windows
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
+      // Retry deletion on Windows (files may still be locked)
+      for (let i = 0; i < 5; i++) {
+        try {
+          fs.rmSync(testDir, { recursive: true, force: true });
+          break; // Success
+        } catch (err: any) {
+          if (i === 4) {
+            // Last attempt failed, log but don't throw
+            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+      }
     }
   });
 
