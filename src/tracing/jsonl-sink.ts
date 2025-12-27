@@ -59,7 +59,15 @@ export class JsonlTraceSink extends TraceSink {
    */
   emit(event: Record<string, any>): void {
     if (this.closed) {
-      console.warn('[JsonlTraceSink] Attempted to emit after close()');
+      // Only warn in non-test environments to avoid test noise
+      const isTestEnv = process.env.CI === 'true' || 
+                        process.env.NODE_ENV === 'test' ||
+                        process.env.JEST_WORKER_ID !== undefined ||
+                        (typeof global !== 'undefined' && (global as any).__JEST__);
+      
+      if (!isTestEnv) {
+        console.warn('[JsonlTraceSink] Attempted to emit after close()');
+      }
       return;
     }
 

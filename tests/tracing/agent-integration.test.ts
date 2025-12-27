@@ -40,10 +40,18 @@ describe('Agent Integration with Tracing', () => {
     fs.mkdirSync(testDir, { recursive: true });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait a bit before cleanup to ensure all async operations complete
+    // This prevents race conditions where files are still being written
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Clean up test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(testDir, { recursive: true, force: true });
+      } catch (err) {
+        // Ignore cleanup errors (files may still be in use in CI)
+      }
     }
   });
 
@@ -156,24 +164,39 @@ describe('Agent Integration with Tracing', () => {
 
     it('should emit error events on failure', async () => {
       // Ensure directory exists and is writable before creating sink
-      if (!fs.existsSync(testDir)) {
-        fs.mkdirSync(testDir, { recursive: true });
+      // Do this synchronously to avoid race conditions
+      try {
+        if (!fs.existsSync(testDir)) {
+          fs.mkdirSync(testDir, { recursive: true });
+        }
+        // Verify directory is writable
+        fs.accessSync(testDir, fs.constants.W_OK);
+      } catch (err: any) {
+        throw new Error(`Failed to create/write to test directory: ${testDir}. Error: ${err.message}`);
       }
       
       // Ensure file doesn't exist from previous test runs
       if (fs.existsSync(testFile)) {
-        fs.unlinkSync(testFile);
+        try {
+          fs.unlinkSync(testFile);
+        } catch (err) {
+          // Ignore unlink errors
+        }
       }
       
       const sink = new JsonlTraceSink(testFile);
-      const tracer = new Tracer('test-run', sink);
-      const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
-
-      // Verify sink initialized properly (writeStream should exist)
+      
+      // Verify sink initialized properly (writeStream should exist and not be destroyed)
       const writeStream = (sink as any).writeStream;
       if (!writeStream) {
         throw new Error('JsonlTraceSink failed to initialize writeStream');
       }
+      if (writeStream.destroyed) {
+        throw new Error('JsonlTraceSink writeStream is already destroyed');
+      }
+      
+      const tracer = new Tracer('test-run', sink);
+      const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
 
       // Verify directory is writable
       try {
@@ -216,10 +239,7 @@ describe('Agent Integration with Tracing', () => {
       // Check if file exists - if not, the sink may have failed to initialize
       // or no events were emitted. In that case, verify the sink was created.
       if (!fileExists) {
-        // If file doesn't exist, check if sink initialized properly
-        // The sink should create the file on first write, so if it doesn't exist,
-        // either no events were emitted or the sink failed to initialize
-        // For this test, we expect at least step_start to be emitted
+        // Re-check directory and stream state for better diagnostics
         const dirExists = fs.existsSync(testDir);
         const dirWritable = dirExists ? (() => {
           try {
@@ -229,7 +249,23 @@ describe('Agent Integration with Tracing', () => {
             return false;
           }
         })() : false;
-        throw new Error(`Trace file not created after 2s: ${testFile}. WriteStream exists: ${!!writeStream}, Stream destroyed: ${writeStream?.destroyed}, Directory exists: ${dirExists}, Directory writable: ${dirWritable}`);
+        
+        // Check current stream state (it may have changed)
+        const currentWriteStream = (sink as any).writeStream;
+        const streamDestroyed = currentWriteStream?.destroyed ?? true;
+        const streamErrored = currentWriteStream?.errored ? String(currentWriteStream.errored) : null;
+        
+        // If directory doesn't exist, it may have been cleaned up prematurely
+        if (!dirExists) {
+          throw new Error(`Trace file not created: ${testFile}. Directory was deleted (possibly by parallel test cleanup). Directory exists: false`);
+        }
+        
+        // If stream is destroyed, provide more context
+        if (streamDestroyed) {
+          throw new Error(`Trace file not created: ${testFile}. WriteStream was destroyed${streamErrored ? ` (error: ${streamErrored})` : ''}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}`);
+        }
+        
+        throw new Error(`Trace file not created after 2s: ${testFile}. WriteStream exists: ${!!currentWriteStream}, Stream destroyed: ${streamDestroyed}, Directory exists: ${dirExists}, Directory writable: ${dirWritable}`);
       }
 
       // Read trace file
