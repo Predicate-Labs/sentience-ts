@@ -720,6 +720,64 @@ const browser = new SentienceBrowser(undefined, undefined, true);
 const browser = new SentienceBrowser();  // headless=true if CI=true, else false
 ```
 
+### Residential Proxy Support
+
+For users running from datacenters (AWS, DigitalOcean, etc.), you can configure a residential proxy to prevent IP-based detection by Cloudflare, Akamai, and other anti-bot services.
+
+**Supported Formats:**
+- HTTP: `http://username:password@host:port`
+- HTTPS: `https://username:password@host:port`
+- SOCKS5: `socks5://username:password@host:port`
+
+**Usage:**
+
+```typescript
+// Via constructor parameter
+const browser = new SentienceBrowser(
+  undefined,
+  undefined,
+  false,
+  'http://username:password@residential-proxy.com:8000'
+);
+await browser.start();
+
+// Via environment variable
+process.env.SENTIENCE_PROXY = 'http://username:password@proxy.com:8000';
+const browser = new SentienceBrowser();
+await browser.start();
+
+// With agent
+import { SentienceAgent, OpenAIProvider } from 'sentience-ts';
+
+const browser = new SentienceBrowser(
+  'your-api-key',
+  undefined,
+  false,
+  'http://user:pass@proxy.com:8000'
+);
+await browser.start();
+
+const agent = new SentienceAgent(browser, new OpenAIProvider('openai-key'));
+await agent.act('Navigate to example.com');
+```
+
+**WebRTC Protection:**
+The SDK automatically adds WebRTC leak protection flags when a proxy is configured, preventing your real datacenter IP from being exposed via WebRTC even when using proxies.
+
+**HTTPS Certificate Handling:**
+The SDK automatically ignores HTTPS certificate errors when a proxy is configured, as residential proxies often use self-signed certificates for SSL interception. This ensures seamless navigation to HTTPS sites through the proxy.
+
+**Example:**
+```bash
+# Run with proxy via environment variable
+SENTIENCE_PROXY=http://user:pass@proxy.com:8000 npm run example:proxy
+
+# Or via command line argument
+ts-node examples/proxy-example.ts --proxy=http://user:pass@proxy.com:8000
+```
+
+**Note:** The proxy is configured at the browser level, so all traffic (including the Chrome extension) routes through the proxy. No changes to the extension are required.
+
 ## Best Practices
 
 ### 1. Wait for Dynamic Content
