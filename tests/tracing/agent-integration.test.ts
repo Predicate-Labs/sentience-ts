@@ -134,9 +134,43 @@ describe('Agent Integration with Tracing', () => {
 
       mockSnapshot.mockRestore();
 
-      // Read trace file
+      // Wait for file to be written and flushed (stream may be buffered)
+      // Use a retry loop to handle slow CI environments
+      let fileExists = false;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (fs.existsSync(testFile)) {
+          // Also check that file has content (not just empty file)
+          try {
+            const stats = fs.statSync(testFile);
+            if (stats.size > 0) {
+              fileExists = true;
+              break;
+            }
+          } catch {
+            // File might be deleted between exists and stat, continue waiting
+          }
+        }
+      }
+
+      // Verify file exists before reading
+      if (!fileExists) {
+        throw new Error(`Trace file not created after 3s: ${testFile}`);
+      }
+
+      // Read trace file - verify it exists one more time before reading
+      if (!fs.existsSync(testFile)) {
+        throw new Error(`Trace file disappeared after verification: ${testFile}`);
+      }
+
       const content = fs.readFileSync(testFile, 'utf-8');
-      const lines = content.trim().split('\n');
+      const lines = content.trim().split('\n').filter(line => line.length > 0);
+      
+      // If no lines, no events were written
+      if (lines.length === 0) {
+        throw new Error(`Trace file exists but is empty: ${testFile}`);
+      }
+      
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
       // Should have at least: step_start, snapshot, llm_response, action
