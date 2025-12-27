@@ -8,8 +8,16 @@ import { inspect } from './inspector';
 import { record, Recorder, Trace } from './recorder';
 import { ScriptGenerator } from './generator';
 
-async function cmdInspect() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+async function cmdInspect(args: string[]) {
+  // Parse proxy from args
+  let proxy: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--proxy' && i + 1 < args.length) {
+      proxy = args[++i];
+    }
+  }
+
+  const browser = new SentienceBrowser(undefined, undefined, false, proxy);
   try {
     await browser.start();
     console.log('✅ Inspector started. Hover elements to see info, click to see full details.');
@@ -36,27 +44,30 @@ async function cmdInspect() {
 }
 
 async function cmdRecord(args: string[]) {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  // Parse arguments
+  let url: string | undefined;
+  let output = 'trace.json';
+  let captureSnapshots = false;
+  let proxy: string | undefined;
+  const maskPatterns: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--url' && i + 1 < args.length) {
+      url = args[++i];
+    } else if (args[i] === '--output' || args[i] === '-o') {
+      output = args[++i];
+    } else if (args[i] === '--snapshots') {
+      captureSnapshots = true;
+    } else if (args[i] === '--mask' && i + 1 < args.length) {
+      maskPatterns.push(args[++i]);
+    } else if (args[i] === '--proxy' && i + 1 < args.length) {
+      proxy = args[++i];
+    }
+  }
+
+  const browser = new SentienceBrowser(undefined, undefined, false, proxy);
   try {
     await browser.start();
-
-    // Parse arguments
-    let url: string | undefined;
-    let output = 'trace.json';
-    let captureSnapshots = false;
-    const maskPatterns: string[] = [];
-
-    for (let i = 0; i < args.length; i++) {
-      if (args[i] === '--url' && i + 1 < args.length) {
-        url = args[++i];
-      } else if (args[i] === '--output' || args[i] === '-o') {
-        output = args[++i];
-      } else if (args[i] === '--snapshots') {
-        captureSnapshots = true;
-      } else if (args[i] === '--mask' && i + 1 < args.length) {
-        maskPatterns.push(args[++i]);
-      }
-    }
 
     // Navigate to start URL if provided
     if (url) {
@@ -141,7 +152,7 @@ async function main() {
   const command = args[0];
 
   if (command === 'inspect') {
-    await cmdInspect();
+    await cmdInspect(args.slice(1));
   } else if (command === 'record') {
     await cmdRecord(args.slice(1));
   } else if (command === 'gen') {
@@ -150,13 +161,18 @@ async function main() {
     console.log('Usage: sentience <command> [options]');
     console.log('');
     console.log('Commands:');
-    console.log('  inspect              Start inspector mode');
-    console.log('  record [--url URL]   Start recording mode');
-    console.log('  gen <trace.json>     Generate script from trace');
+    console.log('  inspect                    Start inspector mode');
+    console.log('  record [--url URL]         Start recording mode');
+    console.log('  gen <trace.json>           Generate script from trace');
+    console.log('');
+    console.log('Options:');
+    console.log('  --proxy <url>              Proxy connection string (e.g., http://user:pass@host:port)');
     console.log('');
     console.log('Examples:');
     console.log('  sentience inspect');
+    console.log('  sentience inspect --proxy http://user:pass@proxy.com:8000');
     console.log('  sentience record --url https://example.com --output trace.json');
+    console.log('  sentience record --proxy http://user:pass@proxy.com:8000 --url https://example.com');
     console.log('  sentience gen trace.json --lang py --output script.py');
     process.exit(1);
   }
