@@ -16,15 +16,16 @@ describe('Tracer', () => {
   beforeEach(() => {
     // Clean up and recreate test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
     fs.mkdirSync(testDir, { recursive: true });
   });
 
   afterEach(() => {
     // Clean up test directory
+    // Use force: true to handle Windows file locking issues
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
   });
 

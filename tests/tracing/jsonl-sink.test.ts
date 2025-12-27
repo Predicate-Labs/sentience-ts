@@ -13,14 +13,14 @@ describe('JsonlTraceSink', () => {
   beforeEach(() => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
   });
 
   afterEach(() => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
   });
 

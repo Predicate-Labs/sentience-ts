@@ -35,7 +35,7 @@ describe('Agent Integration with Tracing', () => {
   beforeEach(() => {
     // Clean up and recreate test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
     fs.mkdirSync(testDir, { recursive: true });
   });
@@ -43,7 +43,7 @@ describe('Agent Integration with Tracing', () => {
   afterEach(() => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+      fs.rmSync(testDir, { recursive: true, force: true });
     }
   });
 
