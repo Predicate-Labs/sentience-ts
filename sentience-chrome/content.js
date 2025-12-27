@@ -94,7 +94,7 @@ function handleSnapshotRequest(data) {
                 }
 
                 if (response?.success) {
-                    console.log(`[Sentience Bridge] ✓ WASM processing complete in ${duration.toFixed(1)}ms`);
+                    // console.log(`[Sentience Bridge] ✓ WASM processing complete in ${duration.toFixed(1)}ms`);
                     window.postMessage({
                         type: 'SENTIENCE_SNAPSHOT_RESULT',
                         requestId: data.requestId,
@@ -129,4 +129,4 @@ function handleSnapshotRequest(data) {
     }
 }
 
-console.log('[Sentience Bridge] Ready - Extension ID:', chrome.runtime.id);
+// console.log('[Sentience Bridge] Ready - Extension ID:', chrome.runtime.id);
