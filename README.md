@@ -778,6 +778,55 @@ ts-node examples/proxy-example.ts --proxy=http://user:pass@proxy.com:8000
 
 **Note:** The proxy is configured at the browser level, so all traffic (including the Chrome extension) routes through the proxy. No changes to the extension are required.
 
+### Authentication Session Injection
+
+Inject pre-recorded authentication sessions (cookies + localStorage) to start your agent already logged in, bypassing login screens, 2FA, and CAPTCHAs. This saves tokens and reduces costs by eliminating login steps.
+
+```typescript
+// Workflow 1: Inject pre-recorded session from file
+import { SentienceBrowser, saveStorageState } from 'sentience-ts';
+
+// Save session after manual login
+const browser = new SentienceBrowser();
+await browser.start();
+await browser.getPage().goto('https://example.com');
+// ... log in manually ...
+await saveStorageState(browser.getContext(), 'auth.json');
+
+// Use saved session in future runs
+const browser2 = new SentienceBrowser(
+  undefined, // apiKey
+  undefined, // apiUrl
+  false,     // headless
+  undefined,  // proxy
+  undefined,  // userDataDir
+  'auth.json' // storageState - inject saved session
+);
+await browser2.start();
+// Agent starts already logged in!
+
+// Workflow 2: Persistent sessions (cookies persist across runs)
+const browser3 = new SentienceBrowser(
+  undefined,      // apiKey
+  undefined,      // apiUrl
+  false,          // headless
+  undefined,      // proxy
+  './chrome_profile', // userDataDir - persist cookies
+  undefined       // storageState
+);
+await browser3.start();
+// First run: Log in
+// Second run: Already logged in (cookies persist automatically)
+```
+
+**Benefits:**
+- Bypass login screens and CAPTCHAs with valid sessions
+- Save 5-10 agent steps and hundreds of tokens per run
+- Maintain stateful sessions for accessing authenticated pages
+- Act as authenticated users (e.g., "Go to my Orders page")
+
+See `examples/auth-injection-agent.ts` for complete examples.
+
 ## Best Practices
 
 ### 1. Wait for Dynamic Content
