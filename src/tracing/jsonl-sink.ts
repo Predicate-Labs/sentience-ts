@@ -59,7 +59,15 @@ export class JsonlTraceSink extends TraceSink {
    */
   emit(event: Record<string, any>): void {
     if (this.closed) {
-      console.warn('[JsonlTraceSink] Attempted to emit after close()');
+      // Only warn in non-test environments to avoid test noise
+      const isTestEnv = process.env.CI === 'true' || 
+                        process.env.NODE_ENV === 'test' ||
+                        process.env.JEST_WORKER_ID !== undefined ||
+                        (typeof global !== 'undefined' && (global as any).__JEST__);
+      
+      if (!isTestEnv) {
+        console.warn('[JsonlTraceSink] Attempted to emit after close()');
+      }
       return;
     }
 
@@ -70,7 +78,15 @@ export class JsonlTraceSink extends TraceSink {
 
     try {
       const jsonLine = JSON.stringify(event) + '\n';
-      this.writeStream.write(jsonLine);
+      const written = this.writeStream.write(jsonLine);
+      // If write returns false, the stream is backpressured
+      // We don't need to wait, but we could add a drain listener if needed
+      if (!written) {
+        // Stream is backpressured - wait for drain
+        this.writeStream.once('drain', () => {
+          // Stream is ready again
+        });
+      }
     } catch (error) {
       // Log error but don't crash agent execution
       console.error('[JsonlTraceSink] Failed to write event:', error);

@@ -127,9 +127,15 @@ export class Tracer {
 
   /**
    * Close the underlying sink (flush buffered data)
+   * @param blocking - If false, upload happens in background (default: true). Only applies to CloudTraceSink.
    */
-  async close(): Promise<void> {
-    await this.sink.close();
+  async close(blocking: boolean = true): Promise<void> {
+    // Check if sink has a close method that accepts blocking parameter
+    if (typeof (this.sink as any).close === 'function' && (this.sink as any).close.length > 0) {
+      await (this.sink as any).close(blocking);
+    } else {
+      await this.sink.close();
+    }
   }
 
   /**

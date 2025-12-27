@@ -40,6 +40,8 @@ Thumbs.db
 # Project specific
 snapshot_*.json
 *.test.js.map
+traces/
+tests/tracing/test-traces/
 
 # Temporary directories from sync workflows
 extension-temp/

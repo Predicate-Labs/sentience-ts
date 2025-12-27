@@ -75,13 +75,13 @@ async function snapshotViaExtension(
   // may not be immediately available after page load
   try {
     await page.waitForFunction(
-      () => typeof window.sentience !== 'undefined',
+      () => typeof (window as any).sentience !== 'undefined',
       { timeout: 5000 }
     );
   } catch (e) {
     // Gather diagnostics if wait fails
     const diag = await page.evaluate(() => ({
-      sentience_defined: typeof window.sentience !== 'undefined',
+      sentience_defined: typeof (window as any).sentience !== 'undefined',
       extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
       url: window.location.href
     })).catch(() => ({ error: 'Could not gather diagnostics' }));
@@ -104,9 +104,9 @@ async function snapshotViaExtension(
     opts.filter = options.filter;
   }
 
-  // Call extension API (no 'as any' needed - types defined in global.d.ts)
+  // Call extension API
   const result = await page.evaluate((opts) => {
-    return window.sentience.snapshot(opts);
+    return (window as any).sentience.snapshot(opts);
   }, opts);
 
   // Save trace if requested
