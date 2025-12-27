@@ -2,10 +2,15 @@
  * Tracer Factory with Automatic Tier Detection
  *
  * Provides convenient factory function for creating tracers with cloud upload support
+ *
+ * PRODUCTION HARDENING:
+ * - Recovers orphaned traces from previous crashes on SDK init (Risk #3)
+ * - Passes runId to CloudTraceSink for persistent cache naming (Risk #1)
  */
 
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
@@ -13,6 +18,60 @@ import { randomUUID } from 'crypto';
 import { Tracer } from './tracer';
 import { CloudTraceSink } from './cloud-sink';
 import { JsonlTraceSink } from './jsonl-sink';
+
+/**
+ * Get persistent cache directory for traces
+ */
+function getPersistentCacheDir(): string {
+  const homeDir = os.homedir();
+  return path.join(homeDir, '.sentience', 'traces', 'pending');
+}
+
+/**
+ * Recover orphaned traces from previous crashes
+ * PRODUCTION FIX: Risk #3 - Upload traces from crashed sessions
+ */
+async function recoverOrphanedTraces(apiKey: string, apiUrl: string): Promise<void> {
+  const cacheDir = getPersistentCacheDir();
+
+  if (!fs.existsSync(cacheDir)) {
+    return;
+  }
+
+  const orphanedFiles = fs.readdirSync(cacheDir).filter(f => f.endsWith('.jsonl'));
+
+  if (orphanedFiles.length === 0) {
+    return;
+  }
+
+  console.log(`⚠️  [Sentience] Found ${orphanedFiles.length} un-uploaded trace(s) from previous run(s)`);
+  console.log('   Attempting to upload now...');
+
+  for (const file of orphanedFiles) {
+    const filePath = path.join(cacheDir, file);
+    const runId = path.basename(file, '.jsonl');
+
+    try {
+      // Request upload URL for this orphaned trace
+      const response = await httpPost(
+        `${apiUrl}/v1/traces/init`,
+        { run_id: runId },
+        { Authorization: `Bearer ${apiKey}` }
+      );
+
+      if (response.status === 200 && response.data.upload_url) {
+        // Create a temporary CloudTraceSink to upload this orphaned trace
+        const sink = new CloudTraceSink(response.data.upload_url, runId);
+        await sink.close(); // This will upload the existing file
+        console.log(`✅ [Sentience] Uploaded orphaned trace: ${runId}`);
+      } else {
+        console.log(`❌ [Sentience] Failed to get upload URL for ${runId}`);
+      }
+    } catch (error: any) {
+      console.log(`❌ [Sentience] Failed to upload ${runId}: ${error.message}`);
+    }
+  }
+}
 
 /**
  * Make HTTP/HTTPS POST request using built-in Node modules
@@ -108,6 +167,16 @@ export async function createTracer(options: {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || 'https://api.sentienceapi.com';
 
+  // PRODUCTION FIX: Recover orphaned traces from previous crashes
+  if (options.apiKey) {
+    try {
+      await recoverOrphanedTraces(options.apiKey, apiUrl);
+    } catch (error) {
+      // Don't fail SDK init if orphaned trace recovery fails
+      console.log('⚠️  [Sentience] Orphaned trace recovery failed (non-critical)');
+    }
+  }
+
   // 1. Try to initialize Cloud Sink (Pro/Enterprise tier)
   if (options.apiKey) {
     try {
@@ -122,7 +191,8 @@ export async function createTracer(options: {
         const uploadUrl = response.data.upload_url;
 
         console.log('☁️  [Sentience] Cloud tracing enabled (Pro tier)');
-        return new Tracer(runId, new CloudTraceSink(uploadUrl));
+        // PRODUCTION FIX: Pass runId for persistent cache naming
+        return new Tracer(runId, new CloudTraceSink(uploadUrl, runId));
       } else if (response.status === 403) {
         console.log('⚠️  [Sentience] Cloud tracing requires Pro tier');
         console.log('   Falling back to local-only tracing');

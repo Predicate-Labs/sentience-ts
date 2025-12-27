@@ -3,6 +3,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as zlib from 'zlib';
 import * as http from 'http';
@@ -12,6 +13,7 @@ describe('CloudTraceSink', () => {
   let mockServer: http.Server;
   let serverPort: number;
   let uploadUrl: string;
+  const persistentCacheDir = path.join(os.homedir(), '.sentience', 'traces', 'pending');
 
   // Start a mock HTTP server before tests
   beforeAll((done) => {
@@ -62,15 +64,30 @@ describe('CloudTraceSink', () => {
     delete (mockServer as any).responseBody;
   });
 
+  afterEach(() => {
+    // Clean up persistent cache files created during tests
+    if (fs.existsSync(persistentCacheDir)) {
+      const files = fs.readdirSync(persistentCacheDir);
+      files.forEach((file) => {
+        if (file.startsWith('test-run-')) {
+          const filePath = path.join(persistentCacheDir, file);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      });
+    }
+  });
+
   describe('Basic functionality', () => {
     it('should create CloudTraceSink with upload URL', () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       expect(sink).toBeDefined();
       expect(sink.getSinkType()).toContain('CloudTraceSink');
     });
 
     it('should emit events to local temp file', async () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
 
       sink.emit({ v: 1, type: 'test1', seq: 1 });
       sink.emit({ v: 1, type: 'test2', seq: 2 });
@@ -83,7 +100,7 @@ describe('CloudTraceSink', () => {
     });
 
     it('should raise error when emitting after close', async () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       await sink.close();
 
       expect(() => {
@@ -92,7 +109,7 @@ describe('CloudTraceSink', () => {
     });
 
     it('should be idempotent on multiple close calls', async () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       sink.emit({ v: 1, type: 'test', seq: 1 });
 
       await sink.close();
@@ -106,7 +123,7 @@ describe('CloudTraceSink', () => {
 
   describe('Upload functionality', () => {
     it('should upload gzip-compressed JSONL data', async () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
 
       sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
       sink.emit({ v: 1, type: 'run_end', seq: 2, data: { steps: 1 } });
@@ -134,7 +151,7 @@ describe('CloudTraceSink', () => {
     });
 
     it('should delete temp file on successful upload', async () => {
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       sink.emit({ v: 1, type: 'test', seq: 1 });
 
       // Access private field for testing (TypeScript hack)
@@ -151,7 +168,7 @@ describe('CloudTraceSink', () => {
       (mockServer as any).responseStatus = 500;
       (mockServer as any).responseBody = 'Internal Server Error';
 
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       sink.emit({ v: 1, type: 'test', seq: 1 });
 
       const tempFilePath = (sink as any).tempFilePath;
@@ -230,7 +247,7 @@ describe('CloudTraceSink', () => {
     it('should work with Tracer class', async () => {
       const { Tracer } = await import('../../src/tracing/tracer');
 
-      const sink = new CloudTraceSink(uploadUrl);
+      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       const tracer = new Tracer('test-run-123', sink);
 
       tracer.emitRunStart('TestAgent', 'gpt-4');

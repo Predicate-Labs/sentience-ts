@@ -283,9 +283,8 @@ describe('createTracer', () => {
       });
 
       tracer.emitRunStart('SentienceAgent', 'gpt-4');
-      tracer.emitStepStart(1, 'Click button', 'https://example.com');
+      tracer.emitStepStart('step-1', 1, 'Click button', 0, 'https://example.com');
       tracer.emit('custom_event', { data: 'test' });
-      tracer.emitStepEnd(1, 'success');
       tracer.emitRunEnd(1);
 
       await tracer.close();
@@ -300,8 +299,7 @@ describe('createTracer', () => {
       });
 
       tracer.emitRunStart('SentienceAgent', 'gpt-4');
-      tracer.emitStepStart(1, 'Click button', 'https://example.com');
-      tracer.emitStepEnd(1, 'success');
+      tracer.emitStepStart('step-1', 1, 'Click button', 0, 'https://example.com');
       tracer.emitRunEnd(1);
 
       await tracer.close();
@@ -313,7 +311,7 @@ describe('createTracer', () => {
       // Verify content
       const content = fs.readFileSync(traceFile, 'utf-8');
       const lines = content.trim().split('\n');
-      expect(lines.length).toBe(4);
+      expect(lines.length).toBe(3); // run_start, step_start, run_end
 
       const event1 = JSON.parse(lines[0]);
       expect(event1.type).toBe('run_start');
