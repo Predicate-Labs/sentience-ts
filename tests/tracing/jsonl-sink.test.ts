@@ -46,7 +46,13 @@ describe('JsonlTraceSink', () => {
     expect(JSON.parse(lines[1])).toEqual({ type: 'test2', data: 'world' });
   });
 
-  it('should append to existing file', async () => {
+    it('should append to existing file', async () => {
+    // Ensure directory exists
+    const dir = path.dirname(testFile);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
     // Write first batch
     const sink1 = new JsonlTraceSink(testFile);
     sink1.emit({ seq: 1 });

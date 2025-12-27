@@ -91,6 +91,11 @@ describe('Agent Integration with Tracing', () => {
     });
 
     it('should emit events during act() execution', async () => {
+      // Ensure directory exists before creating sink
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+      }
+      
       const sink = new JsonlTraceSink(testFile);
       const tracer = new Tracer('test-run', sink);
       const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
@@ -116,6 +121,11 @@ describe('Agent Integration with Tracing', () => {
       await agent.closeTracer();
 
       mockSnapshot.mockRestore();
+
+      // Ensure file exists before reading
+      if (!fs.existsSync(testFile)) {
+        throw new Error(`Trace file not created: ${testFile}`);
+      }
 
       // Read trace file
       const content = fs.readFileSync(testFile, 'utf-8');
@@ -145,6 +155,11 @@ describe('Agent Integration with Tracing', () => {
     });
 
     it('should emit error events on failure', async () => {
+      // Ensure directory exists before creating sink
+      if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+      }
+      
       const sink = new JsonlTraceSink(testFile);
       const tracer = new Tracer('test-run', sink);
       const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
@@ -161,6 +176,11 @@ describe('Agent Integration with Tracing', () => {
 
       await agent.closeTracer();
       mockSnapshot.mockRestore();
+
+      // Ensure file exists before reading
+      if (!fs.existsSync(testFile)) {
+        throw new Error(`Trace file not created: ${testFile}`);
+      }
 
       // Read trace file
       const content = fs.readFileSync(testFile, 'utf-8');

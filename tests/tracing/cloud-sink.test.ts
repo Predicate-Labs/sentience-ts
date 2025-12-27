@@ -168,6 +168,9 @@ describe('CloudTraceSink', () => {
       (mockServer as any).responseStatus = 500;
       (mockServer as any).responseBody = 'Internal Server Error';
 
+      // Suppress expected error logs for this test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
       sink.emit({ v: 1, type: 'test', seq: 1 });
 
@@ -177,6 +180,9 @@ describe('CloudTraceSink', () => {
 
       // Temp file should still exist on error
       expect(fs.existsSync(tempFilePath)).toBe(true);
+
+      // Restore console.error
+      consoleErrorSpy.mockRestore();
 
       // Cleanup
       if (fs.existsSync(tempFilePath)) {
@@ -189,12 +195,21 @@ describe('CloudTraceSink', () => {
     it('should handle network errors gracefully', async () => {
       // Use invalid URL that will fail
       const invalidUrl = 'http://localhost:1/invalid';
+      
+      // Suppress expected error logs for this test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
       const sink = new CloudTraceSink(invalidUrl, 'test-run-' + Date.now());
 
       sink.emit({ v: 1, type: 'test', seq: 1 });
 
       // Should not throw, just log error
       await expect(sink.close()).resolves.not.toThrow();
+
+      // Restore console methods
+      consoleErrorSpy.mockRestore();
+      consoleLogSpy.mockRestore();
     });
 
     it('should handle upload timeout gracefully', async () => {
@@ -202,6 +217,10 @@ describe('CloudTraceSink', () => {
       const slowServer = http.createServer((req, res) => {
         // Never respond - will timeout
       });
+
+      // Suppress expected error logs for this test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       await new Promise<void>((resolve) => {
         slowServer.listen(0, () => resolve());
@@ -219,9 +238,17 @@ describe('CloudTraceSink', () => {
 
         slowServer.close();
       }
+
+      // Restore console methods
+      consoleErrorSpy.mockRestore();
+      consoleLogSpy.mockRestore();
     }, 70000); // 70 second timeout for test (CloudTraceSink has 60s timeout)
 
     it('should preserve trace on any error', async () => {
+      // Suppress expected error logs for this test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
       const sink = new CloudTraceSink('http://invalid-url-that-doesnt-exist.local/upload', 'test-run-' + Date.now());
 
       sink.emit({ v: 1, type: 'test', seq: 1 });
@@ -237,6 +264,10 @@ describe('CloudTraceSink', () => {
       const content = fs.readFileSync(tempFilePath, 'utf-8');
       const event = JSON.parse(content.trim());
       expect(event.type).toBe('test');
+
+      // Restore console methods
+      consoleErrorSpy.mockRestore();
+      consoleLogSpy.mockRestore();
 
       // Cleanup
       fs.unlinkSync(tempFilePath);

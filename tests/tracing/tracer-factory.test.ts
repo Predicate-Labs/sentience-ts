@@ -35,6 +35,19 @@ describe('createTracer', () => {
         if (req.url === '/v1/traces/init' && req.method === 'POST') {
           const authorization = req.headers['authorization'];
 
+          // Check for special test conditions (only for valid auth)
+          if (authorization && (mockServer as any).shouldTimeout) {
+            // Simulate timeout - don't respond (connection will timeout)
+            return; // Don't call res.end() - this will cause a timeout
+          }
+          
+          if (authorization && (mockServer as any).shouldError) {
+            // Simulate error - return 500 without upload_url
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Internal Server Error' }));
+            return;
+          }
+
           if (!authorization) {
             res.writeHead(401);
             res.end(JSON.stringify({ error: 'Unauthorized' }));
@@ -46,13 +59,6 @@ describe('createTracer', () => {
             // Pro tier - return upload URL
             res.writeHead(200);
             res.end(JSON.stringify({ upload_url: `http://localhost:${serverPort}/upload` }));
-          } else if ((mockServer as any).shouldTimeout) {
-            // Simulate timeout - don't respond
-            return;
-          } else if ((mockServer as any).shouldError) {
-            // Simulate error
-            res.writeHead(500);
-            res.end('Internal Server Error');
           } else {
             res.writeHead(200);
             res.end(JSON.stringify({ upload_url: `http://localhost:${serverPort}/upload` }));
@@ -86,8 +92,8 @@ describe('createTracer', () => {
     // Reset server state
     delete (mockServer as any).lastRequest;
     delete (mockServer as any).lastRequestBody;
-    delete (mockServer as any).shouldTimeout;
-    delete (mockServer as any).shouldError;
+    (mockServer as any).shouldTimeout = false;
+    (mockServer as any).shouldError = false;
 
     // Create traces directory
     if (!fs.existsSync(testTracesDir)) {
@@ -235,6 +241,9 @@ describe('createTracer', () => {
         runId: 'test-run',
         apiUrl: 'http://localhost:1/invalid', // Invalid port
       });
+      
+      expect(tracer).toBeDefined();
+      expect(tracer.getSinkType()).toContain('JsonlTraceSink');
 
       expect(tracer).toBeDefined();
       expect(tracer.getSinkType()).toContain('JsonlTraceSink');
