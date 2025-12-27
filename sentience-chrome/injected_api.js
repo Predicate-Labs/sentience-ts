@@ -123,6 +123,102 @@
         }
     }
 
+    // --- HELPER: Get SVG Fill/Stroke Color ---
+    // For SVG elements, get the fill or stroke color (SVGs use fill/stroke, not backgroundColor)
+    function getSVGColor(el) {
+        if (!el || el.tagName !== 'SVG') return null;
+        
+        const style = window.getComputedStyle(el);
+        
+        // Try fill first (most common for SVG icons)
+        const fill = style.fill;
+        if (fill && fill !== 'none' && fill !== 'transparent' && fill !== 'rgba(0, 0, 0, 0)') {
+            // Convert fill to rgb() format if needed
+            const rgbaMatch = fill.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+            if (rgbaMatch) {
+                const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1.0;
+                if (alpha >= 0.9) {
+                    return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
+                }
+            } else if (fill.startsWith('rgb(')) {
+                return fill;
+            }
+        }
+        
+        // Fallback to stroke if fill is not available
+        const stroke = style.stroke;
+        if (stroke && stroke !== 'none' && stroke !== 'transparent' && stroke !== 'rgba(0, 0, 0, 0)') {
+            const rgbaMatch = stroke.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+            if (rgbaMatch) {
+                const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1.0;
+                if (alpha >= 0.9) {
+                    return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
+                }
+            } else if (stroke.startsWith('rgb(')) {
+                return stroke;
+            }
+        }
+        
+        return null;
+    }
+
+    // --- HELPER: Get Effective Background Color ---
+    // Traverses up the DOM tree to find the nearest non-transparent background color
+    // For SVGs, also checks fill/stroke properties
+    // This handles rgba(0,0,0,0) and transparent values that browsers commonly return
+    function getEffectiveBackgroundColor(el) {
+        if (!el) return null;
+        
+        // For SVG elements, use fill/stroke instead of backgroundColor
+        if (el.tagName === 'SVG') {
+            const svgColor = getSVGColor(el);
+            if (svgColor) return svgColor;
+        }
+        
+        let current = el;
+        const maxDepth = 10; // Prevent infinite loops
+        let depth = 0;
+        
+        while (current && depth < maxDepth) {
+            const style = window.getComputedStyle(current);
+            
+            // For SVG elements in the tree, also check fill/stroke
+            if (current.tagName === 'SVG') {
+                const svgColor = getSVGColor(current);
+                if (svgColor) return svgColor;
+            }
+            
+            const bgColor = style.backgroundColor;
+            
+            if (bgColor && bgColor !== 'transparent' && bgColor !== 'rgba(0, 0, 0, 0)') {
+                // Check if it's rgba with alpha < 1 (semi-transparent)
+                const rgbaMatch = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+                if (rgbaMatch) {
+                    const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1.0;
+                    // If alpha is high enough (>= 0.9), consider it opaque enough
+                    if (alpha >= 0.9) {
+                        // Convert to rgb() format for Gateway compatibility
+                        return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
+                    }
+                    // If semi-transparent, continue up the tree
+                } else if (bgColor.startsWith('rgb(')) {
+                    // Already in rgb() format, use it
+                    return bgColor;
+                } else {
+                    // Named color or other format, return as-is
+                    return bgColor;
+                }
+            }
+            
+            // Move up the DOM tree
+            current = current.parentElement;
+            depth++;
+        }
+        
+        // Fallback: return null if nothing found
+        return null;
+    }
+
     // --- HELPER: Viewport Check ---
     function isInViewport(rect) {
         return (
@@ -131,8 +227,22 @@
         );
     }
 
-    // --- HELPER: Occlusion Check ---
-    function isOccluded(el, rect) {
+    // --- HELPER: Occlusion Check (Optimized to avoid layout thrashing) ---
+    // Only checks occlusion for elements likely to be occluded (high z-index, positioned)
+    // This avoids forced reflow for most elements, dramatically improving performance
+    function isOccluded(el, rect, style) {
+        // Fast path: Skip occlusion check for most elements
+        // Only check for elements that are likely to be occluded (overlays, modals, tooltips)
+        const zIndex = parseInt(style.zIndex, 10);
+        const position = style.position;
+        
+        // Skip occlusion check for normal flow elements (vast majority)
+        // Only check for positioned elements or high z-index (likely overlays)
+        if (position === 'static' && (isNaN(zIndex) || zIndex <= 10)) {
+            return false; // Assume not occluded for performance
+        }
+
+        // For positioned/high z-index elements, do the expensive check
         const cx = rect.x + rect.width / 2;
         const cy = rect.y + rect.height / 2;
 
@@ -492,11 +602,279 @@
         return path.join(' > ') || el.tagName.toLowerCase();
     }
 
+    // --- HELPER: Wait for DOM Stability (SPA Hydration) ---
+    // Waits for the DOM to stabilize before taking a snapshot
+    // Useful for React/Vue apps that render empty skeletons before hydration
+    async function waitForStability(options = {}) {
+        const {
+            minNodeCount = 500,
+            quietPeriod = 200, // milliseconds
+            maxWait = 5000 // maximum wait time
+        } = options;
+
+        const startTime = Date.now();
+        
+        return new Promise((resolve) => {
+            // Check if DOM already has enough nodes
+            const nodeCount = document.querySelectorAll('*').length;
+            if (nodeCount >= minNodeCount) {
+                // DOM seems ready, but wait for quiet period to ensure stability
+                let lastChange = Date.now();
+                const observer = new MutationObserver(() => {
+                    lastChange = Date.now();
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: false
+                });
+                
+                const checkStable = () => {
+                    const timeSinceLastChange = Date.now() - lastChange;
+                    const totalWait = Date.now() - startTime;
+                    
+                    if (timeSinceLastChange >= quietPeriod) {
+                        observer.disconnect();
+                        resolve();
+                    } else if (totalWait >= maxWait) {
+                        observer.disconnect();
+                        console.warn('[SentienceAPI] DOM stability timeout - proceeding anyway');
+                        resolve();
+                    } else {
+                        setTimeout(checkStable, 50);
+                    }
+                };
+                
+                checkStable();
+            } else {
+                // DOM doesn't have enough nodes yet, wait for them
+                const observer = new MutationObserver(() => {
+                    const currentCount = document.querySelectorAll('*').length;
+                    const totalWait = Date.now() - startTime;
+                    
+                    if (currentCount >= minNodeCount) {
+                        observer.disconnect();
+                        // Now wait for quiet period
+                        let lastChange = Date.now();
+                        const quietObserver = new MutationObserver(() => {
+                            lastChange = Date.now();
+                        });
+                        
+                        quietObserver.observe(document.body, {
+                            childList: true,
+                            subtree: true,
+                            attributes: false
+                        });
+                        
+                        const checkQuiet = () => {
+                            const timeSinceLastChange = Date.now() - lastChange;
+                            const totalWait = Date.now() - startTime;
+                            
+                            if (timeSinceLastChange >= quietPeriod) {
+                                quietObserver.disconnect();
+                                resolve();
+                            } else if (totalWait >= maxWait) {
+                                quietObserver.disconnect();
+                                console.warn('[SentienceAPI] DOM stability timeout - proceeding anyway');
+                                resolve();
+                            } else {
+                                setTimeout(checkQuiet, 50);
+                            }
+                        };
+                        
+                        checkQuiet();
+                    } else if (totalWait >= maxWait) {
+                        observer.disconnect();
+                        console.warn('[SentienceAPI] DOM node count timeout - proceeding anyway');
+                        resolve();
+                    }
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: false
+                });
+                
+                // Timeout fallback
+                setTimeout(() => {
+                    observer.disconnect();
+                    console.warn('[SentienceAPI] DOM stability max wait reached - proceeding');
+                    resolve();
+                }, maxWait);
+            }
+        });
+    }
+
+    // --- HELPER: Collect Iframe Snapshots (Frame Stitching) ---
+    // Recursively collects snapshot data from all child iframes
+    // This enables detection of elements inside iframes (e.g., Stripe forms)
+    // 
+    // NOTE: Cross-origin iframes cannot be accessed due to browser security (Same-Origin Policy).
+    // Only same-origin iframes will return snapshot data. Cross-origin iframes will be skipped
+    // with a warning. For cross-origin iframes, users must manually switch frames using
+    // Playwright's page.frame() API.
+    async function collectIframeSnapshots(options = {}) {
+        const iframeData = new Map(); // Map of iframe element -> snapshot data
+        
+        // Find all iframe elements in current document
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        
+        if (iframes.length === 0) {
+            return iframeData;
+        }
+        
+        console.log(`[SentienceAPI] Found ${iframes.length} iframe(s), requesting snapshots...`);
+        
+        // Request snapshot from each iframe
+        const iframePromises = iframes.map((iframe, idx) => {
+            return new Promise((resolve) => {
+                const requestId = `iframe-${idx}-${Date.now()}`;
+                
+                // 1. EXTENDED TIMEOUT (Handle slow children)
+                const timeout = setTimeout(() => {
+                    console.warn(`[SentienceAPI] ⚠️ Iframe ${idx} snapshot TIMEOUT (id: ${requestId})`);
+                    resolve(null);
+                }, 10000); // Increased to 10s to handle slow processing
+                
+                // 2. ROBUST LISTENER with debugging
+                const listener = (event) => {
+                    // Debug: Log all SENTIENCE_IFRAME_SNAPSHOT_RESPONSE messages to see what's happening
+                    if (event.data?.type === 'SENTIENCE_IFRAME_SNAPSHOT_RESPONSE') {
+                        // Only log if it's not our request (for debugging)
+                        if (event.data?.requestId !== requestId) {
+                            // console.log(`[SentienceAPI] Received response for different request: ${event.data.requestId} (expected: ${requestId})`);
+                        }
+                    }
+                    
+                    // Check if this is the response we're waiting for
+                    if (event.data?.type === 'SENTIENCE_IFRAME_SNAPSHOT_RESPONSE' && 
+                        event.data?.requestId === requestId) {
+                        
+                        clearTimeout(timeout);
+                        window.removeEventListener('message', listener);
+                        
+                        if (event.data.error) {
+                            console.warn(`[SentienceAPI] Iframe ${idx} returned error:`, event.data.error);
+                            resolve(null);
+                        } else {
+                            const elementCount = event.data.snapshot?.raw_elements?.length || 0;
+                            console.log(`[SentienceAPI] ✓ Received ${elementCount} elements from Iframe ${idx} (id: ${requestId})`);
+                            resolve({
+                                iframe: iframe,
+                                data: event.data.snapshot,
+                                error: null
+                            });
+                        }
+                    }
+                };
+                
+                window.addEventListener('message', listener);
+                
+                // 3. SEND REQUEST with error handling
+                try {
+                    if (iframe.contentWindow) {
+                        // console.log(`[SentienceAPI] Sending request to Iframe ${idx} (id: ${requestId})`);
+                        iframe.contentWindow.postMessage({
+                            type: 'SENTIENCE_IFRAME_SNAPSHOT_REQUEST',
+                            requestId: requestId,
+                            options: { 
+                                ...options, 
+                                collectIframes: true // Enable recursion for nested iframes
+                            }
+                        }, '*'); // Use '*' for cross-origin, but browser will enforce same-origin policy
+                    } else {
+                        console.warn(`[SentienceAPI] Iframe ${idx} contentWindow is inaccessible (Cross-Origin?)`);
+                        clearTimeout(timeout);
+                        window.removeEventListener('message', listener);
+                        resolve(null);
+                    }
+                } catch (error) {
+                    console.error(`[SentienceAPI] Failed to postMessage to Iframe ${idx}:`, error);
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', listener);
+                    resolve(null);
+                }
+            });
+        });
+        
+        // Wait for all iframe responses
+        const results = await Promise.all(iframePromises);
+        
+        // Store iframe data
+        results.forEach((result, idx) => {
+            if (result && result.data && !result.error) {
+                iframeData.set(iframes[idx], result.data);
+                console.log(`[SentienceAPI] ✓ Collected snapshot from iframe ${idx}`);
+            } else if (result && result.error) {
+                console.warn(`[SentienceAPI] Iframe ${idx} snapshot error:`, result.error);
+            } else if (!result) {
+                console.warn(`[SentienceAPI] Iframe ${idx} returned no data (timeout or error)`);
+            }
+        });
+        
+        return iframeData;
+    }
+
+    // --- HELPER: Handle Iframe Snapshot Request (for child frames) ---
+    // When a parent frame requests snapshot, this handler responds with local snapshot
+    // NOTE: Recursion is safe because querySelectorAll('iframe') only finds direct children.
+    // Iframe A can ask Iframe B, but won't go back up to parent (no circular dependency risk).
+    function setupIframeSnapshotHandler() {
+        window.addEventListener('message', async (event) => {
+            // Security: only respond to snapshot requests from parent frames
+            if (event.data?.type === 'SENTIENCE_IFRAME_SNAPSHOT_REQUEST') {
+                const { requestId, options } = event.data;
+                
+                try {
+                    // Generate snapshot for this iframe's content
+                    // Allow recursive collection - querySelectorAll('iframe') only finds direct children,
+                    // so Iframe A will ask Iframe B, but won't go back up to parent (safe recursion)
+                    // waitForStability: false makes performance better - i.e. don't wait for children frames
+                    const snapshotOptions = { ...options, collectIframes: true, waitForStability: options.waitForStability === false ? false : false };
+                    const snapshot = await window.sentience.snapshot(snapshotOptions);
+                    
+                    // Send response back to parent
+                    if (event.source && event.source.postMessage) {
+                        event.source.postMessage({
+                            type: 'SENTIENCE_IFRAME_SNAPSHOT_RESPONSE',
+                            requestId: requestId,
+                            snapshot: snapshot,
+                            error: null
+                        }, '*');
+                    }
+                } catch (error) {
+                    // Send error response
+                    if (event.source && event.source.postMessage) {
+                        event.source.postMessage({
+                            type: 'SENTIENCE_IFRAME_SNAPSHOT_RESPONSE',
+                            requestId: requestId,
+                            snapshot: null,
+                            error: error.message
+                        }, '*');
+                    }
+                }
+            }
+        });
+    }
+    
+    // Setup iframe handler when script loads (only once)
+    if (!window.sentience_iframe_handler_setup) {
+        setupIframeSnapshotHandler();
+        window.sentience_iframe_handler_setup = true;
+    }
+
     // --- GLOBAL API ---
     window.sentience = {
         // 1. Geometry snapshot (NEW ARCHITECTURE - No WASM in Main World!)
         snapshot: async (options = {}) => {
             try {
+                // Step 0: Wait for DOM stability if requested (for SPA hydration)
+                if (options.waitForStability !== false) {
+                    await waitForStability(options.waitForStability || {});
+                }
+                
                 // Step 1: Collect raw DOM data (Main World - CSP can't block this!)
                 const rawData = [];
                 window.sentience_registry = [];
@@ -512,9 +890,17 @@
 
                     const textVal = getText(el);
                     const inView = isInViewport(rect);
-                    const occluded = inView ? isOccluded(el, rect) : false;
-
+                    
+                    // Get computed style once (needed for both occlusion check and data collection)
                     const style = window.getComputedStyle(el);
+                    
+                    // Only check occlusion for elements likely to be occluded (optimized)
+                    // This avoids layout thrashing for the vast majority of elements
+                    const occluded = inView ? isOccluded(el, rect, style) : false;
+                    
+                    // Get effective background color (traverses DOM to find non-transparent color)
+                    const effectiveBgColor = getEffectiveBackgroundColor(el);
+                    
                     rawData.push({
                         id: idx,
                         tag: el.tagName.toLowerCase(),
@@ -524,7 +910,8 @@
                             visibility: toSafeString(style.visibility),
                             opacity: toSafeString(style.opacity),
                             z_index: toSafeString(style.zIndex || "auto"),
-                            bg_color: toSafeString(style.backgroundColor),
+                            position: toSafeString(style.position),
+                            bg_color: toSafeString(effectiveBgColor || style.backgroundColor),
                             color: toSafeString(style.color),
                             cursor: toSafeString(style.cursor),
                             font_weight: toSafeString(style.fontWeight),
@@ -543,10 +930,87 @@
                     });
                 });
 
-                console.log(`[SentienceAPI] Collected ${rawData.length} elements, sending to background for WASM processing...`);
+                console.log(`[SentienceAPI] Collected ${rawData.length} elements from main frame`);
 
-                // Step 2: Send to background worker for WASM processing (CSP-immune!)
-                const processed = await processSnapshotInBackground(rawData, options);
+                // Step 1.5: Collect iframe snapshots and FLATTEN immediately
+                // "Flatten Early" architecture: Merge iframe elements into main array before WASM
+                // This allows WASM to process all elements uniformly (no recursion needed)
+                let allRawElements = [...rawData]; // Start with main frame elements
+                let totalIframeElements = 0;
+                
+                if (options.collectIframes !== false) {
+                    try {
+                        console.log(`[SentienceAPI] Starting iframe collection...`);
+                        const iframeSnapshots = await collectIframeSnapshots(options);
+                        console.log(`[SentienceAPI] Iframe collection complete. Received ${iframeSnapshots.size} snapshot(s)`);
+                        
+                        if (iframeSnapshots.size > 0) {
+                            // FLATTEN IMMEDIATELY: Don't nest them. Just append them with coordinate translation.
+                            iframeSnapshots.forEach((iframeSnapshot, iframeEl) => {
+                                // Debug: Log structure to verify data is correct
+                                // console.log(`[SentienceAPI] Processing iframe snapshot:`, iframeSnapshot);
+                                
+                                if (iframeSnapshot && iframeSnapshot.raw_elements) {
+                                    const rawElementsCount = iframeSnapshot.raw_elements.length;
+                                    console.log(`[SentienceAPI] Processing ${rawElementsCount} elements from iframe (src: ${iframeEl.src || 'unknown'})`);
+                                    // Get iframe's bounding rect (offset for coordinate translation)
+                                    const iframeRect = iframeEl.getBoundingClientRect();
+                                    const offset = { x: iframeRect.x, y: iframeRect.y };
+                                    
+                                    // Get iframe context for frame switching (Playwright needs this)
+                                    const iframeSrc = iframeEl.src || iframeEl.getAttribute('src') || '';
+                                    let isSameOrigin = false;
+                                    try {
+                                        // Try to access contentWindow to check if same-origin
+                                        isSameOrigin = iframeEl.contentWindow !== null;
+                                    } catch (e) {
+                                        isSameOrigin = false;
+                                    }
+                                    
+                                    // Adjust coordinates and add iframe context to each element
+                                    const adjustedElements = iframeSnapshot.raw_elements.map(el => {
+                                        const adjusted = { ...el };
+                                        
+                                        // Adjust rect coordinates to parent viewport
+                                        if (adjusted.rect) {
+                                            adjusted.rect = {
+                                                ...adjusted.rect,
+                                                x: adjusted.rect.x + offset.x,
+                                                y: adjusted.rect.y + offset.y
+                                            };
+                                        }
+                                        
+                                        // Add iframe context so agents can switch frames in Playwright
+                                        adjusted.iframe_context = {
+                                            src: iframeSrc,
+                                            is_same_origin: isSameOrigin
+                                        };
+                                        
+                                        return adjusted;
+                                    });
+                                    
+                                    // Append flattened iframe elements to main array
+                                    allRawElements.push(...adjustedElements);
+                                    totalIframeElements += adjustedElements.length;
+                                }
+                            });
+                            
+                            // console.log(`[SentienceAPI] Merged ${iframeSnapshots.size} iframe(s). Total elements: ${allRawElements.length} (${rawData.length} main + ${totalIframeElements} iframe)`);
+                        }
+                    } catch (error) {
+                        console.warn('[SentienceAPI] Iframe collection failed:', error);
+                    }
+                }
+
+                // Step 2: Send EVERYTHING to WASM (One giant flat list)
+                // Now WASM prunes iframe elements and main elements in one pass!
+                // No recursion needed - everything is already flat
+                console.log(`[SentienceAPI] Sending ${allRawElements.length} total elements to WASM (${rawData.length} main + ${totalIframeElements} iframe)`);
+                const processed = await processSnapshotInBackground(allRawElements, options);
+                
+                if (!processed || !processed.elements) {
+                    throw new Error('WASM processing returned invalid result');
+                }
 
                 // Step 3: Capture screenshot if requested
                 let screenshot = null;
@@ -558,7 +1022,16 @@
                 const cleanedElements = cleanElement(processed.elements);
                 const cleanedRawElements = cleanElement(processed.raw_elements);
 
-                console.log(`[SentienceAPI] ✓ Complete: ${cleanedElements.length} elements, ${cleanedRawElements.length} raw (WASM took ${processed.duration?.toFixed(1)}ms)`);
+                // FIXED: Removed undefined 'totalIframeRawElements'
+                // FIXED: Logic updated for "Flatten Early" architecture. 
+                // processed.elements ALREADY contains the merged iframe elements,
+                // so we simply use .length. No addition needed.
+                
+                const totalCount = cleanedElements.length;
+                const totalRaw = cleanedRawElements.length;
+                const iframeCount = totalIframeElements || 0;
+
+                console.log(`[SentienceAPI] ✓ Complete: ${totalCount} Smart Elements, ${totalRaw} Raw Elements (includes ${iframeCount} from iframes) (WASM took ${processed.duration?.toFixed(1)}ms)`);
 
                 return {
                     status: "success",
@@ -569,9 +1042,11 @@
                 };
             } catch (error) {
                 console.error('[SentienceAPI] snapshot() failed:', error);
+                console.error('[SentienceAPI] Error stack:', error.stack);
                 return {
                     status: "error",
-                    error: error.message || 'Unknown error'
+                    error: error.message || 'Unknown error',
+                    stack: error.stack
                 };
             }
         },
@@ -802,5 +1277,5 @@
         }
     };
 
-    // console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
+    console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
 })();
