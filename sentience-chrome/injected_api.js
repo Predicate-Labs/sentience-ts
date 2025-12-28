@@ -726,9 +726,15 @@
         }
         
         console.log(`[SentienceAPI] Found ${iframes.length} iframe(s), requesting snapshots...`);
-        
         // Request snapshot from each iframe
         const iframePromises = iframes.map((iframe, idx) => {
+            // OPTIMIZATION: Skip common ad domains to save time
+            const src = iframe.src || '';
+            if (src.includes('doubleclick') || src.includes('googleadservices') || src.includes('ads system')) {
+                console.log(`[SentienceAPI] Skipping ad iframe: ${src.substring(0, 30)}...`);
+                return Promise.resolve(null);
+            }
+
             return new Promise((resolve) => {
                 const requestId = `iframe-${idx}-${Date.now()}`;
                 
@@ -736,7 +742,7 @@
                 const timeout = setTimeout(() => {
                     console.warn(`[SentienceAPI] ⚠️ Iframe ${idx} snapshot TIMEOUT (id: ${requestId})`);
                     resolve(null);
-                }, 10000); // Increased to 10s to handle slow processing
+                }, 5000); // Increased to 5s to handle slow processing
                 
                 // 2. ROBUST LISTENER with debugging
                 const listener = (event) => {
@@ -1036,6 +1042,10 @@
                 return {
                     status: "success",
                     url: window.location.href,
+                    viewport: {
+                        width: window.innerWidth,
+                        height: window.innerHeight
+                    },
                     elements: cleanedElements,
                     raw_elements: cleanedRawElements,
                     screenshot: screenshot
