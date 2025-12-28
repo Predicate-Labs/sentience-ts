@@ -7,6 +7,9 @@ import { Snapshot } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Maximum payload size for API requests (10MB server limit)
+const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024;
+
 export interface SnapshotOptions {
   screenshot?: boolean | { format: 'png' | 'jpeg'; quality?: number };
   limit?: number;
@@ -183,6 +186,18 @@ async function snapshotViaApi(
     },
   };
 
+  // Check payload size before sending (server has 10MB limit)
+  const payloadJson = JSON.stringify(payload);
+  const payloadSize = new TextEncoder().encode(payloadJson).length;
+  if (payloadSize > MAX_PAYLOAD_BYTES) {
+    const sizeMB = (payloadSize / 1024 / 1024).toFixed(2);
+    const limitMB = (MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(0);
+    throw new Error(
+      `Payload size (${sizeMB}MB) exceeds server limit (${limitMB}MB). ` +
+      `Try reducing the number of elements on the page or filtering elements.`
+    );
+  }
+
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -192,7 +207,7 @@ async function snapshotViaApi(
     const response = await fetch(`${apiUrl}/v1/snapshot`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: payloadJson,
     });
 
     if (!response.ok) {
