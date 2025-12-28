@@ -73,11 +73,11 @@ jobs:
         tag_name: v${{ steps.version.outputs.version }}
         name: Release v${{ steps.version.outputs.version }}
         body: |
-          Release v${{ steps.version.outputs.version }} of sentience-ts
-          
+          Release v${{ steps.version.outputs.version }} of sentienceapi
+
           ## Installation
           ```bash
-          npm install sentience-ts@${{ steps.version.outputs.version }}
+          npm install sentienceapi@${{ steps.version.outputs.version }}
           ```
         draft: false
         prerelease: false

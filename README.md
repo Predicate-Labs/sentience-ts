@@ -5,11 +5,17 @@ The SDK is open under ELv2; the core semantic geometry and reliability logic run
 ## Installation
 
 ```bash
-npm install
-npm run build
+# Install from npm
+npm install sentienceapi
 
 # Install Playwright browsers (required)
 npx playwright install chromium
+```
+
+**For local development:**
+```bash
+npm install
+npm run build
 ```
 
 ## Quick Start: Choose Your Abstraction Level
@@ -21,7 +27,7 @@ Sentience SDK offers **4 levels of abstraction** - choose based on your needs:
 Complete automation with natural conversation. Just describe what you want, and the agent plans and executes everything:
 
 ```typescript
-import { SentienceBrowser, ConversationalAgent, OpenAIProvider } from 'sentience-ts';
+import { SentienceBrowser, ConversationalAgent, OpenAIProvider } from 'sentienceapi';
 
 const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
 const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o');
@@ -52,7 +58,7 @@ await browser.close();
 Zero coding knowledge needed. Just write what you want in plain English:
 
 ```typescript
-import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';
+import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentienceapi';
 
 const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
 const llm = new OpenAIProvider(process.env.OPENAI_API_KEY!, 'gpt-4o-mini');
@@ -80,7 +86,7 @@ await browser.close();
 Full control with semantic selectors. For technical users who want precision:
 
 ```typescript
-import { SentienceBrowser, snapshot, find, click, typeText, press } from 'sentience-ts';
+import { SentienceBrowser, snapshot, find, click, typeText, press } from 'sentienceapi';
 
 const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
 await browser.getPage().goto('https://www.amazon.com');
@@ -136,7 +142,7 @@ import {
   OpenAIProvider,
   Tracer,
   JsonlTraceSink
-} from 'sentience-ts';
+} from 'sentienceapi';
 import { randomUUID } from 'crypto';
 
 const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
@@ -222,7 +228,7 @@ console.log(`Total tokens: ${totalTokens}`);
 You can also use the tracer directly for custom workflows:
 
 ```typescript
-import { Tracer, JsonlTraceSink } from 'sentience-ts';
+import { Tracer, JsonlTraceSink } from 'sentienceapi';
 import { randomUUID } from 'crypto';
 
 const runId = randomUUID();
@@ -258,7 +264,7 @@ Traces are **100% compatible** with Python SDK traces - use the same tools to an
 ### Google Search (6 lines of code)
 
 ```typescript
-import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentience-ts';
+import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentienceapi';
 
 const browser = await SentienceBrowser.create({ apiKey: apiKey });
 const llm = new OpenAIProvider(openaiKey, 'gpt-4o-mini');
@@ -278,7 +284,7 @@ await browser.close();
 ### Using Anthropic Claude Instead of GPT
 
 ```typescript
-import { SentienceAgent, AnthropicProvider } from 'sentience-ts';
+import { SentienceAgent, AnthropicProvider } from 'sentienceapi';
 
 // Swap OpenAI for Anthropic - same API!
 const llm = new AnthropicProvider(
@@ -315,7 +321,7 @@ await agent.act("Click the 'Add to Cart' button");
 
 ```bash
 # Install core SDK
-npm install sentience-ts
+npm install sentienceapi
 
 # Install LLM provider (choose one or both)
 npm install openai              # For GPT-4, GPT-4o, GPT-4o-mini
@@ -747,7 +753,7 @@ const browser = new SentienceBrowser();
 await browser.start();
 
 // With agent
-import { SentienceAgent, OpenAIProvider } from 'sentience-ts';
+import { SentienceAgent, OpenAIProvider } from 'sentienceapi';
 
 const browser = new SentienceBrowser(
   'your-api-key',
@@ -784,7 +790,7 @@ Inject pre-recorded authentication sessions (cookies + localStorage) to start yo
 
 ```typescript
 // Workflow 1: Inject pre-recorded session from file
-import { SentienceBrowser, saveStorageState } from 'sentience-ts';
+import { SentienceBrowser, saveStorageState } from 'sentienceapi';
 
 // Save session after manual login
 const browser = new SentienceBrowser();
