@@ -14,6 +14,7 @@ export { ScriptGenerator, generate } from './generator';
 export { read, ReadOptions, ReadResult } from './read';
 export { screenshot, ScreenshotOptions } from './screenshot';
 export * from './types';
+export { saveStorageState } from './utils';
 
 // Agent Layer (v0.2.0+)
 export {

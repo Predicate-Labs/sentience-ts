@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { URL } from 'url';
+import { StorageState } from './types';
 
 export class SentienceBrowser {
   private context: BrowserContext | null = null;
@@ -18,12 +19,16 @@ export class SentienceBrowser {
   private _apiUrl?: string;
   private headless: boolean;
   private _proxy?: string;
+  private _userDataDir?: string;
+  private _storageState?: string | StorageState | object;
 
   constructor(
     apiKey?: string,
     apiUrl?: string,
     headless?: boolean,
-    proxy?: string
+    proxy?: string,
+    userDataDir?: string,
+    storageState?: string | StorageState | object
   ) {
     this._apiKey = apiKey;
     
@@ -45,6 +50,10 @@ export class SentienceBrowser {
 
     // Support proxy from parameter or environment variable
     this._proxy = proxy || process.env.SENTIENCE_PROXY;
+
+    // Auth injection support
+    this._userDataDir = userDataDir;
+    this._storageState = storageState;
   }
 
   async start(): Promise<void> {
@@ -77,8 +86,18 @@ export class SentienceBrowser {
         );
     }
 
-    // 2. Setup Temp Profile (Avoids locking issues)
-    this.userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-ts-'));
+    // 2. Setup User Data Directory
+    if (this._userDataDir) {
+      // Use provided directory for persistent sessions
+      this.userDataDir = this._userDataDir;
+      if (!fs.existsSync(this.userDataDir)) {
+        fs.mkdirSync(this.userDataDir, { recursive: true });
+      }
+    } else {
+      // Create temp directory (ephemeral, existing behavior)
+      this.userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-ts-'));
+    }
+    
     this.extensionPath = path.join(this.userDataDir, 'extension');
     
     // Copy extension to temp dir
@@ -123,6 +142,11 @@ export class SentienceBrowser {
     });
 
     this.page = this.context.pages()[0] || await this.context.newPage();
+    
+    // Inject storage state if provided (must be after context creation)
+    if (this._storageState) {
+      await this.injectStorageState(this._storageState);
+    }
     
     // Apply context-level stealth patches (runs on every new page)
     await this.context.addInitScript(() => {
@@ -493,6 +517,111 @@ export class SentienceBrowser {
     }
   }
 
+  /**
+   * Inject storage state (cookies + localStorage) into browser context.
+   * 
+   * @param storageState - Path to JSON file, StorageState object, or plain object
+   */
+  private async injectStorageState(
+    storageState: string | StorageState | object
+  ): Promise<void> {
+    // Load storage state
+    let state: StorageState;
+    
+    if (typeof storageState === 'string') {
+      // Load from file
+      const content = fs.readFileSync(storageState, 'utf-8');
+      state = JSON.parse(content) as StorageState;
+    } else if (typeof storageState === 'object' && storageState !== null) {
+      // Already an object (StorageState or plain object)
+      state = storageState as StorageState;
+    } else {
+      throw new Error(
+        `Invalid storageState type: ${typeof storageState}. ` +
+        'Expected string (file path), StorageState, or object.'
+      );
+    }
+    
+    // Inject cookies (works globally)
+    if (state.cookies && Array.isArray(state.cookies) && state.cookies.length > 0) {
+      // Convert to Playwright cookie format
+      const playwrightCookies = state.cookies.map(cookie => {
+        const playwrightCookie: any = {
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path || '/',
+        };
+        
+        if (cookie.expires !== undefined) {
+          playwrightCookie.expires = cookie.expires;
+        }
+        if (cookie.httpOnly !== undefined) {
+          playwrightCookie.httpOnly = cookie.httpOnly;
+        }
+        if (cookie.secure !== undefined) {
+          playwrightCookie.secure = cookie.secure;
+        }
+        if (cookie.sameSite !== undefined) {
+          playwrightCookie.sameSite = cookie.sameSite;
+        }
+        
+        return playwrightCookie;
+      });
+      
+      await this.context!.addCookies(playwrightCookies);
+      console.log(`✅ [Sentience] Injected ${state.cookies.length} cookie(s)`);
+    }
+    
+    // Inject LocalStorage (requires navigation to each domain)
+    if (state.origins && Array.isArray(state.origins)) {
+      for (const originData of state.origins) {
+        const origin = originData.origin;
+        if (!origin) {
+          continue;
+        }
+        
+        try {
+          // Navigate to origin
+          await this.page!.goto(origin, { waitUntil: 'domcontentloaded', timeout: 10000 });
+          
+          // Inject localStorage
+          if (originData.localStorage && Array.isArray(originData.localStorage)) {
+            // Convert to dict format for JavaScript
+            const localStorageDict: Record<string, string> = {};
+            for (const item of originData.localStorage) {
+              localStorageDict[item.name] = item.value;
+            }
+            
+            await this.page!.evaluate((localStorageData: Record<string, string>) => {
+              for (const [key, value] of Object.entries(localStorageData)) {
+                localStorage.setItem(key, value);
+              }
+            }, localStorageDict);
+            
+            console.log(
+              `✅ [Sentience] Injected ${originData.localStorage.length} localStorage item(s) for ${origin}`
+            );
+          }
+        } catch (error: any) {
+          console.warn(
+            `⚠️  [Sentience] Failed to inject localStorage for ${origin}: ${error.message}`
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Get the browser context (for utilities like saveStorageState)
+   */
+  getContext(): BrowserContext {
+    if (!this.context) {
+      throw new Error('Browser not started. Call start() first.');
+    }
+    return this.context;
+  }
+
   async close(): Promise<void> {
     const cleanup: Promise<void>[] = [];
     
@@ -529,12 +658,17 @@ export class SentienceBrowser {
       this.extensionPath = null;
     }
     
-    // Clean up user data directory
+    // Clean up user data directory (only if it's a temp directory)
+    // If user provided a custom userDataDir, we don't delete it (persistent sessions)
     if (this.userDataDir && fs.existsSync(this.userDataDir)) {
-      try {
-        fs.rmSync(this.userDataDir, { recursive: true, force: true });
-      } catch (e) {
-        // Ignore cleanup errors
+      // Only delete if it's a temp directory (starts with os.tmpdir())
+      const isTempDir = this.userDataDir.startsWith(os.tmpdir());
+      if (isTempDir) {
+        try {
+          fs.rmSync(this.userDataDir, { recursive: true, force: true });
+        } catch (e) {
+          // Ignore cleanup errors
+        }
       }
       this.userDataDir = null;
     }
