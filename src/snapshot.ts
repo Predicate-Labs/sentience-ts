@@ -18,6 +18,7 @@ export interface SnapshotOptions {
   use_api?: boolean; // Force use of server-side API if True, local extension if False
   save_trace?: boolean; // Save raw_elements to JSON for benchmarking/training
   trace_path?: string; // Path to save trace file (default: "trace_{timestamp}.json")
+  goal?: string; // Optional goal/task description for the snapshot
 }
 
 /**
@@ -165,6 +166,7 @@ async function snapshotViaApi(
     raw_elements: rawResult.raw_elements || [],  // Raw data needed for server processing
     url: rawResult.url || '',
     viewport: rawResult.viewport,
+    goal: options.goal,  // Optional goal/task description
     options: {
       limit: options.limit,
       filter: options.filter,
