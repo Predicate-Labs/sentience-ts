@@ -19,6 +19,7 @@ export interface SnapshotOptions {
   save_trace?: boolean; // Save raw_elements to JSON for benchmarking/training
   trace_path?: string; // Path to save trace file (default: "trace_{timestamp}.json")
   goal?: string; // Optional goal/task description for the snapshot
+  show_overlay?: boolean; // Show visual overlay highlighting elements in browser
 }
 
 /**
@@ -115,6 +116,15 @@ async function snapshotViaExtension(
     _saveTraceToFile(result.raw_elements, options.trace_path);
   }
 
+  // Show visual overlay if requested
+  if (options.show_overlay && result.raw_elements) {
+    await page.evaluate((elements: any[]) => {
+      if ((window as any).sentience && (window as any).sentience.showOverlay) {
+        (window as any).sentience.showOverlay(elements, null);
+      }
+    }, result.raw_elements);
+  }
+
   // Basic validation
   if (result.status !== 'success' && result.status !== 'error') {
     throw new Error(`Invalid snapshot status: ${result.status}`);
@@ -203,6 +213,15 @@ async function snapshotViaApi(
       screenshot_format: rawResult.screenshot_format,
       error: apiResult.error,
     };
+
+    // Show visual overlay if requested (use API-ranked elements)
+    if (options.show_overlay && apiResult.elements) {
+      await page.evaluate((elements: any[]) => {
+        if ((window as any).sentience && (window as any).sentience.showOverlay) {
+          (window as any).sentience.showOverlay(elements, null);
+        }
+      }, apiResult.elements);
+    }
 
     return snapshotData;
   } catch (e: any) {

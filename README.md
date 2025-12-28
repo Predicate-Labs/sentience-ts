@@ -2,7 +2,7 @@
 
 The SDK is open under ELv2; the core semantic geometry and reliability logic runs in Sentience-hosted services.
 
-## Installation
+## 📦 Installation
 
 ```bash
 # Install from npm
@@ -18,11 +18,12 @@ npm install
 npm run build
 ```
 
-## Quick Start: Choose Your Abstraction Level
+## 🚀 Quick Start: Choose Your Abstraction Level
 
 Sentience SDK offers **4 levels of abstraction** - choose based on your needs:
 
-### 💬 Level 4: Conversational Agent (Highest Abstraction) - **NEW in v0.3.0**
+<details open>
+<summary><b>💬 Level 4: Conversational Agent (Highest Abstraction)</b> - NEW in v0.3.0</summary>
 
 Complete automation with natural conversation. Just describe what you want, and the agent plans and executes everything:
 
@@ -53,7 +54,10 @@ await browser.close();
 **Code reduction:** 99% less code - describe goals in natural language
 **Requirements:** OpenAI or Anthropic API key
 
-### 🤖 Level 3: Agent (Natural Language Commands) - **Recommended for Most Users**
+</details>
+
+<details>
+<summary><b>🤖 Level 3: Agent (Natural Language Commands)</b> - Recommended for Most Users</summary>
 
 Zero coding knowledge needed. Just write what you want in plain English:
 
@@ -81,7 +85,10 @@ await browser.close();
 **Code reduction:** 95-98% less code vs manual approach
 **Requirements:** OpenAI API key (or Anthropic for Claude)
 
-### 🔧 Level 2: Direct SDK (Technical Control)
+</details>
+
+<details>
+<summary><b>🔧 Level 2: Direct SDK (Technical Control)</b></summary>
 
 Full control with semantic selectors. For technical users who want precision:
 
@@ -109,7 +116,10 @@ await browser.close();
 **Code reduction:** Still 80% less code vs raw Playwright
 **Requirements:** Only Sentience API key
 
-### ⚙️ Level 1: Raw Playwright (Maximum Control)
+</details>
+
+<details>
+<summary><b>⚙️ Level 1: Raw Playwright (Maximum Control)</b></summary>
 
 For when you need complete low-level control (rare):
 
@@ -127,9 +137,12 @@ await browser.close();
 **When to use:** Very specific edge cases, custom browser configs
 **Tradeoffs:** No semantic intelligence, brittle selectors, more code
 
+</details>
+
 ---
 
-## Agent Execution Tracing (NEW in v0.3.1)
+<details>
+<summary><h2>📊 Agent Execution Tracing (NEW in v0.3.1)</h2></summary>
 
 Record complete agent execution traces for debugging, analysis, and replay. Traces capture every step, snapshot, LLM decision, and action in a structured JSONL format.
 
@@ -187,187 +200,18 @@ Each agent action generates multiple events:
 4. **action** - Executed action (type, element ID, success)
 5. **error** - Any failures (error message, retry attempt)
 
-**Example trace output:**
-```jsonl
-{"v":1,"type":"run_start","ts":"2025-12-26T10:00:00.000Z","run_id":"abc-123","seq":1,"data":{"agent":"SentienceAgent","llm_model":"gpt-4o"}}
-{"v":1,"type":"step_start","ts":"2025-12-26T10:00:01.000Z","run_id":"abc-123","seq":2,"step_id":"step-1","data":{"step_index":1,"goal":"Click the search box","attempt":0,"url":"https://google.com"}}
-{"v":1,"type":"snapshot","ts":"2025-12-26T10:00:01.500Z","run_id":"abc-123","seq":3,"step_id":"step-1","data":{"url":"https://google.com","elements":[...]}}
-{"v":1,"type":"llm_response","ts":"2025-12-26T10:00:02.000Z","run_id":"abc-123","seq":4,"step_id":"step-1","data":{"model":"gpt-4o","prompt_tokens":250,"completion_tokens":10,"response_text":"CLICK(42)"}}
-{"v":1,"type":"action","ts":"2025-12-26T10:00:02.500Z","run_id":"abc-123","seq":5,"step_id":"step-1","data":{"action_type":"click","element_id":42,"success":true}}
-{"v":1,"type":"run_end","ts":"2025-12-26T10:00:03.000Z","run_id":"abc-123","seq":6,"data":{"steps":1}}
-```
-
-### Reading and Analyzing Traces
-
-```typescript
-import * as fs from 'fs';
-
-// Read trace file
-const content = fs.readFileSync(`traces/${runId}.jsonl`, 'utf-8');
-const events = content.trim().split('\n').map(JSON.parse);
-
-console.log(`Total events: ${events.length}`);
-
-// Analyze events
-events.forEach(event => {
-  console.log(`[${event.seq}] ${event.type} - ${event.ts}`);
-});
-
-// Filter by type
-const actions = events.filter(e => e.type === 'action');
-console.log(`Actions taken: ${actions.length}`);
-
-// Get token usage
-const llmEvents = events.filter(e => e.type === 'llm_response');
-const totalTokens = llmEvents.reduce((sum, e) => sum + (e.data.prompt_tokens || 0) + (e.data.completion_tokens || 0), 0);
-console.log(`Total tokens: ${totalTokens}`);
-```
-
-### Tracing Without Agent (Manual)
-
-You can also use the tracer directly for custom workflows:
-
-```typescript
-import { Tracer, JsonlTraceSink } from 'sentienceapi';
-import { randomUUID } from 'crypto';
-
-const runId = randomUUID();
-const sink = new JsonlTraceSink(`traces/${runId}.jsonl`);
-const tracer = new Tracer(runId, sink);
-
-// Emit custom events
-tracer.emit('custom_event', {
-  message: 'Something happened',
-  details: { foo: 'bar' }
-});
-
-// Use convenience methods
-tracer.emitRunStart('MyAgent', 'gpt-4o');
-tracer.emitStepStart('step-1', 1, 'Do something');
-tracer.emitError('step-1', 'Something went wrong');
-tracer.emitRunEnd(1);
-
-// Flush to disk
-await tracer.close();
-```
-
 ### Schema Compatibility
 
 Traces are **100% compatible** with Python SDK traces - use the same tools to analyze traces from both TypeScript and Python agents!
 
 **See full example:** [examples/agent-with-tracing.ts](examples/agent-with-tracing.ts)
 
----
-
-## Agent Layer Examples
-
-### Google Search (6 lines of code)
-
-```typescript
-import { SentienceBrowser, SentienceAgent, OpenAIProvider } from 'sentienceapi';
-
-const browser = await SentienceBrowser.create({ apiKey: apiKey });
-const llm = new OpenAIProvider(openaiKey, 'gpt-4o-mini');
-const agent = new SentienceAgent(browser, llm);
-
-await browser.getPage().goto('https://www.google.com');
-await agent.act('Click the search box');
-await agent.act("Type 'mechanical keyboards' into the search field");
-await agent.act('Press Enter key');
-await agent.act('Click the first non-ad search result');
-
-await browser.close();
-```
-
-**See full example:** [examples/agent-google-search.ts](examples/agent-google-search.ts)
-
-### Using Anthropic Claude Instead of GPT
-
-```typescript
-import { SentienceAgent, AnthropicProvider } from 'sentienceapi';
-
-// Swap OpenAI for Anthropic - same API!
-const llm = new AnthropicProvider(
-  process.env.ANTHROPIC_API_KEY!,
-  'claude-3-5-sonnet-20241022'
-);
-
-const agent = new SentienceAgent(browser, llm);
-await agent.act('Click the search button'); // Works exactly the same
-```
-
-**BYOB (Bring Your Own Brain):** OpenAI, Anthropic, or implement `LLMProvider` for any model.
-
-**See full example:** [examples/agent-with-anthropic.ts](examples/agent-with-anthropic.ts)
-
-### Amazon Shopping (98% code reduction)
-
-**Before (manual approach):** 350 lines
-**After (agent layer):** 6 lines
-
-```typescript
-await agent.act('Click the search box');
-await agent.act("Type 'wireless mouse' into the search field");
-await agent.act('Press Enter key');
-await agent.act('Click the first visible product in the search results');
-await agent.act("Click the 'Add to Cart' button");
-```
-
-**See full example:** [examples/agent-amazon-shopping.ts](examples/agent-amazon-shopping.ts)
+</details>
 
 ---
 
-## Installation for Agent Layer
-
-```bash
-# Install core SDK
-npm install sentienceapi
-
-# Install LLM provider (choose one or both)
-npm install openai              # For GPT-4, GPT-4o, GPT-4o-mini
-npm install @anthropic-ai/sdk   # For Claude 3.5 Sonnet
-
-# Set API keys
-export SENTIENCE_API_KEY="your-sentience-key"
-export OPENAI_API_KEY="your-openai-key"        # OR
-export ANTHROPIC_API_KEY="your-anthropic-key"
-```
-
----
-
-## Direct SDK Quick Start
-
-```typescript
-import { SentienceBrowser, snapshot, find, click } from './src';
-
-async function main() {
-  const browser = new SentienceBrowser();
-
-  try {
-    await browser.start();
-
-    await browser.goto('https://example.com');
-    await browser.getPage().waitForLoadState('networkidle');
-
-    // Take snapshot - captures all interactive elements
-    const snap = await snapshot(browser);
-    console.log(`Found ${snap.elements.length} elements`);
-
-    // Find and click a link using semantic selectors
-    const link = find(snap, 'role=link text~"More information"');
-    if (link) {
-      const result = await click(browser, link.id);
-      console.log(`Click success: ${result.success}`);
-    }
-  } finally {
-    await browser.close();
-  }
-}
-
-main();
-```
-
-## Real-World Example: Amazon Shopping Bot
+<details>
+<summary><h2>💼 Real-World Example: Amazon Shopping Bot</h2></summary>
 
 This example demonstrates navigating Amazon, finding products, and adding items to cart:
 
@@ -428,50 +272,38 @@ async function main() {
 main();
 ```
 
-**See the complete tutorial**: [Amazon Shopping Guide](../docs/AMAZON_SHOPPING_GUIDE.md)
+**📖 See the complete tutorial:** [Amazon Shopping Guide](../docs/AMAZON_SHOPPING_GUIDE.md)
 
-## Running Examples
+</details>
 
-**⚠️ Important**: You cannot use `node` directly to run TypeScript files. Use one of these methods:
+---
 
-### Option 1: Using npm scripts (recommended)
-```bash
-npm run example:hello
-npm run example:basic
-npm run example:query
-npm run example:wait
-```
+## 📚 Core Features
 
-### Option 2: Using ts-node directly
-```bash
-npx ts-node examples/hello.ts
-# or if ts-node is installed globally:
-ts-node examples/hello.ts
-```
+<details>
+<summary><h3>🌐 Browser Control</h3></summary>
 
-### Option 3: Compile then run
-```bash
-npm run build
-# Then use compiled JavaScript from dist/
-```
-
-## Core Features
-
-### Browser Control
 - **`SentienceBrowser`** - Playwright browser with Sentience extension pre-loaded
 - **`browser.goto(url)`** - Navigate with automatic extension readiness checks
 - Automatic bot evasion and stealth mode
 - Configurable headless/headed mode
 
-### Snapshot - Intelligent Page Analysis
-- **`snapshot(browser, options?)`** - Capture page state with AI-ranked elements
+</details>
+
+<details>
+<summary><h3>📸 Snapshot - Intelligent Page Analysis</h3></summary>
+
+**`snapshot(browser, options?)`** - Capture page state with AI-ranked elements
+
+Features:
 - Returns semantic elements with roles, text, importance scores, and bounding boxes
 - Optional screenshot capture (PNG/JPEG)
+- Optional visual overlay to see what elements are detected
 - TypeScript types for type safety
 
 **Example:**
 ```typescript
-const snap = await snapshot(browser, { screenshot: true });
+const snap = await snapshot(browser, { screenshot: true, show_overlay: true });
 
 // Access structured data
 console.log(`URL: ${snap.url}`);
@@ -484,7 +316,11 @@ for (const element of snap.elements) {
 }
 ```
 
-### Query Engine - Semantic Element Selection
+</details>
+
+<details>
+<summary><h3>🔍 Query Engine - Semantic Element Selection</h3></summary>
+
 - **`query(snapshot, selector)`** - Find all matching elements
 - **`find(snapshot, selector)`** - Find single best match (by importance)
 - Powerful query DSL with multiple operators
@@ -514,7 +350,11 @@ const firstRow = query(snap, 'bbox.y<600');
 
 **📖 [Complete Query DSL Guide](docs/QUERY_DSL.md)** - All operators, fields, and advanced patterns
 
-### Actions - Interact with Elements
+</details>
+
+<details>
+<summary><h3>👆 Actions - Interact with Elements</h3></summary>
+
 - **`click(browser, elementId)`** - Click element by ID
 - **`clickRect(browser, rect)`** - Click at center of rectangle (coordinate-based)
 - **`typeText(browser, elementId, text)`** - Type into input fields
@@ -554,7 +394,11 @@ if (element) {
 }
 ```
 
-### Wait & Assertions
+</details>
+
+<details>
+<summary><h3>⏱️ Wait & Assertions</h3></summary>
+
 - **`waitFor(browser, selector, timeout?, interval?, useApi?)`** - Wait for element to appear
 - **`expect(browser, selector)`** - Assertion helper with fluent API
 
@@ -587,11 +431,55 @@ await expect(browser, 'role=button').toHaveText('Submit');
 await expect(browser, 'role=link').toHaveCount(10);
 ```
 
-### Content Reading
-- **`read(browser, options?)`** - Extract page content
-  - `format: "text"` - Plain text extraction
-  - `format: "markdown"` - High-quality markdown conversion (uses Turndown)
-  - `format: "raw"` - Cleaned HTML (default)
+</details>
+
+<details>
+<summary><h3>🎨 Visual Overlay - Debug Element Detection</h3></summary>
+
+- **`showOverlay(browser, elements, targetElementId?)`** - Display visual overlay highlighting elements
+- **`clearOverlay(browser)`** - Clear overlay manually
+
+Show color-coded borders around detected elements to debug, validate, and understand what Sentience sees:
+
+```typescript
+import { showOverlay, clearOverlay } from 'sentienceapi';
+
+// Take snapshot once
+const snap = await snapshot(browser);
+
+// Show overlay anytime without re-snapshotting
+await showOverlay(browser, snap);  // Auto-clears after 5 seconds
+
+// Highlight specific target element in red
+const button = find(snap, 'role=button text~"Submit"');
+await showOverlay(browser, snap, button.id);
+
+// Clear manually before 5 seconds
+await new Promise(resolve => setTimeout(resolve, 2000));
+await clearOverlay(browser);
+```
+
+**Color Coding:**
+- 🔴 Red: Target element
+- 🔵 Blue: Primary elements (`is_primary=true`)
+- 🟢 Green: Regular interactive elements
+
+**Visual Indicators:**
+- Border thickness/opacity scales with importance
+- Semi-transparent fill
+- Importance badges
+- Star icons for primary elements
+- Auto-clear after 5 seconds
+
+</details>
+
+<details>
+<summary><h3>📄 Content Reading</h3></summary>
+
+**`read(browser, options?)`** - Extract page content
+- `format: "text"` - Plain text extraction
+- `format: "markdown"` - High-quality markdown conversion (uses Turndown)
+- `format: "raw"` - Cleaned HTML (default)
 
 **Example:**
 ```typescript
@@ -606,11 +494,15 @@ const result = await read(browser, { format: 'text' });
 console.log(result.content);  // Plain text
 ```
 
-### Screenshots
-- **`screenshot(browser, options?)`** - Standalone screenshot capture
-  - Returns base64-encoded data URL
-  - PNG or JPEG format
-  - Quality control for JPEG (1-100)
+</details>
+
+<details>
+<summary><h3>📷 Screenshots</h3></summary>
+
+**`screenshot(browser, options?)`** - Standalone screenshot capture
+- Returns base64-encoded data URL
+- PNG or JPEG format
+- Quality control for JPEG (1-100)
 
 **Example:**
 ```typescript
@@ -629,7 +521,14 @@ writeFileSync('screenshot.png', imageData);
 const dataUrl = await screenshot(browser, { format: 'jpeg', quality: 85 });
 ```
 
-## Element Properties
+</details>
+
+---
+
+## 📋 Reference
+
+<details>
+<summary><h3>Element Properties</h3></summary>
 
 Elements returned by `snapshot()` have the following properties:
 
@@ -645,7 +544,10 @@ element.is_occluded     // Is element covered by other elements?
 element.z_index         // CSS stacking order
 ```
 
-## Query DSL Reference
+</details>
+
+<details>
+<summary><h3>Query DSL Reference</h3></summary>
 
 ### Basic Operators
 
@@ -668,38 +570,14 @@ element.z_index         // CSS stacking order
 - **Position**: `bbox.x`, `bbox.y`, `bbox.width`, `bbox.height`
 - **Layering**: `z_index`
 
-## Examples
+</details>
 
-See the `examples/` directory for complete working examples:
+---
 
-### Agent Layer (Level 3 - Natural Language)
-- **`agent-google-search.ts`** - Google search automation with natural language commands
-- **`agent-amazon-shopping.ts`** - Amazon shopping bot (6 lines vs 350 lines manual code)
-- **`agent-with-anthropic.ts`** - Using Anthropic Claude instead of OpenAI GPT
+## ⚙️ Configuration
 
-### Direct SDK (Level 2 - Technical Control)
-- **`hello.ts`** - Extension bridge verification
-- **`basic-agent.ts`** - Basic snapshot and element inspection
-- **`query-demo.ts`** - Query engine demonstrations
-- **`wait-and-click.ts`** - Waiting for elements and performing actions
-- **`read-markdown.ts`** - Content extraction and markdown conversion
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-
-# Run specific test file
-npm test -- snapshot.test.ts
-```
-
-## Configuration
-
-### Viewport Size
+<details>
+<summary><h3>Viewport Size</h3></summary>
 
 Default viewport is **1280x800** pixels. You can customize it using Playwright's API:
 
@@ -713,7 +591,10 @@ await browser.getPage().setViewportSize({ width: 1920, height: 1080 });
 await browser.goto('https://example.com');
 ```
 
-### Headless Mode
+</details>
+
+<details>
+<summary><h3>Headless Mode</h3></summary>
 
 ```typescript
 // Headed mode (shows browser window)
@@ -726,7 +607,10 @@ const browser = new SentienceBrowser(undefined, undefined, true);
 const browser = new SentienceBrowser();  // headless=true if CI=true, else false
 ```
 
-### Residential Proxy Support
+</details>
+
+<details>
+<summary><h3>🌍 Residential Proxy Support</h3></summary>
 
 For users running from datacenters (AWS, DigitalOcean, etc.), you can configure a residential proxy to prevent IP-based detection by Cloudflare, Akamai, and other anti-bot services.
 
@@ -771,20 +655,12 @@ await agent.act('Navigate to example.com');
 The SDK automatically adds WebRTC leak protection flags when a proxy is configured, preventing your real datacenter IP from being exposed via WebRTC even when using proxies.
 
 **HTTPS Certificate Handling:**
-The SDK automatically ignores HTTPS certificate errors when a proxy is configured, as residential proxies often use self-signed certificates for SSL interception. This ensures seamless navigation to HTTPS sites through the proxy.
+The SDK automatically ignores HTTPS certificate errors when a proxy is configured, as residential proxies often use self-signed certificates for SSL interception.
 
-**Example:**
-```bash
-# Run with proxy via environment variable
-SENTIENCE_PROXY=http://user:pass@proxy.com:8000 npm run example:proxy
+</details>
 
-# Or via command line argument
-ts-node examples/proxy-example.ts --proxy=http://user:pass@proxy.com:8000
-```
-
-**Note:** The proxy is configured at the browser level, so all traffic (including the Chrome extension) routes through the proxy. No changes to the extension are required.
-
-### Authentication Session Injection
+<details>
+<summary><h3>🔐 Authentication Session Injection</h3></summary>
 
 Inject pre-recorded authentication sessions (cookies + localStorage) to start your agent already logged in, bypassing login screens, 2FA, and CAPTCHAs. This saves tokens and reduces costs by eliminating login steps.
 
@@ -833,7 +709,14 @@ await browser3.start();
 
 See `examples/auth-injection-agent.ts` for complete examples.
 
-## Best Practices
+</details>
+
+---
+
+## 💡 Best Practices
+
+<details>
+<summary>Click to expand best practices</summary>
 
 ### 1. Wait for Dynamic Content
 ```typescript
@@ -889,7 +772,14 @@ try {
 }
 ```
 
-## Troubleshooting
+</details>
+
+---
+
+## 🛠️ Troubleshooting
+
+<details>
+<summary>Click to expand common issues and solutions</summary>
 
 ### "Extension failed to load"
 **Solution:** Build the extension first:
@@ -915,18 +805,91 @@ npm run example:hello
 ### Button not clickable
 **Solutions:**
 - Check visibility: `element.in_viewport && !element.is_occluded`
-- Scroll to element: `await browser.getPage().evaluate(\`window.sentience_registry[${element.id}].scrollIntoView()\`)`
+- Scroll to element: ``await browser.getPage().evaluate(`window.sentience_registry[${element.id}].scrollIntoView()`)``
 
-## Documentation
+</details>
+
+---
+
+## 💻 Examples & Testing
+
+<details>
+<summary><h3>Agent Layer Examples (Level 3 - Natural Language)</h3></summary>
+
+- **`agent-google-search.ts`** - Google search automation with natural language commands
+- **`agent-amazon-shopping.ts`** - Amazon shopping bot (6 lines vs 350 lines manual code)
+- **`agent-with-anthropic.ts`** - Using Anthropic Claude instead of OpenAI GPT
+- **`agent-with-tracing.ts`** - Agent execution tracing for debugging and analysis
+
+</details>
+
+<details>
+<summary><h3>Direct SDK Examples (Level 2 - Technical Control)</h3></summary>
+
+- **`hello.ts`** - Extension bridge verification
+- **`basic-agent.ts`** - Basic snapshot and element inspection
+- **`query-demo.ts`** - Query engine demonstrations
+- **`wait-and-click.ts`** - Waiting for elements and performing actions
+- **`read-markdown.ts`** - Content extraction and markdown conversion
+
+</details>
+
+<details>
+<summary><h3>Running Examples</h3></summary>
+
+**⚠️ Important**: You cannot use `node` directly to run TypeScript files. Use one of these methods:
+
+### Option 1: Using npm scripts (recommended)
+```bash
+npm run example:hello
+npm run example:basic
+npm run example:query
+npm run example:wait
+```
+
+### Option 2: Using ts-node directly
+```bash
+npx ts-node examples/hello.ts
+# or if ts-node is installed globally:
+ts-node examples/hello.ts
+```
+
+### Option 3: Compile then run
+```bash
+npm run build
+# Then use compiled JavaScript from dist/
+```
+
+</details>
+
+<details>
+<summary><h3>Testing</h3></summary>
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific test file
+npm test -- snapshot.test.ts
+```
+
+</details>
+
+---
+
+## 📖 Documentation
 
 - **📖 [Amazon Shopping Guide](../docs/AMAZON_SHOPPING_GUIDE.md)** - Complete tutorial with real-world example
 - **📖 [Query DSL Guide](docs/QUERY_DSL.md)** - Advanced query patterns and operators
 - **📄 [API Contract](../spec/SNAPSHOT_V1.md)** - Snapshot API specification
 - **📄 [Type Definitions](../spec/sdk-types.md)** - TypeScript/Python type definitions
 
-## License
+---
 
-📜 **License**
+## 📜 License
 
 This SDK is licensed under the **Elastic License 2.0 (ELv2)**.
 
@@ -936,11 +899,10 @@ The Elastic License 2.0 allows you to use, modify, and distribute this SDK for i
 
 - This SDK is a **client-side library** that communicates with proprietary Sentience services and browser components.
 
-- The Sentience backend services (including semantic geometry grounding, ranking, visual cues, and trace processing) are **not open source** and are governed by Sentience’s Terms of Service.
+- The Sentience backend services (including semantic geometry grounding, ranking, visual cues, and trace processing) are **not open source** and are governed by Sentience's Terms of Service.
 
-- Use of this SDK does **not** grant rights to operate, replicate, or reimplement Sentience’s hosted services.
+- Use of this SDK does **not** grant rights to operate, replicate, or reimplement Sentience's hosted services.
 
 For commercial usage, hosted offerings, or enterprise deployments, please contact Sentience to obtain a commercial license.
 
 See the full license text in [`LICENSE`](./LICENSE.md).
-
