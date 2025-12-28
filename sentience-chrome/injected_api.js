@@ -1435,5 +1435,36 @@
         }
     };
 
+    /**
+     * Show overlay highlighting specific elements with Shadow DOM
+     * @param {Array} elements - List of elements with bbox, importance, visual_cues
+     * @param {number} targetElementId - Optional ID of target element (shown in red)
+     */
+    window.sentience.showOverlay = function(elements, targetElementId = null) {
+        if (!elements || !Array.isArray(elements)) {
+            console.warn('[Sentience] showOverlay: elements must be an array');
+            return;
+        }
+
+        window.postMessage({
+            type: 'SENTIENCE_SHOW_OVERLAY',
+            elements: elements,
+            targetElementId: targetElementId,
+            timestamp: Date.now()
+        }, '*');
+
+        console.log(`[Sentience] Overlay requested for ${elements.length} elements`);
+    };
+
+    /**
+     * Clear overlay manually
+     */
+    window.sentience.clearOverlay = function() {
+        window.postMessage({
+            type: 'SENTIENCE_CLEAR_OVERLAY'
+        }, '*');
+        console.log('[Sentience] Overlay cleared');
+    };
+
     console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
 })();
