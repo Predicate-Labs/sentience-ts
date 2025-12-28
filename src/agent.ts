@@ -159,10 +159,11 @@ export class SentienceAgent {
         // 1. OBSERVE: Get refined semantic snapshot
         const startTime = Date.now();
 
-        const snapOpts = snapshotOptions || {};
-        if (!snapOpts.limit) {
-          snapOpts.limit = this.snapshotLimit;
-        }
+        const snapOpts = {
+          ...snapshotOptions,
+          goal: snapshotOptions?.goal ?? goal,
+          limit: snapshotOptions?.limit || this.snapshotLimit,
+        };
 
         const snap = await snapshot(this.browser, snapOpts);
 
