@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Sentience Semantic Visual Grounding Extractor",
-  "version": "1.0.5",
+  "version": "2.0.7",
   "description": "Extract semantic visual grounding data from web pages",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "web_accessible_resources": [
     {
       "resources": ["pkg/*"],
@@ -15,13 +19,15 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     },
     {
       "matches": ["<all_urls>"],
       "js": ["injected_api.js"],
       "run_at": "document_idle",
-      "world": "MAIN"
+      "world": "MAIN",
+      "all_frames": true
     }
   ],
   "content_security_policy": {

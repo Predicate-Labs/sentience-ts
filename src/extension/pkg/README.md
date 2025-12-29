@@ -21,6 +21,7 @@ Perfect for AI agents, automation scripts, visual grounding, and accessibility t
 11. [API Reference](#api-reference)
 12. [Performance](#performance)
 13. [Troubleshooting](#troubleshooting)
+14. Transferred to SentienceAPI Org
 
 ---
 
@@ -151,13 +152,20 @@ Claude/
 
 ## User API
 
-### The Only Function You Need
+### Core Functions
+
+The extension provides two main functions:
+
+1. **`window.sentience.snapshot(options?)`** - Extract page geometry and elements
+2. **`window.sentience.findTextRect(options)`** - Find exact pixel coordinates of text
+
+### snapshot() - Geometry Extraction
 
 ```javascript
 window.sentience.snapshot(options?)
 ```
 
-**One function, many capabilities:**
+**Capabilities:**
 - Get geometry map
 - Capture screenshot
 - Filter by role/size/z-index
@@ -212,6 +220,159 @@ await window.sentience.snapshot({
   screenshot_error?: string
 }
 ```
+
+### findTextRect() - Text Location Finder
+
+Find exact pixel coordinates of any text on the page using the DOM Range API. Perfect for highlighting specific words, clicking on text, or text-based navigation **without Vision Models**.
+
+```javascript
+window.sentience.findTextRect(options)
+```
+
+**Parameters:**
+```typescript
+{
+  text: string,                  // Required: Text to find
+  containerElement?: Element,    // Optional: Search within (default: document.body)
+  caseSensitive?: boolean,       // Optional: Case-sensitive search (default: false)
+  wholeWord?: boolean,          // Optional: Match whole words only (default: false)
+  maxResults?: number           // Optional: Limit results (default: 10)
+}
+```
+
+**Returns:**
+```typescript
+{
+  status: "success" | "error",
+  query: string,                // The search text
+  case_sensitive: boolean,
+  whole_word: boolean,
+  matches: number,              // Total matches found
+  results: [{
+    text: string,               // Actual matched text
+    rect: {                     // Absolute coordinates (with scroll)
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      left: number,
+      top: number,
+      right: number,
+      bottom: number
+    },
+    viewport_rect: {            // Viewport-relative coordinates
+      x: number,
+      y: number,
+      width: number,
+      height: number
+    },
+    context: {                  // Surrounding text
+      before: string,           // 20 chars before
+      after: string             // 20 chars after
+    },
+    in_viewport: boolean        // Is it currently visible?
+  }],
+  viewport: {
+    width: number,
+    height: number,
+    scroll_x: number,
+    scroll_y: number
+  },
+  error?: string                // Error message if status is "error"
+}
+```
+
+**Usage Examples:**
+
+```javascript
+// Example 1: Find "Add to Cart" text
+const result = await window.sentience.findTextRect({
+  text: "Add to Cart"
+});
+
+if (result.status === "success") {
+  console.log(`Found ${result.matches} occurrences`);
+  result.results.forEach((match, i) => {
+    console.log(`${i+1}. At (${match.rect.x}, ${match.rect.y})`);
+    console.log(`   Context: "${match.context.before}${match.text}${match.context.after}"`);
+  });
+}
+
+// Example 2: Highlight all matches
+const result = await window.sentience.findTextRect({
+  text: "price",
+  caseSensitive: false,
+  maxResults: 20
+});
+
+result.results.forEach(match => {
+  const highlight = document.createElement('div');
+  highlight.style.cssText = `
+    position: absolute;
+    left: ${match.rect.x}px;
+    top: ${match.rect.y}px;
+    width: ${match.rect.width}px;
+    height: ${match.rect.height}px;
+    background: yellow;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 9999;
+  `;
+  document.body.appendChild(highlight);
+});
+
+// Example 3: Click on specific text (not button!)
+const result = await window.sentience.findTextRect({
+  text: "Terms of Service",
+  wholeWord: true
+});
+
+if (result.matches > 0) {
+  const first = result.results[0];
+  // Click the center of the text
+  const centerX = first.viewport_rect.x + first.viewport_rect.width / 2;
+  const centerY = first.viewport_rect.y + first.viewport_rect.height / 2;
+
+  document.elementFromPoint(centerX, centerY)?.click();
+}
+
+// Example 4: Find text only in header
+const header = document.querySelector('header');
+const result = await window.sentience.findTextRect({
+  text: "Login",
+  containerElement: header
+});
+
+// Example 5: Scroll to first match
+const result = await window.sentience.findTextRect({
+  text: "Contact Us"
+});
+
+if (result.matches > 0) {
+  const first = result.results[0];
+  window.scrollTo({
+    top: first.rect.y - 100,  // Offset for header
+    behavior: 'smooth'
+  });
+}
+```
+
+**Use Cases:**
+- 🎯 **Text-based clicking** - Click on text that's not in a button
+- 🖍️ **Text highlighting** - Draw bounding boxes around specific words
+- 📍 **Text navigation** - Scroll to specific content
+- ♿ **Accessibility** - Find and highlight important text
+- 🤖 **AI Agents** - Locate text without vision models
+- 🔍 **Search results** - Find and highlight search terms
+
+**Features:**
+- ✅ Pixel-perfect coordinates using DOM Range API
+- ✅ Filters invisible/hidden text automatically
+- ✅ Returns both absolute and viewport-relative coordinates
+- ✅ Provides context for ambiguous matches
+- ✅ Handles multiple occurrences
+- ✅ Performance-safe with result limits
+- ✅ Works with case-insensitive and whole-word matching
 
 ---
 

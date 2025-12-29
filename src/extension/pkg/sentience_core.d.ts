@@ -7,6 +7,14 @@ export function analyze_page_with_options(val: any, options: any): any;
 
 export function decide_and_act(_raw_elements: any): void;
 
+/**
+ * Prune raw elements before sending to API
+ * This is a "dumb" filter that reduces payload size without leaking proprietary IP
+ * Filters out: tiny elements, invisible elements, non-interactive wrapper divs
+ * Amazon: 5000-6000 elements -> ~200-400 elements (~95% reduction)
+ */
+export function prune_for_api(val: any): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -14,6 +22,7 @@ export interface InitOutput {
   readonly analyze_page: (a: number) => number;
   readonly analyze_page_with_options: (a: number, b: number) => number;
   readonly decide_and_act: (a: number) => void;
+  readonly prune_for_api: (a: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;
   readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export3: (a: number) => void;
