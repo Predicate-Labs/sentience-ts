@@ -120,5 +120,111 @@ export interface StorageState {
   origins: OriginStorage[];
 }
 
+// ========== Text Search Types (findTextRect) ==========
+
+/**
+ * Rectangle coordinates for text occurrence.
+ * Includes both absolute (page) and viewport-relative coordinates.
+ */
+export interface TextRect {
+  /** Absolute X coordinate (page coordinate with scroll offset) */
+  x: number;
+  /** Absolute Y coordinate (page coordinate with scroll offset) */
+  y: number;
+  /** Rectangle width in pixels */
+  width: number;
+  /** Rectangle height in pixels */
+  height: number;
+  /** Absolute left position (same as x) */
+  left: number;
+  /** Absolute top position (same as y) */
+  top: number;
+  /** Absolute right position (x + width) */
+  right: number;
+  /** Absolute bottom position (y + height) */
+  bottom: number;
+}
+
+/**
+ * Viewport-relative rectangle coordinates (without scroll offset)
+ */
+export interface ViewportRect {
+  /** Viewport-relative X coordinate */
+  x: number;
+  /** Viewport-relative Y coordinate */
+  y: number;
+  /** Rectangle width in pixels */
+  width: number;
+  /** Rectangle height in pixels */
+  height: number;
+}
+
+/**
+ * Context text surrounding a match
+ */
+export interface TextContext {
+  /** Text before the match (up to 20 chars) */
+  before: string;
+  /** Text after the match (up to 20 chars) */
+  after: string;
+}
+
+/**
+ * A single text match with its rectangle and context
+ */
+export interface TextMatch {
+  /** The matched text */
+  text: string;
+  /** Absolute rectangle coordinates (with scroll offset) */
+  rect: TextRect;
+  /** Viewport-relative rectangle (without scroll offset) */
+  viewport_rect: ViewportRect;
+  /** Surrounding text context */
+  context: TextContext;
+  /** Whether the match is currently visible in viewport */
+  in_viewport: boolean;
+}
+
+/**
+ * Result of findTextRect operation.
+ * Returns all occurrences of text on the page with their exact pixel coordinates.
+ */
+export interface TextRectSearchResult {
+  status: "success" | "error";
+  /** The search text that was queried */
+  query?: string;
+  /** Whether search was case-sensitive */
+  case_sensitive?: boolean;
+  /** Whether whole-word matching was used */
+  whole_word?: boolean;
+  /** Number of matches found */
+  matches?: number;
+  /** List of text matches with coordinates */
+  results?: TextMatch[];
+  /** Current viewport dimensions */
+  viewport?: Viewport & {
+    scroll_x: number;
+    scroll_y: number;
+  };
+  /** Error message if status is 'error' */
+  error?: string;
+}
+
+/**
+ * Options for findTextRect operation
+ */
+export interface FindTextRectOptions {
+  /** Text to search for (required) */
+  text: string;
+  /** Container element to search within (default: document.body) */
+  containerElement?: Element;
+  /** Case-sensitive search (default: false) */
+  caseSensitive?: boolean;
+  /** Match whole words only (default: false) */
+  wholeWord?: boolean;
+  /** Maximum number of results to return (default: 10) */
+  maxResults?: number;
+}
+
 
 
