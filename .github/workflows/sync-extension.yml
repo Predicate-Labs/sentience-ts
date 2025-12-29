@@ -145,8 +145,8 @@ jobs:
     - name: Update extension files
       if: steps.release.outputs.skip != 'true'
       run: |
-        # Target directory in sdk-ts
-        TARGET_DIR="sentience-chrome"
+        # Target directory in sdk-ts (must match package.json files array)
+        TARGET_DIR="src/extension"
         
         # Ensure target directory exists and is clean
         rm -rf "$TARGET_DIR"
@@ -161,6 +161,12 @@ jobs:
           exit 1
         fi
         
+        # Verify findTextRect is in the synced extension
+        if ! grep -q "findTextRect:" "$TARGET_DIR/injected_api.js"; then
+          echo "⚠️  Warning: findTextRect not found in synced injected_api.js"
+          echo "The extension may be outdated. Check sentience-chrome repository."
+        fi
+        
         # Cleanup
         rm -rf extension-temp
         
@@ -171,7 +177,7 @@ jobs:
       if: steps.release.outputs.skip != 'true'
       id: changes
       run: |
-        git add sentience-chrome/
+        git add src/extension/
         
         if git diff --staged --quiet; then
           echo "No changes detected."

@@ -56,9 +56,78 @@ jobs:
       env:
         CI: true
         
+    - name: Verify extension files are present
+      run: |
+        echo "🔍 Verifying extension files are included..."
+        
+        # Check required extension files exist
+        REQUIRED_FILES=(
+          "src/extension/manifest.json"
+          "src/extension/content.js"
+          "src/extension/background.js"
+          "src/extension/injected_api.js"
+          "src/extension/pkg/sentience_core.js"
+          "src/extension/pkg/sentience_core_bg.wasm"
+        )
+        
+        MISSING_FILES=()
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            MISSING_FILES+=("$file")
+          fi
+        done
+        
+        if [ ${#MISSING_FILES[@]} -ne 0 ]; then
+          echo "❌ Error: Missing required extension files:"
+          printf '  - %s\n' "${MISSING_FILES[@]}"
+          echo ""
+          echo "Please ensure the extension is synced before releasing."
+          echo "Run the sync-extension workflow or manually sync extension files."
+          exit 1
+        fi
+        
+        # Verify findTextRect function exists in injected_api.js
+        if ! grep -q "findTextRect:" src/extension/injected_api.js; then
+          echo "❌ Error: findTextRect function not found in injected_api.js"
+          echo "The extension may be out of date. Please sync the extension before releasing."
+          exit 1
+        fi
+        
+        echo "✅ All extension files verified"
+        echo "📦 Extension files that will be included:"
+        find src/extension -type f | sort
+
     - name: Build package
       run: |
         npm run build
+    
+    - name: Verify extension files in built package
+      run: |
+        echo "🔍 Verifying extension files are included in the built package..."
+        
+        # Check that src/extension directory exists after build
+        # (TypeScript build doesn't modify extension files, they should still be in src/)
+        if [ ! -d "src/extension" ]; then
+          echo "❌ Error: src/extension directory missing after build"
+          exit 1
+        fi
+        
+        # Verify findTextRect is still in the extension after build
+        if ! grep -q "findTextRect:" src/extension/injected_api.js; then
+          echo "❌ Error: findTextRect not found in extension after build"
+          exit 1
+        fi
+        
+        # Check package.json files array includes src/extension
+        if ! grep -q '"src/extension"' package.json; then
+          echo "⚠️  Warning: package.json files array may not include src/extension"
+          echo "Current files array:"
+          grep -A 5 '"files"' package.json || echo "files array not found"
+        fi
+        
+        echo "✅ Extension files verified in package"
+        echo "📦 Extension files that will be published:"
+        find src/extension -type f | head -20
         
     - name: Publish to npm
       run: |
