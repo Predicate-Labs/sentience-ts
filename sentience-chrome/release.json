@@ -67,7 +67,7 @@
       "state": "uploaded",
       "size": 78026,
       "digest": "sha256:d8ff48cfac38e8a3fe2408f7dacc93fb1c76e4772e7f981545c920aea18998ba",
-      "download_count": 0,
+      "download_count": 2,
       "created_at": "2025-12-28T18:16:59Z",
       "updated_at": "2025-12-28T18:16:59Z",
       "browser_download_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/download/v2.0.6/extension-files.tar.gz"
