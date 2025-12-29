@@ -928,7 +928,10 @@
                             type_: toSafeString(el.getAttribute('type')),
                             aria_label: toSafeString(el.getAttribute('aria-label')),
                             href: toSafeString(el.href || el.getAttribute('href') || null),
-                            class: toSafeString(getClassName(el))
+                            class: toSafeString(getClassName(el)),
+                            // Capture dynamic input state (not just initial attributes)
+                            value: el.value !== undefined ? toSafeString(el.value) : toSafeString(el.getAttribute('value')),
+                            checked: el.checked !== undefined ? String(el.checked) : null
                         },
                         text: toSafeString(textVal),
                         in_viewport: inView,
