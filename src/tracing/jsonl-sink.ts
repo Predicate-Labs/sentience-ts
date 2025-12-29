@@ -120,10 +120,27 @@ export class JsonlTraceSink extends TraceSink {
           // Silently ignore close errors in production
           // (they're logged during stream lifetime if needed)
         }
+
+        // Generate index after closing file
+        this.generateIndex();
+
         // Always resolve, don't reject on close errors
         resolve();
       });
     });
+  }
+
+  /**
+   * Generate trace index file (automatic on close)
+   */
+  private generateIndex(): void {
+    try {
+      const { writeTraceIndex } = require('./indexer');
+      writeTraceIndex(this.path);
+    } catch (error: any) {
+      // Non-fatal: log but don't crash
+      console.log(`⚠️  Failed to generate trace index: ${error.message}`);
+    }
   }
 
   /**

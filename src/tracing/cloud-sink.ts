@@ -247,6 +247,9 @@ export class CloudTraceSink extends TraceSink {
         });
       }
 
+      // 2. Generate index after closing file
+      this.generateIndex();
+
       // 2. Read and compress trace data (using async operations)
       try {
         await fsPromises.access(this.tempFilePath);
@@ -363,6 +366,19 @@ export class CloudTraceSink extends TraceSink {
       req.write(body);
       req.end();
     });
+  }
+
+  /**
+   * Generate trace index file (automatic on close)
+   */
+  private generateIndex(): void {
+    try {
+      const { writeTraceIndex } = require('./indexer');
+      writeTraceIndex(this.tempFilePath);
+    } catch (error: any) {
+      // Non-fatal: log but don't crash
+      console.log(`⚠️  Failed to generate trace index: ${error.message}`);
+    }
   }
 
   /**
