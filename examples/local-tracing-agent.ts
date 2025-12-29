@@ -1,17 +1,17 @@
 /**
- * Example: Agent with Cloud Tracing
+ * Example: Agent with Local Tracing
  *
- * Demonstrates how to use cloud tracing with SentienceAgent to upload traces
- * and screenshots to cloud storage for remote viewing and analysis.
+ * Demonstrates how to use local tracing with SentienceAgent to save traces
+ * and screenshots to local storage for offline viewing and analysis.
  *
  * Requirements:
  * - Pro or Enterprise tier API key (SENTIENCE_API_KEY)
  * - OpenAI API key (OPENAI_API_KEY) for LLM
  *
  * Usage:
- *   ts-node examples/cloud-tracing-agent.ts
+ *   ts-node examples/local-tracing-agent.ts
  *   or
- *   npm run example:cloud-tracing
+ *   npm run example:local-tracing
  */
 
 import { SentienceBrowser } from '../src/browser';
@@ -39,12 +39,15 @@ async function main() {
   console.log('🚀 Starting Agent with Cloud Tracing Demo\n');
 
   // 1. Create tracer with automatic tier detection
-  // If apiKey is Pro/Enterprise, uses CloudTraceSink
-  // If apiKey is missing/invalid, falls back to local JsonlTraceSink
-  const runId = 'cloud-tracing-demo';
+  // If apiKey is Pro/Enterprise AND uploadTrace is true, uses CloudTraceSink
+  // If apiKey is missing/invalid or uploadTrace is false, falls back to local JsonlTraceSink
+  // Note: uploadTrace defaults to true for backward compatibility
+  const runId = 'local-tracing-demo';
+  // if apiKey is provided and uploadTrace is true, will use cloud storage tracer
   const tracer = await createTracer({
     apiKey: sentienceKey,
-    runId: runId
+    runId: runId,
+    uploadTrace: false  // local storage tracer
   });
 
   console.log(`🆔 Run ID: ${runId}\n`);

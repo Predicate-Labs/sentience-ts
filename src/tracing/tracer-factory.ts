@@ -165,21 +165,26 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
  * Create tracer with automatic tier detection
  *
  * Tier Detection:
- * - If apiKey is provided: Try to initialize CloudTraceSink (Pro/Enterprise)
- * - If cloud init fails or no apiKey: Fall back to JsonlTraceSink (Free tier)
+ * - If apiKey is provided AND uploadTrace is true: Try to initialize CloudTraceSink (Pro/Enterprise)
+ * - If cloud init fails, no apiKey, or uploadTrace is false: Fall back to JsonlTraceSink (Free tier)
  *
  * @param options - Configuration options
  * @param options.apiKey - Sentience API key (e.g., "sk_pro_xxxxx")
  * @param options.runId - Unique identifier for this agent run (generates UUID if not provided)
  * @param options.apiUrl - Sentience API base URL (default: https://api.sentienceapi.com)
  * @param options.logger - Optional logger instance for logging file sizes and errors
+ * @param options.uploadTrace - Enable cloud trace upload (default: true for backward compatibility)
  * @returns Tracer configured with appropriate sink
  *
  * @example
  * ```typescript
- * // Pro tier user
- * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo" });
+ * // Pro tier user with cloud upload
+ * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo", uploadTrace: true });
  * // Returns: Tracer with CloudTraceSink
+ *
+ * // Pro tier user with local-only tracing
+ * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo", uploadTrace: false });
+ * // Returns: Tracer with JsonlTraceSink (local-only)
  *
  * // Free tier user
  * const tracer = await createTracer({ runId: "demo" });
@@ -188,7 +193,7 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
  * // Use with agent
  * const agent = new SentienceAgent(browser, llm, 50, true, tracer);
  * await agent.act("Click search");
- * await tracer.close(); // Uploads to cloud if Pro tier
+ * await tracer.close(); // Uploads to cloud if uploadTrace: true and Pro tier
  * ```
  */
 export async function createTracer(options: {
@@ -196,14 +201,18 @@ export async function createTracer(options: {
   runId?: string;
   apiUrl?: string;
   logger?: SentienceLogger;
+  uploadTrace?: boolean;
 }): Promise<Tracer> {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || SENTIENCE_API_URL;
+  // Default uploadTrace to true for backward compatibility
+  const uploadTrace = options.uploadTrace !== false;
 
   // PRODUCTION FIX: Recover orphaned traces from previous crashes
   // Note: This is skipped in test environments (see recoverOrphanedTraces function)
   // Run in background to avoid blocking tracer creation
-  if (options.apiKey) {
+  // Only recover if uploadTrace is enabled
+  if (options.apiKey && uploadTrace) {
     // Don't await - run in background to avoid blocking
     recoverOrphanedTraces(options.apiKey, apiUrl).catch(() => {
       // Silently fail - orphan recovery should not block tracer creation
@@ -211,7 +220,8 @@ export async function createTracer(options: {
   }
 
   // 1. Try to initialize Cloud Sink (Pro/Enterprise tier)
-  if (options.apiKey) {
+  // Only attempt cloud init if uploadTrace is enabled
+  if (options.apiKey && uploadTrace) {
     try {
       // Request pre-signed upload URL from backend
       const response = await httpPost(
