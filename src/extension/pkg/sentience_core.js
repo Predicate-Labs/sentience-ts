@@ -223,6 +223,19 @@ export function decide_and_act(_raw_elements) {
     wasm.decide_and_act(addHeapObject(_raw_elements));
 }
 
+/**
+ * Prune raw elements before sending to API
+ * This is a "dumb" filter that reduces payload size without leaking proprietary IP
+ * Filters out: tiny elements, invisible elements, non-interactive wrapper divs
+ * Amazon: 5000-6000 elements -> ~200-400 elements (~95% reduction)
+ * @param {any} val
+ * @returns {any}
+ */
+export function prune_for_api(val) {
+    const ret = wasm.prune_for_api(addHeapObject(val));
+    return takeObject(ret);
+}
+
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
 
 async function __wbg_load(module, imports) {
@@ -337,6 +350,9 @@ function __wbg_get_imports() {
     imports.wbg.__wbg_done_62ea16af4ce34b24 = function(arg0) {
         const ret = getObject(arg0).done;
         return ret;
+    };
+    imports.wbg.__wbg_error_7bc7d576a6aaf855 = function(arg0) {
+        console.error(getObject(arg0));
     };
     imports.wbg.__wbg_get_6b7bd52aca3f9671 = function(arg0, arg1) {
         const ret = getObject(arg0)[arg1 >>> 0];
