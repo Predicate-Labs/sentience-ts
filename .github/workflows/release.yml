@@ -28,8 +28,10 @@ jobs:
       id: version
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
-          VERSION=${GITHUB_REF#refs/tags/v}
-          VERSION=${VERSION#refs/tags/}
+          # For release events, use the tag_name from the release event
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          VERSION=${TAG_NAME#v}
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
