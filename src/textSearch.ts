@@ -87,6 +87,39 @@ export async function findTextRect(
   // Limit max_results to prevent performance issues
   const limitedMaxResults = Math.min(maxResults, 100);
 
+  // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
+  // The new architecture loads injected_api.js asynchronously, so window.sentience
+  // may not be immediately available after page load
+  try {
+    await page.waitForFunction(
+      () => typeof (window as any).sentience !== 'undefined',
+      { timeout: 5000 }
+    );
+  } catch (e) {
+    // Gather diagnostics if wait fails
+    const diag = await page.evaluate(() => ({
+      sentience_defined: typeof (window as any).sentience !== 'undefined',
+      extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
+      url: window.location.href
+    })).catch(() => ({ error: 'Could not gather diagnostics' }));
+
+    throw new Error(
+      `Sentience extension failed to inject window.sentience API. ` +
+      `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
+    );
+  }
+
+  // Verify findTextRect method exists (for older extension versions that don't have it)
+  const hasFindTextRect = await page.evaluate(
+    () => typeof (window as any).sentience.findTextRect !== 'undefined'
+  );
+  if (!hasFindTextRect) {
+    throw new Error(
+      'window.sentience.findTextRect is not available. ' +
+      'Please update the Sentience extension to the latest version.'
+    );
+  }
+
   // Call the extension's findTextRect method
   const result = await page.evaluate(
     (evalOptions) => {
