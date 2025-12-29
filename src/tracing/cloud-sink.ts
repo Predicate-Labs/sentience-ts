@@ -10,6 +10,7 @@
  */
 
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as zlib from 'zlib';
@@ -17,6 +18,15 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { TraceSink } from './sink';
+
+/**
+ * Optional logger interface for SDK users
+ */
+export interface SentienceLogger {
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+}
 
 /**
  * Get persistent cache directory for traces
@@ -61,17 +71,36 @@ export class CloudTraceSink extends TraceSink {
   private runId: string;
   private writeStream: fs.WriteStream | null = null;
   private closed: boolean = false;
+  private apiKey?: string;
+  private apiUrl: string;
+  private logger?: SentienceLogger;
+
+  // File size tracking (NEW)
+  private traceFileSizeBytes: number = 0;
+  private screenshotTotalSizeBytes: number = 0;
 
   /**
    * Create a new CloudTraceSink
    *
    * @param uploadUrl - Pre-signed PUT URL from Sentience API
    * @param runId - Run ID for persistent cache naming
+   * @param apiKey - Sentience API key for calling /v1/traces/complete
+   * @param apiUrl - Sentience API base URL (default: https://api.sentienceapi.com)
+   * @param logger - Optional logger instance for logging file sizes and errors
    */
-  constructor(uploadUrl: string, runId?: string) {
+  constructor(
+    uploadUrl: string,
+    runId?: string,
+    apiKey?: string,
+    apiUrl?: string,
+    logger?: SentienceLogger
+  ) {
     super();
     this.uploadUrl = uploadUrl;
     this.runId = runId || `trace-${Date.now()}`;
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl || 'https://api.sentienceapi.com';
+    this.logger = logger;
 
     // PRODUCTION FIX: Use persistent cache directory instead of /tmp
     // This ensures traces survive process crashes!
@@ -218,14 +247,29 @@ export class CloudTraceSink extends TraceSink {
         });
       }
 
-      // 2. Read and compress trace data
-      if (!fs.existsSync(this.tempFilePath)) {
+      // 2. Read and compress trace data (using async operations)
+      try {
+        await fsPromises.access(this.tempFilePath);
+      } catch {
         console.warn('[CloudTraceSink] Temp file does not exist, skipping upload');
         return;
       }
 
-      const traceData = fs.readFileSync(this.tempFilePath);
+      const traceData = await fsPromises.readFile(this.tempFilePath);
       const compressedData = zlib.gzipSync(traceData);
+
+      // Measure trace file size (NEW)
+      this.traceFileSizeBytes = compressedData.length;
+
+      // Log file sizes if logger is provided (NEW)
+      if (this.logger) {
+        this.logger.info(
+          `Trace file size: ${(this.traceFileSizeBytes / 1024 / 1024).toFixed(2)} MB`
+        );
+        this.logger.info(
+          `Screenshot total: ${(this.screenshotTotalSizeBytes / 1024 / 1024).toFixed(2)} MB`
+        );
+      }
 
       // 3. Upload to cloud via pre-signed URL
       console.log(
@@ -237,8 +281,11 @@ export class CloudTraceSink extends TraceSink {
       if (statusCode === 200) {
         console.log('✅ [Sentience] Trace uploaded successfully');
 
+        // Call /v1/traces/complete to report file sizes (NEW)
+        await this._completeTrace();
+
         // 4. Delete temp file on success
-        fs.unlinkSync(this.tempFilePath);
+        await fsPromises.unlink(this.tempFilePath);
       } else {
         console.error(`❌ [Sentience] Upload failed: HTTP ${statusCode}`);
         console.error(`   Local trace preserved at: ${this.tempFilePath}`);
@@ -248,6 +295,74 @@ export class CloudTraceSink extends TraceSink {
       console.error(`   Local trace preserved at: ${this.tempFilePath}`);
       // Don't throw - preserve trace locally even if upload fails
     }
+  }
+
+  /**
+   * Call /v1/traces/complete to report file sizes to gateway.
+   *
+   * This is a best-effort call - failures are logged but don't affect upload success.
+   */
+  private async _completeTrace(): Promise<void> {
+    if (!this.apiKey) {
+      // No API key - skip complete call
+      return;
+    }
+
+    return new Promise((resolve) => {
+      const url = new URL(`${this.apiUrl}/v1/traces/complete`);
+      const protocol = url.protocol === 'https:' ? https : http;
+
+      const body = JSON.stringify({
+        run_id: this.runId,
+        stats: {
+          trace_file_size_bytes: this.traceFileSizeBytes,
+          screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
+        },
+      });
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        timeout: 10000, // 10 second timeout
+      };
+
+      const req = protocol.request(options, (res) => {
+        // Consume response data
+        res.on('data', () => {});
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            this.logger?.info('Trace completion reported to gateway');
+          } else {
+            this.logger?.warn(
+              `Failed to report trace completion: HTTP ${res.statusCode}`
+            );
+          }
+          resolve();
+        });
+      });
+
+      req.on('error', (error) => {
+        // Best-effort - log but don't fail
+        this.logger?.warn(`Error reporting trace completion: ${error.message}`);
+        resolve();
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        this.logger?.warn('Trace completion request timeout');
+        resolve();
+      });
+
+      req.write(body);
+      req.end();
+    });
   }
 
   /**
