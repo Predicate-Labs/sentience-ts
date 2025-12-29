@@ -16,7 +16,7 @@ import * as http from 'http';
 import { URL } from 'url';
 import { randomUUID } from 'crypto';
 import { Tracer } from './tracer';
-import { CloudTraceSink } from './cloud-sink';
+import { CloudTraceSink, SentienceLogger } from './cloud-sink';
 import { JsonlTraceSink } from './jsonl-sink';
 
 /**
@@ -172,6 +172,7 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
  * @param options.apiKey - Sentience API key (e.g., "sk_pro_xxxxx")
  * @param options.runId - Unique identifier for this agent run (generates UUID if not provided)
  * @param options.apiUrl - Sentience API base URL (default: https://api.sentienceapi.com)
+ * @param options.logger - Optional logger instance for logging file sizes and errors
  * @returns Tracer configured with appropriate sink
  *
  * @example
@@ -194,6 +195,7 @@ export async function createTracer(options: {
   apiKey?: string;
   runId?: string;
   apiUrl?: string;
+  logger?: SentienceLogger;
 }): Promise<Tracer> {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || SENTIENCE_API_URL;
@@ -223,7 +225,10 @@ export async function createTracer(options: {
 
         console.log('☁️  [Sentience] Cloud tracing enabled (Pro tier)');
         // PRODUCTION FIX: Pass runId for persistent cache naming
-        return new Tracer(runId, new CloudTraceSink(uploadUrl, runId));
+        return new Tracer(
+          runId,
+          new CloudTraceSink(uploadUrl, runId, options.apiKey, apiUrl, options.logger)
+        );
       } else if (response.status === 403) {
         console.log('⚠️  [Sentience] Cloud tracing requires Pro tier');
         console.log('   Falling back to local-only tracing');
