@@ -523,6 +523,87 @@ const dataUrl = await screenshot(browser, { format: 'jpeg', quality: 85 });
 
 </details>
 
+<details>
+<summary><h3>🔎 Text Search - Find Elements by Visible Text</h3></summary>
+
+**`findTextRect(page, options)`** - Find text on page and get exact pixel coordinates
+
+Find buttons, links, or any UI elements by their visible text without needing element IDs or CSS selectors. Returns exact pixel coordinates for each match.
+
+**Example:**
+```typescript
+import { SentienceBrowser, findTextRect, clickRect } from 'sentienceapi';
+
+const browser = await SentienceBrowser.create();
+await browser.getPage().goto('https://example.com');
+
+// Find "Sign In" button (simple string syntax)
+const result = await findTextRect(browser.getPage(), "Sign In");
+if (result.status === "success" && result.results) {
+  const firstMatch = result.results[0];
+  console.log(`Found at: (${firstMatch.rect.x}, ${firstMatch.rect.y})`);
+  console.log(`In viewport: ${firstMatch.in_viewport}`);
+
+  // Click on the found text
+  if (firstMatch.in_viewport) {
+    await clickRect(browser, {
+      x: firstMatch.rect.x,
+      y: firstMatch.rect.y,
+      w: firstMatch.rect.width,
+      h: firstMatch.rect.height
+    });
+  }
+}
+```
+
+**Advanced Options:**
+```typescript
+// Case-sensitive search
+const result = await findTextRect(browser.getPage(), {
+  text: "LOGIN",
+  caseSensitive: true
+});
+
+// Whole word only (won't match "login" as part of "loginButton")
+const result = await findTextRect(browser.getPage(), {
+  text: "log",
+  wholeWord: true
+});
+
+// Find multiple matches
+const result = await findTextRect(browser.getPage(), {
+  text: "Buy",
+  maxResults: 10
+});
+for (const match of result.results || []) {
+  if (match.in_viewport) {
+    console.log(`Found '${match.text}' at (${match.rect.x}, ${match.rect.y})`);
+    console.log(`Context: ...${match.context.before}[${match.text}]${match.context.after}...`);
+  }
+}
+```
+
+**Returns:** Promise<TextRectSearchResult> with:
+- **`status`**: "success" or "error"
+- **`results`**: Array of `TextMatch` objects with:
+  - `text` - The matched text
+  - `rect` - Absolute coordinates (with scroll offset)
+  - `viewport_rect` - Viewport-relative coordinates
+  - `context` - Surrounding text (before/after)
+  - `in_viewport` - Whether visible in current viewport
+
+**Use Cases:**
+- Find buttons/links by visible text without CSS selectors
+- Get exact pixel coordinates for click automation
+- Verify text visibility and position on page
+- Search dynamic content that changes frequently
+
+**Note:** Does not consume API credits (runs locally in browser)
+
+**See example:** `examples/find-text-demo.ts`
+
+</details>
+
 ---
 
 ## 📋 Reference

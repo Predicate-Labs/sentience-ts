@@ -14,6 +14,7 @@ export { ScriptGenerator, generate } from './generator';
 export { read, ReadOptions, ReadResult } from './read';
 export { screenshot, ScreenshotOptions } from './screenshot';
 export { showOverlay, clearOverlay } from './overlay';
+export { findTextRect } from './textSearch';
 export * from './types';
 export { saveStorageState } from './utils';
 
