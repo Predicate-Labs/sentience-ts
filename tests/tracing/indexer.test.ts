@@ -203,7 +203,7 @@ describe('Trace Indexing', () => {
         ],
       };
 
-      const tracePath = path.join(tmpdir, 'digest-test.jsonl');
+      const tracePath = path.join(tmpDir, 'digest-test.jsonl');
 
       const event = {
         v: 1,
