@@ -67,7 +67,7 @@ function computeSnapshotDigest(snapshotData: any): string {
   }));
 
   // Sort by element id for determinism
-  canonicalElements.sort((a, b) => (a.id || 0) - (b.id || 0));
+  canonicalElements.sort((a: { id?: number }, b: { id?: number }) => (a.id || 0) - (b.id || 0));
 
   // Build canonical object
   const canonical = {

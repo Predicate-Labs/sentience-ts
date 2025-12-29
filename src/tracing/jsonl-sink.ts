@@ -136,7 +136,7 @@ export class JsonlTraceSink extends TraceSink {
   private generateIndex(): void {
     try {
       const { writeTraceIndex } = require('./indexer');
-      writeTraceIndex(this.filePath);
+      writeTraceIndex(this.path);
     } catch (error: any) {
       // Non-fatal: log but don't crash
       console.log(`⚠️  Failed to generate trace index: ${error.message}`);
