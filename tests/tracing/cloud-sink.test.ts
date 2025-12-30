@@ -311,16 +311,31 @@ describe('CloudTraceSink', () => {
     beforeAll((done) => {
       // Create separate server for index upload API
       indexServer = http.createServer((req, res) => {
-        (indexServer as any).lastRequest = {
-          method: req.method,
-          url: req.url,
-          headers: req.headers,
-        };
+        // Store ALL requests, not just the last one
+        if (!(indexServer as any).requests) {
+          (indexServer as any).requests = [];
+        }
 
         const chunks: Buffer[] = [];
         req.on('data', (chunk) => chunks.push(chunk));
         req.on('end', () => {
-          (indexServer as any).lastRequestBody = Buffer.concat(chunks);
+          const requestBody = Buffer.concat(chunks);
+
+          // Store this request
+          (indexServer as any).requests.push({
+            method: req.method,
+            url: req.url,
+            headers: req.headers,
+            body: requestBody,
+          });
+
+          // Also keep lastRequest for backward compatibility
+          (indexServer as any).lastRequest = {
+            method: req.method,
+            url: req.url,
+            headers: req.headers,
+          };
+          (indexServer as any).lastRequestBody = requestBody;
 
           if (req.url === '/v1/traces/index_upload') {
             // Return index upload URL
@@ -330,6 +345,10 @@ describe('CloudTraceSink', () => {
             }));
           } else if (req.url === '/index-upload') {
             // Accept index upload
+            res.writeHead(200);
+            res.end('OK');
+          } else if (req.url === '/v1/traces/complete') {
+            // Accept completion call
             res.writeHead(200);
             res.end('OK');
           } else {
@@ -355,6 +374,7 @@ describe('CloudTraceSink', () => {
     beforeEach(() => {
       delete (indexServer as any).lastRequest;
       delete (indexServer as any).lastRequestBody;
+      (indexServer as any).requests = [];
     });
 
     it('should upload index file after trace upload', async () => {
@@ -376,12 +396,17 @@ describe('CloudTraceSink', () => {
       await sink.close();
 
       // Verify index upload URL request was made
-      expect((indexServer as any).lastRequest).toBeDefined();
-      expect((indexServer as any).lastRequest.url).toBe('/v1/traces/index_upload');
-      expect((indexServer as any).lastRequest.method).toBe('POST');
+      const requests = (indexServer as any).requests;
+      expect(requests).toBeDefined();
+      expect(requests.length).toBeGreaterThan(0);
+
+      // Find the index upload request
+      const indexUploadRequest = requests.find((r: any) => r.url === '/v1/traces/index_upload');
+      expect(indexUploadRequest).toBeDefined();
+      expect(indexUploadRequest.method).toBe('POST');
 
       // Verify request body
-      const requestBody = JSON.parse((indexServer as any).lastRequestBody.toString());
+      const requestBody = JSON.parse(indexUploadRequest.body.toString());
       expect(requestBody.run_id).toBe(runId);
 
       // Give it a moment for async index upload to complete
@@ -398,7 +423,9 @@ describe('CloudTraceSink', () => {
       await sink.close();
 
       // Verify index upload was NOT attempted
-      expect((indexServer as any).lastRequest).toBeUndefined();
+      const requests = (indexServer as any).requests;
+      const indexUploadRequest = requests.find((r: any) => r.url === '/v1/traces/index_upload');
+      expect(indexUploadRequest).toBeUndefined();
     });
 
     it('should handle index upload failure gracefully', async () => {
