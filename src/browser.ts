@@ -21,6 +21,8 @@ export class SentienceBrowser {
   private _proxy?: string;
   private _userDataDir?: string;
   private _storageState?: string | StorageState | object;
+  private _recordVideoDir?: string;
+  private _recordVideoSize?: { width: number; height: number };
 
   constructor(
     apiKey?: string,
@@ -28,7 +30,9 @@ export class SentienceBrowser {
     headless?: boolean,
     proxy?: string,
     userDataDir?: string,
-    storageState?: string | StorageState | object
+    storageState?: string | StorageState | object,
+    recordVideoDir?: string,
+    recordVideoSize?: { width: number; height: number }
   ) {
     this._apiKey = apiKey;
     
@@ -54,6 +58,10 @@ export class SentienceBrowser {
     // Auth injection support
     this._userDataDir = userDataDir;
     this._storageState = storageState;
+
+    // Video recording support
+    this._recordVideoDir = recordVideoDir;
+    this._recordVideoSize = recordVideoSize || { width: 1280, height: 800 };
   }
 
   async start(): Promise<void> {
@@ -129,8 +137,17 @@ export class SentienceBrowser {
     // 4. Parse proxy configuration
     const proxyConfig = this.parseProxy(this._proxy);
 
-    // 5. Launch Browser
-    this.context = await chromium.launchPersistentContext(this.userDataDir, {
+    // 5. Setup video recording directory if requested
+    if (this._recordVideoDir) {
+      if (!fs.existsSync(this._recordVideoDir)) {
+        fs.mkdirSync(this._recordVideoDir, { recursive: true });
+      }
+      console.log(`🎥 [Sentience] Recording video to: ${this._recordVideoDir}`);
+      console.log(`   Resolution: ${this._recordVideoSize!.width}x${this._recordVideoSize!.height}`);
+    }
+
+    // 6. Launch Browser
+    const launchOptions: any = {
       headless: false, // Must be false here, handled via args above
       args: args,
       viewport: { width: 1920, height: 1080 },
@@ -139,7 +156,17 @@ export class SentienceBrowser {
       proxy: proxyConfig, // Pass proxy configuration
       // CRITICAL: Ignore HTTPS errors when using proxy (proxies often use self-signed certs)
       ignoreHTTPSErrors: proxyConfig !== undefined
-    });
+    };
+
+    // Add video recording if configured
+    if (this._recordVideoDir) {
+      launchOptions.recordVideo = {
+        dir: this._recordVideoDir,
+        size: this._recordVideoSize
+      };
+    }
+
+    this.context = await chromium.launchPersistentContext(this.userDataDir, launchOptions);
 
     this.page = this.context.pages()[0] || await this.context.newPage();
     
@@ -622,10 +649,46 @@ export class SentienceBrowser {
     return this.context;
   }
 
-  async close(): Promise<void> {
+  async close(outputPath?: string): Promise<string | null> {
+    let tempVideoPath: string | null = null;
+
+    // Get video path before closing (if recording was enabled)
+    // Note: Playwright saves videos when pages/context close, but we can get the
+    // expected path before closing. The actual file will be available after close.
+    if (this._recordVideoDir) {
+      try {
+        // Try to get video path from the first page
+        if (this.page) {
+          const video = this.page.video();
+          if (video) {
+            tempVideoPath = await video.path();
+          }
+        }
+        // If that fails, check all pages in the context (before closing)
+        if (!tempVideoPath && this.context) {
+          const pages = this.context.pages();
+          for (const page of pages) {
+            try {
+              const video = page.video();
+              if (video) {
+                tempVideoPath = await video.path();
+                break;
+              }
+            } catch {
+              // Continue to next page
+            }
+          }
+        }
+      } catch {
+        // Video path might not be available until after close
+        // We'll use fallback mechanism below
+      }
+    }
+
     const cleanup: Promise<void>[] = [];
-    
+
     // Close context first (this also closes the browser for persistent contexts)
+    // This triggers video file finalization
     if (this.context) {
       cleanup.push(
         this.context.close().catch(() => {
@@ -634,7 +697,7 @@ export class SentienceBrowser {
       );
       this.context = null;
     }
-    
+
     // Close browser if it exists (for non-persistent contexts)
     if (this.browser) {
       cleanup.push(
@@ -647,7 +710,7 @@ export class SentienceBrowser {
     
     // Wait for all cleanup to complete
     await Promise.all(cleanup);
-    
+
     // Clean up extension directory
     if (this.extensionPath && fs.existsSync(this.extensionPath)) {
       try {
@@ -657,7 +720,47 @@ export class SentienceBrowser {
       }
       this.extensionPath = null;
     }
-    
+
+    // After context closes, verify video file exists if we have a path
+    let finalPath = tempVideoPath;
+    if (tempVideoPath && fs.existsSync(tempVideoPath)) {
+      // Video file exists, proceed with rename if needed
+    } else if (this._recordVideoDir && fs.existsSync(this._recordVideoDir)) {
+      // Fallback: If we couldn't get the path but recording was enabled,
+      // check the directory for video files
+      try {
+        const videoFiles = fs.readdirSync(this._recordVideoDir)
+          .filter(f => f.endsWith('.webm'))
+          .map(f => ({
+            path: path.join(this._recordVideoDir!, f),
+            mtime: fs.statSync(path.join(this._recordVideoDir!, f)).mtime.getTime()
+          }))
+          .sort((a, b) => b.mtime - a.mtime); // Most recent first
+        
+        if (videoFiles.length > 0) {
+          finalPath = videoFiles[0].path;
+        }
+      } catch {
+        // Ignore errors when scanning directory
+      }
+    }
+
+    // Rename/move video if output_path is specified
+    if (finalPath && outputPath && fs.existsSync(finalPath)) {
+      try {
+        // Ensure parent directory exists
+        const outputDir = path.dirname(outputPath);
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+        fs.renameSync(finalPath, outputPath);
+        finalPath = outputPath;
+      } catch (error: any) {
+        console.warn(`Failed to rename video file: ${error.message}`);
+        // Return original path if rename fails
+      }
+    }
+
     // Clean up user data directory (only if it's a temp directory)
     // If user provided a custom userDataDir, we don't delete it (persistent sessions)
     if (this.userDataDir && fs.existsSync(this.userDataDir)) {
@@ -672,5 +775,7 @@ export class SentienceBrowser {
       }
       this.userDataDir = null;
     }
+
+    return finalPath;
   }
 }
