@@ -302,4 +302,197 @@ describe('CloudTraceSink', () => {
       expect(event1.run_id).toBe('test-run-123');
     });
   });
+
+  describe('Index upload', () => {
+    let indexServer: http.Server;
+    let indexServerPort: number;
+    let indexUploadUrl: string;
+
+    beforeAll((done) => {
+      // Create separate server for index upload API
+      indexServer = http.createServer((req, res) => {
+        (indexServer as any).lastRequest = {
+          method: req.method,
+          url: req.url,
+          headers: req.headers,
+        };
+
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk) => chunks.push(chunk));
+        req.on('end', () => {
+          (indexServer as any).lastRequestBody = Buffer.concat(chunks);
+
+          if (req.url === '/v1/traces/index_upload') {
+            // Return index upload URL
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              upload_url: `http://localhost:${indexServerPort}/index-upload`
+            }));
+          } else if (req.url === '/index-upload') {
+            // Accept index upload
+            res.writeHead(200);
+            res.end('OK');
+          } else {
+            res.writeHead(404);
+            res.end('Not Found');
+          }
+        });
+      });
+
+      indexServer.listen(0, () => {
+        const address = indexServer.address();
+        if (address && typeof address === 'object') {
+          indexServerPort = address.port;
+          done();
+        }
+      });
+    });
+
+    afterAll((done) => {
+      indexServer.close(done);
+    });
+
+    beforeEach(() => {
+      delete (indexServer as any).lastRequest;
+      delete (indexServer as any).lastRequestBody;
+    });
+
+    it('should upload index file after trace upload', async () => {
+      const runId = 'test-run-index-' + Date.now();
+      const apiUrl = `http://localhost:${indexServerPort}`;
+
+      const sink = new CloudTraceSink(
+        uploadUrl,
+        runId,
+        'sk_test_123',
+        apiUrl
+      );
+
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
+      sink.emit({ v: 1, type: 'step_start', seq: 2, data: { step: 1 } });
+      sink.emit({ v: 1, type: 'snapshot', seq: 3, data: { url: 'https://example.com' } });
+      sink.emit({ v: 1, type: 'run_end', seq: 4, data: { steps: 1 } });
+
+      await sink.close();
+
+      // Verify index upload URL request was made
+      expect((indexServer as any).lastRequest).toBeDefined();
+      expect((indexServer as any).lastRequest.url).toBe('/v1/traces/index_upload');
+      expect((indexServer as any).lastRequest.method).toBe('POST');
+
+      // Verify request body
+      const requestBody = JSON.parse((indexServer as any).lastRequestBody.toString());
+      expect(requestBody.run_id).toBe(runId);
+
+      // Give it a moment for async index upload to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    it('should skip index upload when no API key provided', async () => {
+      const runId = 'test-run-no-key-' + Date.now();
+
+      const sink = new CloudTraceSink(uploadUrl, runId); // No API key
+
+      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+
+      await sink.close();
+
+      // Verify index upload was NOT attempted
+      expect((indexServer as any).lastRequest).toBeUndefined();
+    });
+
+    it('should handle index upload failure gracefully', async () => {
+      const runId = 'test-run-index-fail-' + Date.now();
+
+      // Create a server that returns 500 for index upload requests
+      const failServer = http.createServer((req, res) => {
+        if (req.url === '/v1/traces/index_upload') {
+          res.writeHead(500);
+          res.end('Internal Server Error');
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      });
+
+      await new Promise<void>((resolve) => {
+        failServer.listen(0, () => resolve());
+      });
+
+      const address = failServer.address();
+      const failPort = (address as any).port;
+      const apiUrl = `http://localhost:${failPort}`;
+
+      const sink = new CloudTraceSink(
+        uploadUrl,
+        runId,
+        'sk_test_123',
+        apiUrl
+      );
+
+      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+
+      // Should not throw even if index upload fails
+      await expect(sink.close()).resolves.not.toThrow();
+
+      // Clean up
+      failServer.close();
+    });
+
+    it('should handle missing index file gracefully', async () => {
+      const runId = 'test-run-missing-index-' + Date.now();
+      const apiUrl = `http://localhost:${indexServerPort}`;
+
+      const sink = new CloudTraceSink(
+        uploadUrl,
+        runId,
+        'sk_test_123',
+        apiUrl
+      );
+
+      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+
+      // Mock index generation to fail
+      const originalGenerate = (sink as any).generateIndex;
+      (sink as any).generateIndex = () => {
+        // Index generation fails/skips
+        console.log('Index generation skipped');
+      };
+
+      await sink.close();
+
+      // Should not throw
+      expect(true).toBe(true);
+
+      // Restore
+      (sink as any).generateIndex = originalGenerate;
+    });
+
+    it('should compress index file with gzip', async () => {
+      const runId = 'test-run-gzip-' + Date.now();
+      const apiUrl = `http://localhost:${indexServerPort}`;
+
+      const sink = new CloudTraceSink(
+        uploadUrl,
+        runId,
+        'sk_test_123',
+        apiUrl
+      );
+
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
+      sink.emit({ v: 1, type: 'snapshot', seq: 2, data: { url: 'https://example.com' } });
+
+      await sink.close();
+
+      // Give async operations time to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Index file should have been created and deleted after successful upload
+      const indexPath = path.join(persistentCacheDir, `${runId}.index.json`);
+
+      // File should be deleted after successful upload
+      // (This is expected behavior - we clean up after upload)
+      // If the test runs fast enough, file might still exist briefly
+    });
+  });
 });

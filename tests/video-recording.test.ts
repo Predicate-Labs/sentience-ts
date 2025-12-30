@@ -39,7 +39,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -75,7 +75,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -100,7 +100,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(customPath);
 
@@ -126,7 +126,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(nestedPath);
 
@@ -147,7 +147,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -172,7 +172,7 @@ describe('video recording', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
