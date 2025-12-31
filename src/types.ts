@@ -30,6 +30,12 @@ export interface Element {
   in_viewport: boolean;
   is_occluded: boolean;
   z_index: number;
+
+  // ML reranking metadata (optional - can be absent or null)
+  rerank_index?: number;  // 0-based, The rank after ML reranking
+  heuristic_index?: number;  // 0-based, Where it would have been without ML
+  ml_probability?: number;  // Confidence score from ONNX model (0.0 - 1.0)
+  ml_score?: number;  // Raw logit score (optional, for debugging)
 }
 
 export interface Snapshot {
