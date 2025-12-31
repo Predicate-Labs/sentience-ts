@@ -1,6 +1,6 @@
 # Sentience TypeScript SDK
 
-The SDK is open under ELv2; the core semantic geometry and reliability logic runs in Sentience-hosted services.
+**Semantic geometry grounding for deterministic, debuggable AI web agents with time-travel traces.**
 
 ## 📦 Installation
 
@@ -972,18 +972,9 @@ npm test -- snapshot.test.ts
 
 ## 📜 License
 
-This SDK is licensed under the **Elastic License 2.0 (ELv2)**.
+This project is licensed under either of:
 
-The Elastic License 2.0 allows you to use, modify, and distribute this SDK for internal, research, and non-competitive purposes. It **does not permit offering this SDK or a derivative as a hosted or managed service**, nor using it to build a competing product or service.
+* Apache License, Version 2.0, ([LICENSE-APACHE](./LICENSE-APACHE))
+* MIT license ([LICENSE-MIT](./LICENSE-MIT))
 
-### Important Notes
-
-- This SDK is a **client-side library** that communicates with proprietary Sentience services and browser components.
-
-- The Sentience backend services (including semantic geometry grounding, ranking, visual cues, and trace processing) are **not open source** and are governed by Sentience's Terms of Service.
-
-- Use of this SDK does **not** grant rights to operate, replicate, or reimplement Sentience's hosted services.
-
-For commercial usage, hosted offerings, or enterprise deployments, please contact Sentience to obtain a commercial license.
-
-See the full license text in [`LICENSE`](./LICENSE.md).
+at your option.

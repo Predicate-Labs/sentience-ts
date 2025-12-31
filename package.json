@@ -66,7 +66,7 @@
     "url": "https://github.com/SentienceAPI/sentience-ts/issues"
   },
   "homepage": "https://github.com/SentienceAPI/sentience-ts#readme",
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "engines": {
     "node": ">=20.0.0"
   }
