@@ -75,3 +75,69 @@ describe('Snapshot', () => {
   }, 60000); // 60 seconds - browser startup can be slow
 });
 
+describe('Element ML Fields', () => {
+  it('should accept elements without ML reranking fields', () => {
+    const element = {
+      id: 1,
+      role: 'button',
+      text: 'Click me',
+      importance: 100,
+      bbox: { x: 10, y: 20, width: 100, height: 50 },
+      visual_cues: { is_primary: true, background_color_name: 'blue', is_clickable: true },
+      in_viewport: true,
+      is_occluded: false,
+      z_index: 0,
+    };
+
+    expect(element.id).toBe(1);
+    expect(element).not.toHaveProperty('rerank_index');
+    expect(element).not.toHaveProperty('heuristic_index');
+    expect(element).not.toHaveProperty('ml_probability');
+    expect(element).not.toHaveProperty('ml_score');
+  });
+
+  it('should accept elements with ML reranking fields', () => {
+    const element = {
+      id: 2,
+      role: 'link',
+      text: 'Learn more',
+      importance: 80,
+      bbox: { x: 15, y: 25, width: 120, height: 40 },
+      visual_cues: { is_primary: false, background_color_name: 'white', is_clickable: true },
+      in_viewport: true,
+      is_occluded: false,
+      z_index: 1,
+      rerank_index: 0,
+      heuristic_index: 5,
+      ml_probability: 0.95,
+      ml_score: 2.34,
+    };
+
+    expect(element.rerank_index).toBe(0);
+    expect(element.heuristic_index).toBe(5);
+    expect(element.ml_probability).toBe(0.95);
+    expect(element.ml_score).toBe(2.34);
+  });
+
+  it('should accept elements with partial ML fields', () => {
+    const element = {
+      id: 3,
+      role: 'textbox',
+      text: null,
+      importance: 60,
+      bbox: { x: 20, y: 30, width: 200, height: 30 },
+      visual_cues: { is_primary: false, background_color_name: null, is_clickable: true },
+      in_viewport: true,
+      is_occluded: false,
+      z_index: 0,
+      rerank_index: 1,
+      ml_probability: 0.87,
+    };
+
+    expect(element.rerank_index).toBe(1);
+    expect(element).not.toHaveProperty('heuristic_index');
+    expect(element.ml_probability).toBe(0.87);
+    expect(element).not.toHaveProperty('ml_score');
+  });
+});
+
