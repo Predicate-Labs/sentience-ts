@@ -44,13 +44,31 @@ describe('Stealth Mode / Bot Evasion', () => {
   });
 
   test('viewport should be realistic (1920x1080 or larger)', async () => {
-    const page = browser.getPage();
-    const viewport = await page.evaluate(() => ({
-      width: window.innerWidth,
-      height: window.innerHeight,
-    }));
-    expect(viewport.width).toBeGreaterThanOrEqual(1920);
-    expect(viewport.height).toBeGreaterThanOrEqual(1080);
+    // Create a browser with a realistic viewport for this test
+    const testBrowser = new SentienceBrowser(
+      undefined, // apiKey
+      undefined, // apiUrl
+      undefined, // headless
+      undefined, // proxy
+      undefined, // userDataDir
+      undefined, // storageState
+      undefined, // recordVideoDir
+      undefined, // recordVideoSize
+      { width: 1920, height: 1080 } // viewport
+    );
+    await testBrowser.start();
+    
+    try {
+      const page = testBrowser.getPage();
+      const viewport = await page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }));
+      expect(viewport.width).toBeGreaterThanOrEqual(1920);
+      expect(viewport.height).toBeGreaterThanOrEqual(1080);
+    } finally {
+      await testBrowser.close();
+    }
   });
 
   test('navigator.plugins should exist', async () => {
