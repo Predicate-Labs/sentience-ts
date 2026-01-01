@@ -55,7 +55,9 @@ export class SentienceBrowser {
     }
 
     // Support proxy from parameter or environment variable
-    this._proxy = proxy || process.env.SENTIENCE_PROXY;
+    // Only use env var if it's a valid non-empty string
+    const envProxy = process.env.SENTIENCE_PROXY;
+    this._proxy = proxy || (envProxy && envProxy.trim() ? envProxy : undefined);
 
     // Auth injection support
     this._userDataDir = userDataDir;
@@ -512,7 +514,7 @@ export class SentienceBrowser {
    * @returns Playwright proxy object or undefined if invalid
    */
   private parseProxy(proxyString?: string): { server: string; username?: string; password?: string } | undefined {
-    if (!proxyString) {
+    if (!proxyString || !proxyString.trim()) {
       return undefined;
     }
 
