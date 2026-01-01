@@ -173,8 +173,17 @@ describe('Screenshot Storage', () => {
       const logger = new MockLogger();
       const sink = new CloudTraceSink(uploadUrl, runId, undefined, undefined, logger);
 
-      // Try to store invalid base64 (should not crash)
-      sink.storeScreenshot(1, 'invalid_base64_data!!!', 'png');
+      // Mock fs.writeFileSync to throw an error to simulate file system failure
+      const originalWriteFileSync = fs.writeFileSync;
+      (fs.writeFileSync as any) = jest.fn(() => {
+        throw new Error('Permission denied');
+      });
+
+      // Try to store screenshot (should trigger file system error)
+      sink.storeScreenshot(1, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'png');
+
+      // Restore original function
+      fs.writeFileSync = originalWriteFileSync;
 
       // Verify error was logged but didn't crash
       const errorLogs = logger.logs.filter(log => log.includes('ERROR') || log.includes('Failed'));
