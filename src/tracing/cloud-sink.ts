@@ -18,6 +18,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { TraceSink } from './sink';
+import { ScreenshotMetadata } from '../types';
 
 /**
  * Optional logger interface for SDK users
@@ -75,9 +76,18 @@ export class CloudTraceSink extends TraceSink {
   private apiUrl: string;
   private logger?: SentienceLogger;
 
-  // File size tracking (NEW)
+  // File size tracking
   private traceFileSizeBytes: number = 0;
   private screenshotTotalSizeBytes: number = 0;
+
+  // Screenshot storage directory
+  private screenshotDir: string;
+  
+  // Screenshot metadata tracking (sequence -> ScreenshotMetadata)
+  private screenshotMetadata: Map<number, ScreenshotMetadata> = new Map();
+  
+  // Upload success flag
+  private uploadSuccessful: boolean = false;
 
   /**
    * Create a new CloudTraceSink
@@ -106,6 +116,12 @@ export class CloudTraceSink extends TraceSink {
     // This ensures traces survive process crashes!
     const cacheDir = getPersistentCacheDir();
     this.tempFilePath = path.join(cacheDir, `${this.runId}.jsonl`);
+
+    // Screenshot storage directory
+    this.screenshotDir = path.join(cacheDir, `${this.runId}_screenshots`);
+    if (!fs.existsSync(this.screenshotDir)) {
+      fs.mkdirSync(this.screenshotDir, { recursive: true });
+    }
 
     try {
       // Open file in append mode
@@ -282,7 +298,14 @@ export class CloudTraceSink extends TraceSink {
       const statusCode = await this._uploadToCloud(compressedData);
 
       if (statusCode === 200) {
+        this.uploadSuccessful = true;
         console.log('✅ [Sentience] Trace uploaded successfully');
+
+        // Upload screenshots after trace upload succeeds
+        if (this.screenshotMetadata.size > 0) {
+          console.log(`📸 [Sentience] Uploading ${this.screenshotMetadata.size} screenshots...`);
+          await this._uploadScreenshots();
+        }
 
         // Upload trace index file
         await this._uploadIndex();
@@ -290,9 +313,10 @@ export class CloudTraceSink extends TraceSink {
         // Call /v1/traces/complete to report file sizes
         await this._completeTrace();
 
-        // 4. Delete temp file on success
-        await fsPromises.unlink(this.tempFilePath);
+        // 4. Delete files on success
+        await this._cleanupFiles();
       } else {
+        this.uploadSuccessful = false;
         console.error(`❌ [Sentience] Upload failed: HTTP ${statusCode}`);
         console.error(`   Local trace preserved at: ${this.tempFilePath}`);
       }
@@ -323,6 +347,7 @@ export class CloudTraceSink extends TraceSink {
         stats: {
           trace_file_size_bytes: this.traceFileSizeBytes,
           screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
+          screenshot_count: this.screenshotMetadata.size,
         },
       });
 

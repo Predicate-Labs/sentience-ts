@@ -88,6 +88,7 @@ export class SentienceAgent {
   private stepCount: number;
   private history: HistoryEntry[];
   private tokenUsage: TokenStats;
+  private screenshotSequence: number;
 
   /**
    * Initialize Sentience Agent
@@ -117,6 +118,9 @@ export class SentienceAgent {
       totalTokens: 0,
       byAction: []
     };
+    
+    // Screenshot sequence counter
+    this.screenshotSequence = 0;
   }
 
   /**
@@ -169,6 +173,23 @@ export class SentienceAgent {
 
         if (snap.status !== 'success') {
           throw new Error(`Snapshot failed: ${snap.error}`);
+        }
+
+        // Store screenshot if captured
+        if (snap.screenshot && this.tracer) {
+          this.screenshotSequence += 1;
+          const seq = this.screenshotSequence;
+          
+          // Store screenshot in CloudTraceSink if available
+          const sink = (this.tracer as any).sink;
+          if (sink && typeof sink.storeScreenshot === 'function') {
+            sink.storeScreenshot(
+              seq,
+              snap.screenshot,
+              snap.screenshot_format || 'jpeg',
+              stepId
+            );
+          }
         }
 
         // Apply element filtering based on goal
