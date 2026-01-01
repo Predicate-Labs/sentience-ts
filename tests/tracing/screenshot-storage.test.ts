@@ -1,12 +1,11 @@
 /**
- * Tests for screenshot storage and upload in CloudTraceSink
+ * Tests for screenshot extraction and upload in CloudTraceSink
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { CloudTraceSink, SentienceLogger } from '../../src/tracing/cloud-sink';
-import { ScreenshotMetadata } from '../../src/types';
 
 // Mock logger for testing
 class MockLogger implements SentienceLogger {
@@ -25,7 +24,7 @@ class MockLogger implements SentienceLogger {
   }
 }
 
-describe('Screenshot Storage', () => {
+describe('Screenshot Extraction and Upload', () => {
   let uploadUrl: string;
   let runId: string;
   let cacheDir: string;
@@ -39,157 +38,177 @@ describe('Screenshot Storage', () => {
   afterEach(() => {
     // Cleanup test files
     const tracePath = path.join(cacheDir, `${runId}.jsonl`);
-    const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
+    const cleanedTracePath = path.join(cacheDir, `${runId}.cleaned.jsonl`);
     
     if (fs.existsSync(tracePath)) {
       fs.unlinkSync(tracePath);
     }
     
-    if (fs.existsSync(screenshotDir)) {
-      const files = fs.readdirSync(screenshotDir);
-      for (const file of files) {
-        fs.unlinkSync(path.join(screenshotDir, file));
-      }
-      fs.rmdirSync(screenshotDir);
+    if (fs.existsSync(cleanedTracePath)) {
+      fs.unlinkSync(cleanedTracePath);
     }
   });
 
-  describe('storeScreenshot', () => {
-    it('should create screenshot directory on initialization', () => {
+  describe('_extractScreenshotsFromTrace', () => {
+    it('should extract screenshots from trace events', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
       
-      expect(fs.existsSync(screenshotDir)).toBe(true);
-      
-      sink.close(false);
-    });
-
-    it('should save screenshot to file', () => {
-      // Create a test base64 image (1x1 PNG)
+      // Create a trace file with screenshot events
       const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const testDataUrl = `data:image/png;base64,${testImageBase64}`;
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
       
-      sink.storeScreenshot(1, testDataUrl, 'png', 'step_001');
-
-      // Verify file was created
-      const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
-      const screenshotFile = path.join(screenshotDir, 'step_0001.png');
-      
-      expect(fs.existsSync(screenshotFile)).toBe(true);
-
-      // Verify file content
-      const fileData = fs.readFileSync(screenshotFile);
-      const expectedData = Buffer.from(testImageBase64, 'base64');
-      expect(fileData).toEqual(expectedData);
-
-      sink.close(false);
-    });
-
-    it('should track metadata correctly', () => {
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const testDataUrl = `data:image/png;base64,${testImageBase64}`;
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      sink.storeScreenshot(1, testDataUrl, 'png', 'step_001');
-
-      // Access private metadata via type assertion
-      const metadata = (sink as any).screenshotMetadata.get(1) as ScreenshotMetadata;
-      
-      expect(metadata).toBeDefined();
-      expect(metadata.sequence).toBe(1);
-      expect(metadata.format).toBe('png');
-      expect(metadata.stepId).toBe('step_001');
-      expect(metadata.sizeBytes).toBeGreaterThan(0);
-
-      sink.close(false);
-    });
-
-    it('should update size counter', () => {
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const testDataUrl = `data:image/png;base64,${testImageBase64}`;
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      const initialSize = (sink as any).screenshotTotalSizeBytes;
-
-      sink.storeScreenshot(1, testDataUrl, 'png');
-      const sizeAfterFirst = (sink as any).screenshotTotalSizeBytes;
-      expect(sizeAfterFirst).toBeGreaterThan(initialSize);
-
-      sink.storeScreenshot(2, testDataUrl, 'png');
-      const sizeAfterSecond = (sink as any).screenshotTotalSizeBytes;
-      expect(sizeAfterSecond).toBeGreaterThan(sizeAfterFirst);
-
-      sink.close(false);
-    });
-
-    it('should handle JPEG format', () => {
-      // Minimal JPEG in base64 (1x1 JPEG)
-      const testJpegBase64 = '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/wA=';
-      const testDataUrl = `data:image/jpeg;base64,${testJpegBase64}`;
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      sink.storeScreenshot(1, testDataUrl, 'jpeg');
-
-      // Verify file was created with .jpeg extension
-      const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
-      const screenshotFile = path.join(screenshotDir, 'step_0001.jpeg');
-      expect(fs.existsSync(screenshotFile)).toBe(true);
-
-      // Verify metadata format
-      const metadata = (sink as any).screenshotMetadata.get(1) as ScreenshotMetadata;
-      expect(metadata.format).toBe('jpeg');
-
-      sink.close(false);
-    });
-
-    it('should handle base64 without prefix', () => {
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      sink.storeScreenshot(1, testImageBase64, 'png');
-
-      // Verify file was created
-      const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
-      const screenshotFile = path.join(screenshotDir, 'step_0001.png');
-      expect(fs.existsSync(screenshotFile)).toBe(true);
-
-      sink.close(false);
-    });
-
-    it('should raise error when closed', () => {
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      sink.close();
-
-      const testDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-
-      expect(() => {
-        sink.storeScreenshot(1, testDataUrl, 'png');
-      }).toThrow('CloudTraceSink is closed');
-    });
-
-    it('should handle errors gracefully', () => {
-      const logger = new MockLogger();
-      const sink = new CloudTraceSink(uploadUrl, runId, undefined, undefined, logger);
-
-      // Mock fs.writeFileSync to throw an error to simulate file system failure
-      const originalWriteFileSync = fs.writeFileSync;
-      (fs.writeFileSync as any) = jest.fn(() => {
-        throw new Error('Permission denied');
+      // Emit a snapshot event with screenshot
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        ts: '2026-01-01T00:00:00.000Z',
+        run_id: runId,
+        seq: 1,
+        step_id: 'step-1',
+        data: {
+          url: 'https://example.com',
+          element_count: 10,
+          screenshot_base64: testImageBase64,
+          screenshot_format: 'png',
+        },
       });
 
-      // Try to store screenshot (should trigger file system error)
-      sink.storeScreenshot(1, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'png');
+      // Close to write file
+      await sink.close(false);
+      
+      // Wait a bit for file to be written
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Restore original function
-      fs.writeFileSync = originalWriteFileSync;
+      // Extract screenshots
+      const screenshots = await (sink as any)._extractScreenshotsFromTrace();
+      
+      expect(screenshots.size).toBe(1);
+      expect(screenshots.get(1)).toBeDefined();
+      expect(screenshots.get(1)?.base64).toBe(testImageBase64);
+      expect(screenshots.get(1)?.format).toBe('png');
+      expect(screenshots.get(1)?.stepId).toBe('step-1');
+    });
 
-      // Verify error was logged but didn't crash
-      const errorLogs = logger.logs.filter(log => log.includes('ERROR') || log.includes('Failed'));
-      expect(errorLogs.length).toBeGreaterThan(0);
+    it('should handle multiple screenshots', async () => {
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      
+      // Emit multiple snapshot events with screenshots
+      for (let i = 1; i <= 3; i++) {
+        sink.emit({
+          v: 1,
+          type: 'snapshot',
+          ts: '2026-01-01T00:00:00.000Z',
+          run_id: runId,
+          seq: i,
+          step_id: `step-${i}`,
+          data: {
+            url: 'https://example.com',
+            element_count: 10,
+            screenshot_base64: testImageBase64,
+            screenshot_format: 'png',
+          },
+        });
+      }
 
-      sink.close(false);
+      await sink.close(false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const screenshots = await (sink as any)._extractScreenshotsFromTrace();
+      expect(screenshots.size).toBe(3);
+    });
+
+    it('should skip events without screenshots', async () => {
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      
+      // Emit snapshot without screenshot
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        ts: '2026-01-01T00:00:00.000Z',
+        run_id: runId,
+        seq: 1,
+        data: {
+          url: 'https://example.com',
+          element_count: 10,
+          // No screenshot_base64
+        },
+      });
+
+      await sink.close(false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const screenshots = await (sink as any)._extractScreenshotsFromTrace();
+      expect(screenshots.size).toBe(0);
+    });
+  });
+
+  describe('_createCleanedTrace', () => {
+    it('should remove screenshot_base64 from events', async () => {
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      
+      // Emit snapshot event with screenshot
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        ts: '2026-01-01T00:00:00.000Z',
+        run_id: runId,
+        seq: 1,
+        data: {
+          url: 'https://example.com',
+          element_count: 10,
+          screenshot_base64: testImageBase64,
+          screenshot_format: 'png',
+        },
+      });
+
+      await sink.close(false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Create cleaned trace
+      const cleanedTracePath = path.join(cacheDir, `${runId}.cleaned.jsonl`);
+      await (sink as any)._createCleanedTrace(cleanedTracePath);
+
+      // Read cleaned trace
+      const cleanedContent = fs.readFileSync(cleanedTracePath, 'utf-8');
+      const cleanedEvent = JSON.parse(cleanedContent.trim());
+
+      // Verify screenshot fields are removed
+      expect(cleanedEvent.data.screenshot_base64).toBeUndefined();
+      expect(cleanedEvent.data.screenshot_format).toBeUndefined();
+      expect(cleanedEvent.data.url).toBe('https://example.com');
+      expect(cleanedEvent.data.element_count).toBe(10);
+    });
+
+    it('should preserve other event types unchanged', async () => {
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      
+      // Emit non-snapshot event
+      sink.emit({
+        v: 1,
+        type: 'action',
+        ts: '2026-01-01T00:00:00.000Z',
+        run_id: runId,
+        seq: 1,
+        data: {
+          action: 'click',
+          element_id: 123,
+        },
+      });
+
+      await sink.close(false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const cleanedTracePath = path.join(cacheDir, `${runId}.cleaned.jsonl`);
+      await (sink as any)._createCleanedTrace(cleanedTracePath);
+
+      const cleanedContent = fs.readFileSync(cleanedTracePath, 'utf-8');
+      const cleanedEvent = JSON.parse(cleanedContent.trim());
+
+      // Verify action event is unchanged
+      expect(cleanedEvent.type).toBe('action');
+      expect(cleanedEvent.data.action).toBe('click');
+      expect(cleanedEvent.data.element_id).toBe(123);
     });
   });
 
@@ -268,23 +287,4 @@ describe('Screenshot Storage', () => {
       sink.close(false);
     });
   });
-
-  describe('_cleanupFiles', () => {
-    it('should delete screenshot directory on successful upload', async () => {
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const testDataUrl = `data:image/png;base64,${testImageBase64}`;
-
-      const sink = new CloudTraceSink(uploadUrl, runId);
-      sink.storeScreenshot(1, testDataUrl, 'png');
-
-      // Mark as successful and cleanup
-      (sink as any).uploadSuccessful = true;
-      await (sink as any)._cleanupFiles();
-
-      // Verify screenshot directory was deleted
-      const screenshotDir = path.join(cacheDir, `${runId}_screenshots`);
-      expect(fs.existsSync(screenshotDir)).toBe(false);
-    });
-  });
 });
-

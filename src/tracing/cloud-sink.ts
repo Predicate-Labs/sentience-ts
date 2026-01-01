@@ -18,7 +18,6 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { TraceSink } from './sink';
-import { ScreenshotMetadata } from '../types';
 
 /**
  * Optional logger interface for SDK users
@@ -79,12 +78,7 @@ export class CloudTraceSink extends TraceSink {
   // File size tracking
   private traceFileSizeBytes: number = 0;
   private screenshotTotalSizeBytes: number = 0;
-
-  // Screenshot storage directory
-  private screenshotDir: string;
-  
-  // Screenshot metadata tracking (sequence -> ScreenshotMetadata)
-  private screenshotMetadata: Map<number, ScreenshotMetadata> = new Map();
+  private screenshotCount: number = 0; // Track number of screenshots extracted
   
   // Upload success flag
   private uploadSuccessful: boolean = false;
@@ -116,12 +110,6 @@ export class CloudTraceSink extends TraceSink {
     // This ensures traces survive process crashes!
     const cacheDir = getPersistentCacheDir();
     this.tempFilePath = path.join(cacheDir, `${this.runId}.jsonl`);
-
-    // Screenshot storage directory
-    this.screenshotDir = path.join(cacheDir, `${this.runId}_screenshots`);
-    if (!fs.existsSync(this.screenshotDir)) {
-      fs.mkdirSync(this.screenshotDir, { recursive: true });
-    }
 
     try {
       // Open file in append mode
@@ -266,7 +254,7 @@ export class CloudTraceSink extends TraceSink {
       // 2. Generate index after closing file
       this.generateIndex();
 
-      // 2. Read and compress trace data (using async operations)
+      // 2. Check trace file exists
       try {
         await fsPromises.access(this.tempFilePath);
       } catch {
@@ -274,13 +262,28 @@ export class CloudTraceSink extends TraceSink {
         return;
       }
 
-      const traceData = await fsPromises.readFile(this.tempFilePath);
+      // 3. Extract screenshots from trace events
+      const screenshots = await this._extractScreenshotsFromTrace();
+      this.screenshotCount = screenshots.size;
+
+      // 4. Upload screenshots separately
+      if (screenshots.size > 0) {
+        console.log(`📸 [Sentience] Uploading ${screenshots.size} screenshots...`);
+        await this._uploadScreenshots(screenshots);
+      }
+
+      // 5. Create cleaned trace file (without screenshot_base64)
+      const cleanedTracePath = this.tempFilePath.replace('.jsonl', '.cleaned.jsonl');
+      await this._createCleanedTrace(cleanedTracePath);
+
+      // 6. Read and compress cleaned trace
+      const traceData = await fsPromises.readFile(cleanedTracePath);
       const compressedData = zlib.gzipSync(traceData);
 
-      // Measure trace file size (NEW)
+      // Measure trace file size
       this.traceFileSizeBytes = compressedData.length;
 
-      // Log file sizes if logger is provided (NEW)
+      // Log file sizes if logger is provided
       if (this.logger) {
         this.logger.info(
           `Trace file size: ${(this.traceFileSizeBytes / 1024 / 1024).toFixed(2)} MB`
@@ -290,7 +293,7 @@ export class CloudTraceSink extends TraceSink {
         );
       }
 
-      // 3. Upload to cloud via pre-signed URL
+      // 7. Upload cleaned trace to cloud
       console.log(
         `📤 [Sentience] Uploading trace to cloud (${compressedData.length} bytes)...`
       );
@@ -301,20 +304,21 @@ export class CloudTraceSink extends TraceSink {
         this.uploadSuccessful = true;
         console.log('✅ [Sentience] Trace uploaded successfully');
 
-        // Upload screenshots after trace upload succeeds
-        if (this.screenshotMetadata.size > 0) {
-          console.log(`📸 [Sentience] Uploading ${this.screenshotMetadata.size} screenshots...`);
-          await this._uploadScreenshots();
-        }
-
         // Upload trace index file
         await this._uploadIndex();
 
         // Call /v1/traces/complete to report file sizes
         await this._completeTrace();
 
-        // 4. Delete files on success
+        // 8. Delete files on success
         await this._cleanupFiles();
+        
+        // Clean up temporary cleaned trace file
+        try {
+          await fsPromises.unlink(cleanedTracePath);
+        } catch {
+          // Ignore cleanup errors
+        }
       } else {
         this.uploadSuccessful = false;
         console.error(`❌ [Sentience] Upload failed: HTTP ${statusCode}`);
@@ -347,7 +351,7 @@ export class CloudTraceSink extends TraceSink {
         stats: {
           trace_file_size_bytes: this.traceFileSizeBytes,
           screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
-          screenshot_count: this.screenshotMetadata.size,
+          screenshot_count: this.screenshotCount,
         },
       });
 
@@ -574,71 +578,91 @@ export class CloudTraceSink extends TraceSink {
   }
 
   /**
-   * Store screenshot locally during execution.
+   * Extract screenshots from trace events.
    * 
-   * Called by agent when screenshot is captured.
-   * Fast, non-blocking operation (~1-5ms per screenshot).
-   * 
-   * @param sequence - Screenshot sequence number (1, 2, 3, ...)
-   * @param screenshotData - Base64-encoded data URL from snapshot
-   * @param format - Image format ("jpeg" or "png")
-   * @param stepId - Optional step ID for trace event association
+   * @returns Map of sequence number to screenshot data
    */
-  storeScreenshot(
-    sequence: number,
-    screenshotData: string,
-    format: 'png' | 'jpeg',
-    stepId?: string | null
-  ): void {
-    if (this.closed) {
-      throw new Error('CloudTraceSink is closed');
-    }
+  private async _extractScreenshotsFromTrace(): Promise<Map<number, { base64: string; format: string; stepId?: string }>> {
+    const screenshots = new Map<number, { base64: string; format: string; stepId?: string }>();
+    let sequence = 0;
 
     try {
-      // Extract base64 string from data URL
-      // Format: "data:image/jpeg;base64,{base64_string}"
-      let base64String: string;
-      if (screenshotData.includes(',')) {
-        base64String = screenshotData.split(',', 2)[1];
-      } else {
-        base64String = screenshotData; // Already base64, no prefix
-      }
+      const traceContent = await fsPromises.readFile(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n');
 
-      // Decode base64 to image bytes
-      const imageBytes = Buffer.from(base64String, 'base64');
-      const imageSize = imageBytes.length;
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
 
-      // Save to file
-      const filename = `step_${sequence.toString().padStart(4, '0')}.${format}`;
-      const filepath = path.join(this.screenshotDir, filename);
+        try {
+          const event = JSON.parse(line);
+          // Check if this is a snapshot event with screenshot
+          if (event.type === 'snapshot') {
+            const data = event.data || {};
+            const screenshotBase64 = data.screenshot_base64;
 
-      fs.writeFileSync(filepath, imageBytes);
-
-      // Track metadata using concrete type
-      const metadata: ScreenshotMetadata = {
-        sequence,
-        format,
-        sizeBytes: imageSize,
-        stepId: stepId || null,
-        filepath,
-      };
-      this.screenshotMetadata.set(sequence, metadata);
-
-      // Update total size
-      this.screenshotTotalSizeBytes += imageSize;
-
-      if (this.logger) {
-        this.logger.info(
-          `Screenshot ${sequence} stored: ${(imageSize / 1024).toFixed(1)} KB (${format})`
-        );
+            if (screenshotBase64) {
+              sequence += 1;
+              screenshots.set(sequence, {
+                base64: screenshotBase64,
+                format: data.screenshot_format || 'jpeg',
+                stepId: event.step_id,
+              });
+            }
+          }
+        } catch {
+          // Skip invalid JSON lines
+          continue;
+        }
       }
     } catch (error: any) {
-      // Log error but don't crash agent
-      if (this.logger) {
-        this.logger.error(`Failed to store screenshot ${sequence}: ${error.message}`);
-      } else {
-        console.error(`⚠️  [Sentience] Failed to store screenshot ${sequence}: ${error.message}`);
+      this.logger?.error(`Error extracting screenshots: ${error.message}`);
+    }
+
+    return screenshots;
+  }
+
+  /**
+   * Create trace file without screenshot_base64 fields.
+   * 
+   * @param outputPath - Path to write cleaned trace file
+   */
+  private async _createCleanedTrace(outputPath: string): Promise<void> {
+    try {
+      const traceContent = await fsPromises.readFile(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n');
+      const cleanedLines: string[] = [];
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(line);
+          // Remove screenshot_base64 from snapshot events
+          if (event.type === 'snapshot' && event.data) {
+            const cleanedData: any = {};
+            for (const [key, value] of Object.entries(event.data)) {
+              if (key !== 'screenshot_base64' && key !== 'screenshot_format') {
+                cleanedData[key] = value;
+              }
+            }
+            event.data = cleanedData;
+          }
+
+          cleanedLines.push(JSON.stringify(event));
+        } catch {
+          // Skip invalid JSON lines
+          continue;
+        }
       }
+
+      await fsPromises.writeFile(outputPath, cleanedLines.join('\n') + '\n', 'utf-8');
+    } catch (error: any) {
+      this.logger?.error(`Error creating cleaned trace: ${error.message}`);
+      throw error;
     }
   }
 
@@ -721,21 +745,25 @@ export class CloudTraceSink extends TraceSink {
   }
 
   /**
-   * Upload all screenshots to cloud via pre-signed URLs.
+   * Upload screenshots extracted from trace events.
    * 
    * Steps:
    * 1. Request pre-signed URLs from gateway (/v1/screenshots/init)
-   * 2. Upload screenshots in parallel (10 concurrent workers)
-   * 3. Track upload progress
-   * 4. Handle failures gracefully
+   * 2. Decode base64 to image bytes
+   * 3. Upload screenshots in parallel (10 concurrent workers)
+   * 4. Track upload progress
+   * 
+   * @param screenshots - Map of sequence to screenshot data
    */
-  private async _uploadScreenshots(): Promise<void> {
-    if (this.screenshotMetadata.size === 0) {
-      return; // No screenshots to upload
+  private async _uploadScreenshots(
+    screenshots: Map<number, { base64: string; format: string; stepId?: string }>
+  ): Promise<void> {
+    if (screenshots.size === 0) {
+      return;
     }
 
     // 1. Request pre-signed URLs from gateway
-    const sequences = Array.from(this.screenshotMetadata.keys()).sort((a, b) => a - b);
+    const sequences = Array.from(screenshots.keys()).sort((a, b) => a - b);
     const uploadUrls = await this._requestScreenshotUrls(sequences);
 
     if (uploadUrls.size === 0) {
@@ -747,12 +775,12 @@ export class CloudTraceSink extends TraceSink {
     const uploadPromises: Promise<boolean>[] = [];
 
     for (const [seq, url] of uploadUrls.entries()) {
-      const metadata = this.screenshotMetadata.get(seq);
-      if (!metadata) {
+      const screenshotData = screenshots.get(seq);
+      if (!screenshotData) {
         continue;
       }
 
-      const uploadPromise = this._uploadSingleScreenshot(seq, url, metadata);
+      const uploadPromise = this._uploadSingleScreenshot(seq, url, screenshotData);
       uploadPromises.push(uploadPromise);
     }
 
@@ -787,7 +815,6 @@ export class CloudTraceSink extends TraceSink {
       console.log(`⚠️  [Sentience] Uploaded ${uploadedCount}/${totalCount} screenshots`);
       if (failedSequences.length > 0) {
         console.log(`   Failed sequences: ${failedSequences.join(', ')}`);
-        console.log(`   Failed screenshots remain at: ${this.screenshotDir}`);
       }
     }
   }
@@ -797,20 +824,24 @@ export class CloudTraceSink extends TraceSink {
    * 
    * @param sequence - Screenshot sequence number
    * @param uploadUrl - Pre-signed upload URL
-   * @param metadata - Screenshot metadata
+   * @param screenshotData - Screenshot data with base64 and format
    * @returns True if upload successful, false otherwise
    */
   private async _uploadSingleScreenshot(
     sequence: number,
     uploadUrl: string,
-    metadata: ScreenshotMetadata
+    screenshotData: { base64: string; format: string; stepId?: string }
   ): Promise<boolean> {
     try {
-      // Read image bytes from file
-      const imageBytes = await fsPromises.readFile(metadata.filepath);
+      // Decode base64 to image bytes
+      const imageBytes = Buffer.from(screenshotData.base64, 'base64');
+      const imageSize = imageBytes.length;
+
+      // Update total size
+      this.screenshotTotalSizeBytes += imageSize;
 
       // Upload to pre-signed URL
-      const statusCode = await this._uploadScreenshotToCloud(uploadUrl, imageBytes, metadata.format);
+      const statusCode = await this._uploadScreenshotToCloud(uploadUrl, imageBytes, screenshotData.format as 'png' | 'jpeg');
 
       if (statusCode === 200) {
         return true;
@@ -880,28 +911,6 @@ export class CloudTraceSink extends TraceSink {
       }
     } catch {
       // Ignore cleanup errors
-    }
-
-    // Delete screenshot files and directory
-    if (fs.existsSync(this.screenshotDir) && this.uploadSuccessful) {
-      try {
-        // Delete all screenshot files
-        const files = await fsPromises.readdir(this.screenshotDir);
-        for (const file of files) {
-          if (file.startsWith('step_') && (file.endsWith('.jpeg') || file.endsWith('.png'))) {
-            await fsPromises.unlink(path.join(this.screenshotDir, file));
-          }
-        }
-
-        // Delete directory if empty
-        try {
-          await fsPromises.rmdir(this.screenshotDir);
-        } catch {
-          // Directory not empty (some uploads failed)
-        }
-      } catch (error: any) {
-        this.logger?.warn(`Failed to cleanup screenshots: ${error.message}`);
-      }
     }
   }
 
