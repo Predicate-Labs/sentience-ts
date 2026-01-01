@@ -161,8 +161,10 @@ describe('Browser Proxy Support', () => {
 
   describe('fromExisting', () => {
     it('should create SentienceBrowser from existing context', async () => {
+      // Auto-detect headless mode (headless in CI, headed locally)
+      const isCI = process.env.CI === 'true' || process.env.CI === '1';
       const context = await chromium.launchPersistentContext('', {
-        headless: false,
+        headless: isCI,
         viewport: { width: 1600, height: 900 },
       });
 
@@ -190,8 +192,10 @@ describe('Browser Proxy Support', () => {
     }, 30000);
 
     it('should accept API key configuration', async () => {
+      // Auto-detect headless mode (headless in CI, headed locally)
+      const isCI = process.env.CI === 'true' || process.env.CI === '1';
       const context = await chromium.launchPersistentContext('', {
-        headless: false,
+        headless: isCI,
       });
 
       try {
@@ -208,7 +212,9 @@ describe('Browser Proxy Support', () => {
 
   describe('fromPage', () => {
     it('should create SentienceBrowser from existing page', async () => {
-      const browserInstance = await chromium.launch({ headless: false });
+      // Auto-detect headless mode (headless in CI, headed locally)
+      const isCI = process.env.CI === 'true' || process.env.CI === '1';
+      const browserInstance = await chromium.launch({ headless: isCI });
       const context = await browserInstance.newContext({
         viewport: { width: 1440, height: 900 },
       });
@@ -239,7 +245,9 @@ describe('Browser Proxy Support', () => {
     }, 30000);
 
     it('should accept API key configuration', async () => {
-      const browserInstance = await chromium.launch({ headless: false });
+      // Auto-detect headless mode (headless in CI, headed locally)
+      const isCI = process.env.CI === 'true' || process.env.CI === '1';
+      const browserInstance = await chromium.launch({ headless: isCI });
       const context = await browserInstance.newContext();
       const page = await context.newPage();
 
