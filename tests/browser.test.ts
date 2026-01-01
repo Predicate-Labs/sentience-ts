@@ -1,8 +1,9 @@
 /**
- * Test browser proxy support
+ * Test browser proxy support and Phase 2 features (viewport, from_existing, from_page)
  */
 
 import { SentienceBrowser } from '../src/browser';
+import { chromium, BrowserContext, Page } from 'playwright';
 
 describe('Browser Proxy Support', () => {
   describe('Proxy Parsing', () => {
@@ -137,6 +138,122 @@ describe('Browser Proxy Support', () => {
       const browser = new SentienceBrowser(undefined, undefined, false);
       expect((browser as any)._proxy).toBeUndefined();
     });
+  });
+
+  describe('Viewport Configuration', () => {
+    it('should use default viewport 1280x800', () => {
+      const browser = new SentienceBrowser();
+      expect((browser as any)._viewport).toEqual({ width: 1280, height: 800 });
+    });
+
+    it('should accept custom viewport', () => {
+      const customViewport = { width: 1920, height: 1080 };
+      const browser = new SentienceBrowser(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, customViewport);
+      expect((browser as any)._viewport).toEqual(customViewport);
+    });
+
+    it('should accept mobile viewport', () => {
+      const mobileViewport = { width: 375, height: 667 };
+      const browser = new SentienceBrowser(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, mobileViewport);
+      expect((browser as any)._viewport).toEqual(mobileViewport);
+    });
+  });
+
+  describe('fromExisting', () => {
+    it('should create SentienceBrowser from existing context', async () => {
+      const context = await chromium.launchPersistentContext('', {
+        headless: false,
+        viewport: { width: 1600, height: 900 },
+      });
+
+      try {
+        const browser = await SentienceBrowser.fromExisting(context);
+
+        expect(browser.getContext()).toBe(context);
+        expect(browser.getPage()).toBeDefined();
+
+        // Verify viewport is preserved
+        const page = browser.getPage();
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle');
+
+        const viewportSize = await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }));
+
+        expect(viewportSize.width).toBe(1600);
+        expect(viewportSize.height).toBe(900);
+      } finally {
+        await context.close();
+      }
+    }, 30000);
+
+    it('should accept API key configuration', async () => {
+      const context = await chromium.launchPersistentContext('', {
+        headless: false,
+      });
+
+      try {
+        const browser = await SentienceBrowser.fromExisting(context, 'test_key', 'https://test.api.com');
+
+        expect(browser.getApiKey()).toBe('test_key');
+        expect(browser.getApiUrl()).toBe('https://test.api.com');
+        expect(browser.getContext()).toBe(context);
+      } finally {
+        await context.close();
+      }
+    }, 30000);
+  });
+
+  describe('fromPage', () => {
+    it('should create SentienceBrowser from existing page', async () => {
+      const browserInstance = await chromium.launch({ headless: false });
+      const context = await browserInstance.newContext({
+        viewport: { width: 1440, height: 900 },
+      });
+      const page = await context.newPage();
+
+      try {
+        const sentienceBrowser = SentienceBrowser.fromPage(page);
+
+        expect(sentienceBrowser.getPage()).toBe(page);
+        expect(sentienceBrowser.getContext()).toBe(context);
+
+        // Test that we can use it
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle');
+
+        // Verify viewport is preserved
+        const viewportSize = await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }));
+
+        expect(viewportSize.width).toBe(1440);
+        expect(viewportSize.height).toBe(900);
+      } finally {
+        await context.close();
+        await browserInstance.close();
+      }
+    }, 30000);
+
+    it('should accept API key configuration', async () => {
+      const browserInstance = await chromium.launch({ headless: false });
+      const context = await browserInstance.newContext();
+      const page = await context.newPage();
+
+      try {
+        const sentienceBrowser = SentienceBrowser.fromPage(page, 'test_key', 'https://test.api.com');
+
+        expect(sentienceBrowser.getApiKey()).toBe('test_key');
+        expect(sentienceBrowser.getApiUrl()).toBe('https://test.api.com');
+        expect(sentienceBrowser.getPage()).toBe(page);
+      } finally {
+        await context.close();
+        await browserInstance.close();
+      }
+    }, 30000);
   });
 });
 

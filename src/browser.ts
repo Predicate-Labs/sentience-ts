@@ -23,6 +23,7 @@ export class SentienceBrowser {
   private _storageState?: string | StorageState | object;
   private _recordVideoDir?: string;
   private _recordVideoSize?: { width: number; height: number };
+  private _viewport?: { width: number; height: number };
 
   constructor(
     apiKey?: string,
@@ -32,7 +33,8 @@ export class SentienceBrowser {
     userDataDir?: string,
     storageState?: string | StorageState | object,
     recordVideoDir?: string,
-    recordVideoSize?: { width: number; height: number }
+    recordVideoSize?: { width: number; height: number },
+    viewport?: { width: number; height: number }
   ) {
     this._apiKey = apiKey;
     
@@ -62,6 +64,9 @@ export class SentienceBrowser {
     // Video recording support
     this._recordVideoDir = recordVideoDir;
     this._recordVideoSize = recordVideoSize || { width: 1280, height: 800 };
+
+    // Viewport configuration
+    this._viewport = viewport || { width: 1280, height: 800 };
   }
 
   async start(): Promise<void> {
@@ -150,7 +155,7 @@ export class SentienceBrowser {
     const launchOptions: any = {
       headless: false, // Must be false here, handled via args above
       args: args,
-      viewport: { width: 1920, height: 1080 },
+      viewport: this._viewport,
       // Clean User-Agent to avoid "HeadlessChrome" detection
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       proxy: proxyConfig, // Pass proxy configuration
@@ -647,6 +652,84 @@ export class SentienceBrowser {
       throw new Error('Browser not started. Call start() first.');
     }
     return this.context;
+  }
+
+  /**
+   * Create SentienceBrowser from an existing Playwright BrowserContext.
+   * 
+   * This allows you to use Sentience SDK with a browser context you've already created,
+   * giving you more control over browser initialization.
+   * 
+   * @param context - Existing Playwright BrowserContext
+   * @param apiKey - Optional API key for server-side processing
+   * @param apiUrl - Optional API URL (defaults to https://api.sentienceapi.com if apiKey provided)
+   * @returns SentienceBrowser instance configured to use the existing context
+   * 
+   * @example
+   * ```typescript
+   * import { chromium } from 'playwright';
+   * import { SentienceBrowser } from '@sentience/sdk';
+   * 
+   * const context = await chromium.launchPersistentContext(...);
+   * const browser = SentienceBrowser.fromExisting(context);
+   * await browser.getPage().goto('https://example.com');
+   * ```
+   */
+  static async fromExisting(
+    context: BrowserContext,
+    apiKey?: string,
+    apiUrl?: string
+  ): Promise<SentienceBrowser> {
+    const instance = new SentienceBrowser(apiKey, apiUrl);
+    instance.context = context;
+    const pages = context.pages();
+    instance.page = pages.length > 0 ? pages[0] : await context.newPage();
+
+    // Wait for extension to be ready (if extension is loaded)
+    // Note: In TypeScript, we can't easily apply stealth here without the page
+    // The user should ensure stealth is applied to their context if needed
+
+    return instance;
+  }
+
+  /**
+   * Create SentienceBrowser from an existing Playwright Page.
+   * 
+   * This allows you to use Sentience SDK with a page you've already created,
+   * giving you more control over browser initialization.
+   * 
+   * @param page - Existing Playwright Page
+   * @param apiKey - Optional API key for server-side processing
+   * @param apiUrl - Optional API URL (defaults to https://api.sentienceapi.com if apiKey provided)
+   * @returns SentienceBrowser instance configured to use the existing page
+   * 
+   * @example
+   * ```typescript
+   * import { chromium } from 'playwright';
+   * import { SentienceBrowser } from '@sentience/sdk';
+   * 
+   * const browserInstance = await chromium.launch();
+   * const context = await browserInstance.newContext();
+   * const page = await context.newPage();
+   * await page.goto('https://example.com');
+   * 
+   * const browser = SentienceBrowser.fromPage(page);
+   * ```
+   */
+  static fromPage(
+    page: Page,
+    apiKey?: string,
+    apiUrl?: string
+  ): SentienceBrowser {
+    const instance = new SentienceBrowser(apiKey, apiUrl);
+    instance.page = page;
+    instance.context = page.context();
+
+    // Wait for extension to be ready (if extension is loaded)
+    // Note: In TypeScript, we can't easily apply stealth here without the page
+    // The user should ensure stealth is applied to their context if needed
+
+    return instance;
   }
 
   async close(outputPath?: string): Promise<string | null> {
