@@ -117,6 +117,7 @@ export class SentienceAgent {
       totalTokens: 0,
       byAction: []
     };
+    
   }
 
   /**
@@ -171,6 +172,7 @@ export class SentienceAgent {
           throw new Error(`Snapshot failed: ${snap.error}`);
         }
 
+
         // Apply element filtering based on goal
         const filteredElements = this.filterElements(snap, goal);
 
@@ -182,15 +184,40 @@ export class SentienceAgent {
 
         // Emit snapshot event
         if (this.tracer) {
-          this.tracer.emit('snapshot', {
+          const snapshotData: any = {
             url: filteredSnap.url,
+            element_count: filteredSnap.elements.length,
+            timestamp: filteredSnap.timestamp,
             elements: filteredSnap.elements.slice(0, 50).map(el => ({
               id: el.id,
               bbox: el.bbox,
               role: el.role,
-              text: el.text?.substring(0, 100),
+              text: el.text?.substring(0, 50),
             }))
-          }, stepId);
+          };
+
+          // Always include screenshot in trace event for studio viewer compatibility
+          // CloudTraceSink will extract and upload screenshots separately, then remove
+          // screenshot_base64 from events before uploading the trace file.
+          if (snap.screenshot) {
+            // Extract base64 string from data URL if needed
+            let screenshotBase64: string;
+            if (snap.screenshot.startsWith('data:image')) {
+              // Format: "data:image/jpeg;base64,{base64_string}"
+              screenshotBase64 = snap.screenshot.includes(',') 
+                ? snap.screenshot.split(',', 2)[1] 
+                : snap.screenshot;
+            } else {
+              screenshotBase64 = snap.screenshot;
+            }
+            
+            snapshotData.screenshot_base64 = screenshotBase64;
+            if (snap.screenshot_format) {
+              snapshotData.screenshot_format = snap.screenshot_format;
+            }
+          }
+
+          this.tracer.emit('snapshot', snapshotData, stepId);
         }
 
         // 2. GROUND: Format elements for LLM context

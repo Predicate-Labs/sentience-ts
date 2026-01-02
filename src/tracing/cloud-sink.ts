@@ -75,9 +75,13 @@ export class CloudTraceSink extends TraceSink {
   private apiUrl: string;
   private logger?: SentienceLogger;
 
-  // File size tracking (NEW)
+  // File size tracking
   private traceFileSizeBytes: number = 0;
   private screenshotTotalSizeBytes: number = 0;
+  private screenshotCount: number = 0; // Track number of screenshots extracted
+  
+  // Upload success flag
+  private uploadSuccessful: boolean = false;
 
   /**
    * Create a new CloudTraceSink
@@ -221,7 +225,6 @@ export class CloudTraceSink extends TraceSink {
         console.error(`   Local trace preserved at: ${this.tempFilePath}`);
       });
 
-      console.log('📤 [Sentience] Trace upload started in background');
       return;
     }
 
@@ -250,7 +253,7 @@ export class CloudTraceSink extends TraceSink {
       // 2. Generate index after closing file
       this.generateIndex();
 
-      // 2. Read and compress trace data (using async operations)
+      // 2. Check trace file exists
       try {
         await fsPromises.access(this.tempFilePath);
       } catch {
@@ -258,13 +261,27 @@ export class CloudTraceSink extends TraceSink {
         return;
       }
 
-      const traceData = await fsPromises.readFile(this.tempFilePath);
+      // 3. Extract screenshots from trace events
+      const screenshots = await this._extractScreenshotsFromTrace();
+      this.screenshotCount = screenshots.size;
+
+      // 4. Upload screenshots separately
+      if (screenshots.size > 0) {
+        await this._uploadScreenshots(screenshots);
+      }
+
+      // 5. Create cleaned trace file (without screenshot_base64)
+      const cleanedTracePath = this.tempFilePath.replace('.jsonl', '.cleaned.jsonl');
+      await this._createCleanedTrace(cleanedTracePath);
+
+      // 6. Read and compress cleaned trace
+      const traceData = await fsPromises.readFile(cleanedTracePath);
       const compressedData = zlib.gzipSync(traceData);
 
-      // Measure trace file size (NEW)
+      // Measure trace file size
       this.traceFileSizeBytes = compressedData.length;
 
-      // Log file sizes if logger is provided (NEW)
+      // Log file sizes if logger is provided
       if (this.logger) {
         this.logger.info(
           `Trace file size: ${(this.traceFileSizeBytes / 1024 / 1024).toFixed(2)} MB`
@@ -274,15 +291,18 @@ export class CloudTraceSink extends TraceSink {
         );
       }
 
-      // 3. Upload to cloud via pre-signed URL
-      console.log(
-        `📤 [Sentience] Uploading trace to cloud (${compressedData.length} bytes)...`
-      );
+      // 7. Upload cleaned trace to cloud
+      if (this.logger) {
+        this.logger.info(`Uploading trace to cloud (${compressedData.length} bytes)`);
+      }
 
       const statusCode = await this._uploadToCloud(compressedData);
 
       if (statusCode === 200) {
-        console.log('✅ [Sentience] Trace uploaded successfully');
+        this.uploadSuccessful = true;
+        if (this.logger) {
+          this.logger.info('Trace uploaded successfully');
+        }
 
         // Upload trace index file
         await this._uploadIndex();
@@ -290,9 +310,17 @@ export class CloudTraceSink extends TraceSink {
         // Call /v1/traces/complete to report file sizes
         await this._completeTrace();
 
-        // 4. Delete temp file on success
-        await fsPromises.unlink(this.tempFilePath);
+        // 8. Delete files on success
+        await this._cleanupFiles();
+        
+        // Clean up temporary cleaned trace file
+        try {
+          await fsPromises.unlink(cleanedTracePath);
+        } catch {
+          // Ignore cleanup errors
+        }
       } else {
+        this.uploadSuccessful = false;
         console.error(`❌ [Sentience] Upload failed: HTTP ${statusCode}`);
         console.error(`   Local trace preserved at: ${this.tempFilePath}`);
       }
@@ -323,6 +351,7 @@ export class CloudTraceSink extends TraceSink {
         stats: {
           trace_file_size_bytes: this.traceFileSizeBytes,
           screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
+          screenshot_count: this.screenshotCount,
         },
       });
 
@@ -380,7 +409,7 @@ export class CloudTraceSink extends TraceSink {
       writeTraceIndex(this.tempFilePath);
     } catch (error: any) {
       // Non-fatal: log but don't crash
-      console.log(`⚠️  Failed to generate trace index: ${error.message}`);
+      this.logger?.warn(`Failed to generate trace index: ${error.message}`);
     }
   }
 
@@ -420,14 +449,17 @@ export class CloudTraceSink extends TraceSink {
       const indexSize = compressedIndex.length;
 
       this.logger?.info(`Index file size: ${(indexSize / 1024).toFixed(2)} KB`);
-
-      console.log(`📤 [Sentience] Uploading trace index (${indexSize} bytes)...`);
+      if (this.logger) {
+        this.logger.info(`Uploading trace index (${indexSize} bytes)`);
+      }
 
       // Upload index to cloud storage
       const statusCode = await this._uploadIndexToCloud(uploadUrlResponse, compressedIndex);
 
       if (statusCode === 200) {
-        console.log('✅ [Sentience] Trace index uploaded successfully');
+        if (this.logger) {
+          this.logger.info('Trace index uploaded successfully');
+        }
 
         // Delete local index file after successful upload
         try {
@@ -437,12 +469,10 @@ export class CloudTraceSink extends TraceSink {
         }
       } else {
         this.logger?.warn(`Index upload failed: HTTP ${statusCode}`);
-        console.log(`⚠️  [Sentience] Index upload failed: HTTP ${statusCode}`);
       }
     } catch (error: any) {
       // Non-fatal: log but don't crash
       this.logger?.warn(`Error uploading trace index: ${error.message}`);
-      console.log(`⚠️  [Sentience] Error uploading trace index: ${error.message}`);
     }
   }
 
@@ -546,6 +576,351 @@ export class CloudTraceSink extends TraceSink {
       req.write(data);
       req.end();
     });
+  }
+
+  /**
+   * Extract screenshots from trace events.
+   * 
+   * @returns Map of sequence number to screenshot data
+   */
+  private async _extractScreenshotsFromTrace(): Promise<Map<number, { base64: string; format: string; stepId?: string }>> {
+    const screenshots = new Map<number, { base64: string; format: string; stepId?: string }>();
+    let sequence = 0;
+
+    try {
+      const traceContent = await fsPromises.readFile(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n');
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(line);
+          // Check if this is a snapshot event with screenshot
+          if (event.type === 'snapshot') {
+            const data = event.data || {};
+            const screenshotBase64 = data.screenshot_base64;
+
+            if (screenshotBase64) {
+              sequence += 1;
+              screenshots.set(sequence, {
+                base64: screenshotBase64,
+                format: data.screenshot_format || 'jpeg',
+                stepId: event.step_id,
+              });
+            }
+          }
+        } catch {
+          // Skip invalid JSON lines
+          continue;
+        }
+      }
+    } catch (error: any) {
+      this.logger?.error(`Error extracting screenshots: ${error.message}`);
+    }
+
+    return screenshots;
+  }
+
+  /**
+   * Create trace file without screenshot_base64 fields.
+   * 
+   * @param outputPath - Path to write cleaned trace file
+   */
+  private async _createCleanedTrace(outputPath: string): Promise<void> {
+    try {
+      const traceContent = await fsPromises.readFile(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n');
+      const cleanedLines: string[] = [];
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(line);
+          // Remove screenshot_base64 from snapshot events
+          if (event.type === 'snapshot' && event.data) {
+            const cleanedData: any = {};
+            for (const [key, value] of Object.entries(event.data)) {
+              if (key !== 'screenshot_base64' && key !== 'screenshot_format') {
+                cleanedData[key] = value;
+              }
+            }
+            event.data = cleanedData;
+          }
+
+          cleanedLines.push(JSON.stringify(event));
+        } catch {
+          // Skip invalid JSON lines
+          continue;
+        }
+      }
+
+      await fsPromises.writeFile(outputPath, cleanedLines.join('\n') + '\n', 'utf-8');
+    } catch (error: any) {
+      this.logger?.error(`Error creating cleaned trace: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Request pre-signed upload URLs for screenshots from gateway.
+   * 
+   * @param sequences - List of screenshot sequence numbers
+   * @returns Map of sequence number to upload URL
+   */
+  private async _requestScreenshotUrls(sequences: number[]): Promise<Map<number, string>> {
+    if (!this.apiKey || sequences.length === 0) {
+      return new Map();
+    }
+
+    return new Promise((resolve) => {
+      const url = new URL(`${this.apiUrl}/v1/screenshots/init`);
+      const protocol = url.protocol === 'https:' ? https : http;
+
+      const body = JSON.stringify({
+        run_id: this.runId,
+        sequences,
+      });
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        timeout: 10000, // 10 second timeout
+      };
+
+      const req = protocol.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const response = JSON.parse(data);
+              const uploadUrls = response.upload_urls || {};
+              const urlMap = new Map<number, string>();
+              
+              // Gateway returns sequences as strings in JSON, convert to int keys
+              for (const [seqStr, url] of Object.entries(uploadUrls)) {
+                urlMap.set(parseInt(seqStr, 10), url as string);
+              }
+              
+              resolve(urlMap);
+            } catch {
+              this.logger?.warn('Failed to parse screenshot upload URLs response');
+              resolve(new Map());
+            }
+          } else {
+            this.logger?.warn(`Failed to get screenshot URLs: HTTP ${res.statusCode}`);
+            resolve(new Map());
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        this.logger?.warn(`Error requesting screenshot URLs: ${error.message}`);
+        resolve(new Map());
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        this.logger?.warn('Screenshot URLs request timeout');
+        resolve(new Map());
+      });
+
+      req.write(body);
+      req.end();
+    });
+  }
+
+  /**
+   * Upload screenshots extracted from trace events.
+   * 
+   * Steps:
+   * 1. Request pre-signed URLs from gateway (/v1/screenshots/init)
+   * 2. Decode base64 to image bytes
+   * 3. Upload screenshots in parallel (10 concurrent workers)
+   * 4. Track upload progress
+   * 
+   * @param screenshots - Map of sequence to screenshot data
+   */
+  private async _uploadScreenshots(
+    screenshots: Map<number, { base64: string; format: string; stepId?: string }>
+  ): Promise<void> {
+    if (screenshots.size === 0) {
+      return;
+    }
+
+    // 1. Request pre-signed URLs from gateway
+    const sequences = Array.from(screenshots.keys()).sort((a, b) => a - b);
+    const uploadUrls = await this._requestScreenshotUrls(sequences);
+
+    if (uploadUrls.size === 0) {
+      this.logger?.warn(
+        'No screenshot upload URLs received, skipping upload. This may indicate API key permission issue, gateway error, or network problem.'
+      );
+      return;
+    }
+
+    // 2. Upload screenshots in parallel
+    const uploadPromises: Promise<boolean>[] = [];
+
+    for (const [seq, url] of uploadUrls.entries()) {
+      const screenshotData = screenshots.get(seq);
+      if (!screenshotData) {
+        continue;
+      }
+
+      const uploadPromise = this._uploadSingleScreenshot(seq, url, screenshotData);
+      uploadPromises.push(uploadPromise);
+    }
+
+    // Wait for all uploads (max 10 concurrent)
+    const results = await Promise.allSettled(uploadPromises.slice(0, 10));
+    
+    // Process remaining uploads in batches of 10
+    for (let i = 10; i < uploadPromises.length; i += 10) {
+      const batch = uploadPromises.slice(i, i + 10);
+      const batchResults = await Promise.allSettled(batch);
+      results.push(...batchResults);
+    }
+
+    // Count successes and failures
+    let uploadedCount = 0;
+    const failedSequences: number[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'fulfilled' && result.value) {
+        uploadedCount++;
+      } else {
+        failedSequences.push(sequences[i]);
+      }
+    }
+
+    // 3. Report results
+    const totalCount = uploadUrls.size;
+    if (uploadedCount === totalCount) {
+      const totalSizeMB = this.screenshotTotalSizeBytes / 1024 / 1024;
+      if (this.logger) {
+        this.logger.info(
+          `All ${totalCount} screenshots uploaded successfully (total size: ${totalSizeMB.toFixed(2)} MB)`
+        );
+      }
+    } else {
+      if (this.logger) {
+        this.logger.warn(
+          `Uploaded ${uploadedCount}/${totalCount} screenshots. Failed sequences: ${failedSequences.length > 0 ? failedSequences.join(', ') : 'none'}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Upload a single screenshot to pre-signed URL.
+   * 
+   * @param sequence - Screenshot sequence number
+   * @param uploadUrl - Pre-signed upload URL
+   * @param screenshotData - Screenshot data with base64 and format
+   * @returns True if upload successful, false otherwise
+   */
+  private async _uploadSingleScreenshot(
+    sequence: number,
+    uploadUrl: string,
+    screenshotData: { base64: string; format: string; stepId?: string }
+  ): Promise<boolean> {
+    try {
+      // Decode base64 to image bytes
+      const imageBytes = Buffer.from(screenshotData.base64, 'base64');
+      const imageSize = imageBytes.length;
+
+      // Update total size
+      this.screenshotTotalSizeBytes += imageSize;
+
+      // Upload to pre-signed URL
+      const statusCode = await this._uploadScreenshotToCloud(uploadUrl, imageBytes, screenshotData.format as 'png' | 'jpeg');
+
+      if (statusCode === 200) {
+        return true;
+      } else {
+        this.logger?.warn(`Screenshot ${sequence} upload failed: HTTP ${statusCode}`);
+        return false;
+      }
+    } catch (error: any) {
+      this.logger?.warn(`Screenshot ${sequence} upload error: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Upload screenshot data to cloud using pre-signed URL
+   */
+  private async _uploadScreenshotToCloud(
+    uploadUrl: string,
+    data: Buffer,
+    format: 'png' | 'jpeg'
+  ): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const url = new URL(uploadUrl);
+      const protocol = url.protocol === 'https:' ? https : http;
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'PUT',
+        headers: {
+          'Content-Type': `image/${format}`,
+          'Content-Length': data.length,
+        },
+        timeout: 30000, // 30 second timeout per screenshot
+      };
+
+      const req = protocol.request(options, (res) => {
+        res.on('data', () => {});
+        res.on('end', () => {
+          resolve(res.statusCode || 500);
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Screenshot upload timeout'));
+      });
+
+      req.write(data);
+      req.end();
+    });
+  }
+
+  /**
+   * Delete local files after successful upload.
+   */
+  private async _cleanupFiles(): Promise<void> {
+    // Delete trace file
+    try {
+      if (fs.existsSync(this.tempFilePath)) {
+        await fsPromises.unlink(this.tempFilePath);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 
   /**
