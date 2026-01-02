@@ -14,6 +14,9 @@ describe('Tracer', () => {
   const testFile = path.join(testDir, 'tracer-test.jsonl');
 
   beforeEach(async () => {
+    // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
+    await new Promise(resolve => setTimeout(resolve, 150));
+
     // Clean up and recreate test directory with retry logic for Windows
     // Use try-catch to handle EPERM errors when checking existence
     let exists = false;
@@ -27,17 +30,25 @@ describe('Tracer', () => {
 
     if (exists) {
       // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         try {
+          // Try to delete individual files first if directory deletion fails
+          if (fs.existsSync(testFile)) {
+            try {
+              fs.unlinkSync(testFile);
+            } catch (unlinkErr: any) {
+              // File might be locked, continue to directory deletion
+            }
+          }
           fs.rmSync(testDir, { recursive: true, force: true });
           break; // Success
         } catch (err: any) {
-          if (i === 4) {
+          if (i === 9) {
             // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
           } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Wait before retry (longer wait for Windows)
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
       }
@@ -46,8 +57,8 @@ describe('Tracer', () => {
   });
 
   afterEach(async () => {
-    // Wait a bit for file handles to close (Windows needs this)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wait longer for file handles to close (Windows needs more time)
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // Clean up test directory with retry logic for Windows
     // Use try-catch to handle EPERM errors when checking existence
@@ -62,17 +73,25 @@ describe('Tracer', () => {
 
     if (exists) {
       // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         try {
+          // Try to delete individual files first if directory deletion fails
+          if (fs.existsSync(testFile)) {
+            try {
+              fs.unlinkSync(testFile);
+            } catch (unlinkErr: any) {
+              // File might be locked, continue to directory deletion
+            }
+          }
           fs.rmSync(testDir, { recursive: true, force: true });
           break; // Success
         } catch (err: any) {
-          if (i === 4) {
+          if (i === 9) {
             // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
           } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Wait before retry (longer wait for Windows)
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
       }
@@ -139,6 +158,8 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' }, 'step-123');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -160,6 +181,8 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' });
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -176,6 +199,8 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent', 'gpt-4o', { timeout: 30000 });
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -194,6 +219,8 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -211,6 +238,8 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-001', 1, 'Click the button', 0, 'https://example.com');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -231,6 +260,8 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-002', 2, 'Type text');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -247,6 +278,8 @@ describe('Tracer', () => {
       tracer.emitRunEnd(5);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -264,6 +297,8 @@ describe('Tracer', () => {
       tracer.emitRunEnd(5, 'success');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -324,6 +359,8 @@ describe('Tracer', () => {
       tracer.emitRunEnd(1);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -347,6 +384,8 @@ describe('Tracer', () => {
       tracer.emitError('step-003', 'Element not found', 2);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -365,6 +404,8 @@ describe('Tracer', () => {
       tracer.emitError('step-004', 'Timeout');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const event = JSON.parse(content.trim()) as TraceEvent;
@@ -388,6 +429,8 @@ describe('Tracer', () => {
       tracer.emitRunEnd(2);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const content = fs.readFileSync(testFile, 'utf-8');
       const lines = content.trim().split('\n');
@@ -607,6 +650,8 @@ describe('Tracer', () => {
 
       // Close the tracer
       await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       // Read trace file and verify run_end event has the inferred status
       const content = fs.readFileSync(testFile, 'utf-8');

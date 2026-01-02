@@ -11,6 +11,9 @@ describe('JsonlTraceSink', () => {
   const testFile = path.join(testDir, 'test.jsonl');
 
   beforeEach(async () => {
+    // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
+    await new Promise(resolve => setTimeout(resolve, 150));
+
     // Clean up test directory with retry logic for Windows
     // Use try-catch to handle EPERM errors when checking existence
     let exists = false;
@@ -24,17 +27,25 @@ describe('JsonlTraceSink', () => {
 
     if (exists) {
       // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         try {
+          // Try to delete individual files first if directory deletion fails
+          if (fs.existsSync(testFile)) {
+            try {
+              fs.unlinkSync(testFile);
+            } catch (unlinkErr: any) {
+              // File might be locked, continue to directory deletion
+            }
+          }
           fs.rmSync(testDir, { recursive: true, force: true });
           break; // Success
         } catch (err: any) {
-          if (i === 4) {
+          if (i === 9) {
             // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
           } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Wait before retry (longer wait for Windows)
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
       }
@@ -42,8 +53,8 @@ describe('JsonlTraceSink', () => {
   });
 
   afterEach(async () => {
-    // Wait a bit for file handles to close (Windows needs this)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wait longer for file handles to close (Windows needs more time)
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // Clean up test directory with retry logic for Windows
     // Use try-catch to handle EPERM errors when checking existence
@@ -58,17 +69,25 @@ describe('JsonlTraceSink', () => {
 
     if (exists) {
       // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         try {
+          // Try to delete individual files first if directory deletion fails
+          if (fs.existsSync(testFile)) {
+            try {
+              fs.unlinkSync(testFile);
+            } catch (unlinkErr: any) {
+              // File might be locked, continue to directory deletion
+            }
+          }
           fs.rmSync(testDir, { recursive: true, force: true });
           break; // Success
         } catch (err: any) {
-          if (i === 4) {
+          if (i === 9) {
             // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
           } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Wait before retry (longer wait for Windows)
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
       }
@@ -88,6 +107,8 @@ describe('JsonlTraceSink', () => {
     sink.emit({ type: 'test2', data: 'world' });
 
     await sink.close();
+    // Wait for file handle to be released on Windows
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const content = fs.readFileSync(testFile, 'utf-8');
     const lines = content.trim().split('\n');
@@ -113,6 +134,8 @@ describe('JsonlTraceSink', () => {
     const sink2 = new JsonlTraceSink(testFile);
     sink2.emit({ seq: 2 });
     await sink2.close();
+    // Wait for file handle to be released on Windows
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const content = fs.readFileSync(testFile, 'utf-8');
     const lines = content.trim().split('\n');
@@ -198,6 +221,8 @@ describe('JsonlTraceSink', () => {
 
     sink.emit(complexEvent);
     await sink.close();
+    // Wait for file handle to be released on Windows
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const content = fs.readFileSync(testFile, 'utf-8');
     const parsed = JSON.parse(content.trim());
