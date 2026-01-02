@@ -115,17 +115,43 @@ export class JsonlTraceSink extends TraceSink {
     stream.removeAllListeners('error');
 
     return new Promise<void>((resolve) => {
+      // Check if stream is already closed
+      if (stream.destroyed || !stream.writable) {
+        // Stream already closed, generate index and resolve immediately
+        this.generateIndex();
+        resolve();
+        return;
+      }
+
+      let resolved = false;
+      const doResolve = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          // Generate index after closing file
+          this.generateIndex();
+          resolve();
+        }
+      };
+
+      // Fallback timeout in case 'close' event doesn't fire (shouldn't happen, but safety)
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          doResolve();
+        }
+      }, 500);
+
+      // Wait for stream to fully close (Windows needs this)
+      // The 'close' event fires after all data is flushed and file handle is released
+      stream.once('close', doResolve);
+
       stream.end((err?: Error | null) => {
         if (err) {
           // Silently ignore close errors in production
           // (they're logged during stream lifetime if needed)
         }
-
-        // Generate index after closing file
-        this.generateIndex();
-
-        // Always resolve, don't reject on close errors
-        resolve();
+        // Note: 'close' event will fire after end() completes
+        // Don't resolve here - wait for 'close' event
       });
     });
   }
@@ -162,5 +188,125 @@ export class JsonlTraceSink extends TraceSink {
    */
   isClosed(): boolean {
     return this.closed;
+  }
+
+  /**
+   * Extract execution statistics from trace file (for local traces).
+   * @returns Dictionary with stats fields (same format as Tracer.getStats())
+   */
+  getStats(): Record<string, any> {
+    try {
+      // Read trace file to extract stats
+      const traceContent = fs.readFileSync(this.path, 'utf-8');
+      const lines = traceContent.split('\n').filter(line => line.trim());
+      const events: any[] = [];
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line);
+          events.push(event);
+        } catch {
+          continue;
+        }
+      }
+
+      if (events.length === 0) {
+        return {
+          total_steps: 0,
+          total_events: 0,
+          duration_ms: null,
+          final_status: 'unknown',
+          started_at: null,
+          ended_at: null,
+        };
+      }
+
+      // Find run_start and run_end events
+      const runStart = events.find(e => e.type === 'run_start');
+      const runEnd = events.find(e => e.type === 'run_end');
+
+      // Extract timestamps
+      const startedAt = runStart?.ts || null;
+      const endedAt = runEnd?.ts || null;
+
+      // Calculate duration
+      let durationMs: number | null = null;
+      if (startedAt && endedAt) {
+        try {
+          const startDt = new Date(startedAt);
+          const endDt = new Date(endedAt);
+          durationMs = endDt.getTime() - startDt.getTime();
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      // Count steps (from step_start events, only first attempt)
+      const stepIndices = new Set<number>();
+      for (const event of events) {
+        if (event.type === 'step_start') {
+          const stepIndex = event.data?.step_index;
+          if (stepIndex !== undefined) {
+            stepIndices.add(stepIndex);
+          }
+        }
+      }
+      let totalSteps = stepIndices.size;
+
+      // If run_end has steps count, use that (more accurate)
+      if (runEnd) {
+        const stepsFromEnd = runEnd.data?.steps;
+        if (stepsFromEnd !== undefined) {
+          totalSteps = Math.max(totalSteps, stepsFromEnd);
+        }
+      }
+
+      // Count total events
+      const totalEvents = events.length;
+
+      // Infer final status
+      let finalStatus = 'unknown';
+      // Check for run_end event with status
+      if (runEnd) {
+        const status = runEnd.data?.status;
+        if (['success', 'failure', 'partial', 'unknown'].includes(status)) {
+          finalStatus = status;
+        }
+      } else {
+        // Infer from error events
+        const hasErrors = events.some(e => e.type === 'error');
+        if (hasErrors) {
+          const stepEnds = events.filter(e => e.type === 'step_end');
+          if (stepEnds.length > 0) {
+            finalStatus = 'partial';
+          } else {
+            finalStatus = 'failure';
+          }
+        } else {
+          const stepEnds = events.filter(e => e.type === 'step_end');
+          if (stepEnds.length > 0) {
+            finalStatus = 'success';
+          }
+        }
+      }
+
+      return {
+        total_steps: totalSteps,
+        total_events: totalEvents,
+        duration_ms: durationMs,
+        final_status: finalStatus,
+        started_at: startedAt,
+        ended_at: endedAt,
+      };
+    } catch {
+      return {
+        total_steps: 0,
+        total_events: 0,
+        duration_ms: null,
+        final_status: 'unknown',
+        started_at: null,
+        ended_at: null,
+      };
+    }
   }
 }
