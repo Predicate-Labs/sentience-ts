@@ -140,16 +140,22 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
   let eventCount = 0;
   let errorCount = 0;
   let finalUrl: string | null = null;
+  let runEndStatus: string | null = null; // Track status from run_end event
+  let agentName: string | null = null; // Extract from run_start event
+  let lineCount = 0; // Track total line count
 
   const stepsById: Map<string, StepIndex> = new Map();
   const stepOrder: string[] = [];
 
-  // Stream through file, tracking byte offsets
+  // Stream through file, tracking byte offsets and line numbers
   const fileBuffer = fs.readFileSync(tracePath);
   let byteOffset = 0;
   const lines = fileBuffer.toString('utf-8').split('\n');
 
+  let lineNumber = 0; // Track line number for each event
   for (const line of lines) {
+    lineNumber++;
+    lineCount++;
     const lineBytes = Buffer.byteLength(line + '\n', 'utf-8');
 
     if (!line.trim()) {
@@ -183,6 +189,11 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
       errorCount++;
     }
 
+    // Extract agent_name from run_start event
+    if (eventType === 'run_start') {
+      agentName = data.agent || null;
+    }
+
     // Initialize step if first time seeing this step_id
     if (!stepsById.has(stepId)) {
       stepOrder.push(stepId);
@@ -192,11 +203,12 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
           stepOrder.length,
           stepId,
           null,
-          'partial',
+          'failure',  // Default to failure (will be updated by step_end event)
           ts,
           ts,
           byteOffset,
           byteOffset + lineBytes,
+          lineNumber,  // Track line number
           null,
           null,
           new SnapshotInfo(),
@@ -212,13 +224,15 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
     // Update step metadata
     step.ts_end = ts;
     step.offset_end = byteOffset + lineBytes;
+    step.line_number = lineNumber;  // Update line number on each event
     step.counters.events++;
 
     // Handle specific event types
     if (eventType === 'step_start') {
       step.goal = data.goal;
       step.url_before = data.pre_url;
-    } else if (eventType === 'snapshot') {
+    } else if (eventType === 'snapshot' || eventType === 'snapshot_taken') {
+      // Handle both "snapshot" (current) and "snapshot_taken" (schema) for backward compatibility
       const snapshotId = data.snapshot_id;
       const url = data.url;
       const digest = computeSnapshotDigest(data);
@@ -233,7 +247,8 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
       step.url_after = url;
       step.counters.snapshots++;
       finalUrl = url;
-    } else if (eventType === 'action') {
+    } else if (eventType === 'action' || eventType === 'action_executed') {
+      // Handle both "action" (current) and "action_executed" (schema) for backward compatibility
       step.action = new ActionInfo(
         data.type,
         data.target_element_id,
@@ -241,19 +256,91 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
         data.success !== false
       );
       step.counters.actions++;
-    } else if (eventType === 'llm_response') {
+    } else if (eventType === 'llm_response' || eventType === 'llm_called') {
+      // Handle both "llm_response" (current) and "llm_called" (schema) for backward compatibility
       step.counters.llm_calls++;
     } else if (eventType === 'error') {
-      step.status = 'error';
+      step.status = 'failure';
     } else if (eventType === 'step_end') {
-      if (step.status !== 'error') {
-        step.status = 'ok';
+      // Determine status from step_end event data
+      // Frontend expects: success, failure, or partial
+      // Logic: success = exec.success && verify.passed
+      //        partial = exec.success && !verify.passed
+      //        failure = !exec.success
+      const execData = data.exec || {};
+      const verifyData = data.verify || {};
+      
+      const execSuccess = execData.success === true;
+      const verifyPassed = verifyData.passed === true;
+      
+      if (execSuccess && verifyPassed) {
+        step.status = 'success';
+      } else if (execSuccess && !verifyPassed) {
+        step.status = 'partial';
+      } else if (!execSuccess) {
+        step.status = 'failure';
+      } else {
+        // Fallback: if step_end exists but no exec/verify data, default to failure
+        step.status = 'failure';
+      }
+    } else if (eventType === 'run_end') {
+      // Extract status from run_end event (will be used for summary)
+      runEndStatus = data.status;
+      // Validate status value
+      if (runEndStatus && !['success', 'failure', 'partial', 'unknown'].includes(runEndStatus)) {
+        runEndStatus = null;
       }
     }
 
     byteOffset += lineBytes;
   }
 
+  // Use run_end status if available, otherwise infer from step statuses
+  let summaryStatus: 'success' | 'failure' | 'partial' | 'unknown' | null = null;
+  if (runEndStatus) {
+    summaryStatus = runEndStatus as 'success' | 'failure' | 'partial' | 'unknown';
+  } else {
+    const stepStatuses = Array.from(stepsById.values()).map(s => s.status);
+    if (stepStatuses.length > 0) {
+      // Infer overall status from step statuses
+      if (stepStatuses.every(s => s === 'success')) {
+        summaryStatus = 'success';
+      } else if (stepStatuses.some(s => s === 'failure')) {
+        // If any failure and no successes, it's failure; otherwise partial
+        if (stepStatuses.some(s => s === 'success')) {
+          summaryStatus = 'partial';
+        } else {
+          summaryStatus = 'failure';
+        }
+      } else if (stepStatuses.some(s => s === 'partial')) {
+        summaryStatus = 'partial';
+      } else {
+        summaryStatus = 'failure';  // Default to failure instead of unknown
+      }
+    } else {
+      summaryStatus = 'failure';  // Default to failure instead of unknown
+    }
+  }
+  
+  // Calculate duration
+  let durationMs: number | null = null;
+  if (firstTs && lastTs) {
+    const start = new Date(firstTs);
+    const end = new Date(lastTs);
+    durationMs = end.getTime() - start.getTime();
+  }
+
+  // Aggregate counters
+  const snapshotCount = Array.from(stepsById.values())
+    .reduce((sum, s) => sum + s.counters.snapshots, 0);
+  const actionCount = Array.from(stepsById.values())
+    .reduce((sum, s) => sum + s.counters.actions, 0);
+  const counters = {
+    snapshot_count: snapshotCount,
+    action_count: actionCount,
+    error_count: errorCount,
+  };
+  
   // Build summary
   const summary = new TraceSummary(
     firstTs,
@@ -261,7 +348,11 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
     eventCount,
     stepsById.size,
     errorCount,
-    finalUrl
+    finalUrl,
+    summaryStatus,
+    agentName,
+    durationMs,
+    counters
   );
 
   // Build steps list in order
@@ -271,7 +362,8 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
   const traceFile = new TraceFileInfo(
     tracePath,
     fs.statSync(tracePath).size,
-    computeFileSha256(tracePath)
+    computeFileSha256(tracePath),
+    lineCount
   );
 
   // Build final index
@@ -289,15 +381,26 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
 
 /**
  * Build index and write to file
+ * @param tracePath - Path to trace JSONL file
+ * @param indexPath - Optional custom path for index file
+ * @param frontendFormat - If true, write in frontend-compatible format (default: false)
  */
-export function writeTraceIndex(tracePath: string, indexPath?: string): string {
+export function writeTraceIndex(
+  tracePath: string,
+  indexPath?: string,
+  frontendFormat: boolean = false
+): string {
   if (!indexPath) {
     indexPath = tracePath.replace(/\.jsonl$/, '.index.json');
   }
 
   const index = buildTraceIndex(tracePath);
 
-  fs.writeFileSync(indexPath, JSON.stringify(index.toJSON(), null, 2));
+  if (frontendFormat) {
+    fs.writeFileSync(indexPath, JSON.stringify(index.toSentienceStudioJSON(), null, 2));
+  } else {
+    fs.writeFileSync(indexPath, JSON.stringify(index.toJSON(), null, 2));
+  }
 
   return indexPath;
 }

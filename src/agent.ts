@@ -9,7 +9,7 @@ import { click, typeText, press } from './actions';
 import { Snapshot, Element, ActionResult } from './types';
 import { LLMProvider, LLMResponse } from './llm-provider';
 import { Tracer } from './tracing/tracer';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 /**
  * Execution result from agent.act()
@@ -122,6 +122,28 @@ export class SentienceAgent {
       byAction: []
     };
     
+  }
+
+  /**
+   * Compute SHA256 hash of text
+   */
+  private computeHash(text: string): string {
+    return createHash('sha256').update(text, 'utf8').digest('hex');
+  }
+
+  /**
+   * Get bounding box for an element from snapshot
+   */
+  private getElementBbox(elementId: number | undefined, snap: Snapshot): { x: number; y: number; width: number; height: number } | undefined {
+    if (elementId === undefined) return undefined;
+    const el = snap.elements.find(e => e.id === elementId);
+    if (!el) return undefined;
+    return {
+      x: el.bbox.x,
+      y: el.bbox.y,
+      width: el.bbox.width,
+      height: el.bbox.height,
+    };
   }
 
   /**
@@ -286,6 +308,103 @@ export class SentienceAgent {
         if (this.verbose) {
           const status = result.success ? '✅' : '❌';
           console.log(`${status} Completed in ${durationMs}ms`);
+        }
+
+        // Emit step_end event if tracer is enabled
+        if (this.tracer) {
+          const preUrl = snap.url;
+          const postUrl = this.browser.getPage()?.url() || null;
+          
+          // Compute snapshot digest (simplified - use URL + timestamp)
+          const snapshotDigest = `sha256:${this.computeHash(`${preUrl}${snap.timestamp}`)}`;
+          
+          // Build LLM data
+          const llmResponseText = llmResponse.content;
+          const llmResponseHash = `sha256:${this.computeHash(llmResponseText)}`;
+          const llmData = {
+            response_text: llmResponseText,
+            response_hash: llmResponseHash,
+            usage: {
+              prompt_tokens: llmResponse.promptTokens || 0,
+              completion_tokens: llmResponse.completionTokens || 0,
+              total_tokens: llmResponse.totalTokens || 0,
+            },
+          };
+          
+          // Build exec data
+          const execData: any = {
+            success: result.success,
+            action: result.action || 'unknown',
+            outcome: result.outcome || (result.success ? `Action ${result.action || 'unknown'} executed successfully` : `Action ${result.action || 'unknown'} failed`),
+            duration_ms: durationMs,
+          };
+          
+          // Add optional exec fields
+          if (result.elementId !== undefined) {
+            execData.element_id = result.elementId;
+            // Add bounding box if element found
+            const bbox = this.getElementBbox(result.elementId, snap);
+            if (bbox) {
+              execData.bounding_box = bbox;
+            }
+          }
+          if (result.text !== undefined) {
+            execData.text = result.text;
+          }
+          if (result.key !== undefined) {
+            execData.key = result.key;
+          }
+          if (result.error !== undefined) {
+            execData.error = result.error;
+          }
+          
+          // Build verify data (simplified - based on success and url_changed)
+          const verifyPassed = result.success && (result.urlChanged || result.action !== 'click');
+          const verifySignals: any = {
+            url_changed: result.urlChanged || false,
+          };
+          if (result.error) {
+            verifySignals.error = result.error;
+          }
+          
+          // Add elements_found array if element was targeted
+          if (result.elementId !== undefined) {
+            const bbox = this.getElementBbox(result.elementId, snap);
+            if (bbox) {
+              verifySignals.elements_found = [
+                {
+                  label: `Element ${result.elementId}`,
+                  bounding_box: bbox,
+                },
+              ];
+            }
+          }
+          
+          const verifyData = {
+            passed: verifyPassed,
+            signals: verifySignals,
+          };
+          
+          // Build complete step_end event
+          const stepEndData = {
+            v: 1,
+            step_id: stepId,
+            step_index: this.stepCount,
+            goal: goal,
+            attempt: attempt,
+            pre: {
+              url: preUrl,
+              snapshot_digest: snapshotDigest,
+            },
+            llm: llmData,
+            exec: execData,
+            post: {
+              url: postUrl,
+            },
+            verify: verifyData,
+          };
+          
+          this.tracer.emit('step_end', stepEndData, stepId);
         }
 
         return result;
