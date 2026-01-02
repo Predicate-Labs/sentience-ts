@@ -50,6 +50,18 @@ export interface Snapshot {
   requires_license?: boolean;
 }
 
+/**
+ * Metadata for a stored screenshot.
+ * Used by CloudTraceSink to track screenshots before upload.
+ */
+export interface ScreenshotMetadata {
+  sequence: number;
+  format: "png" | "jpeg";
+  sizeBytes: number;
+  stepId: string | null;
+  filepath: string;
+}
+
 export interface ActionResult {
   success: boolean;
   duration_ms: number;

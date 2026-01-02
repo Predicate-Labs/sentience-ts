@@ -41,8 +41,9 @@
     "typescript": "^5.0.0"
   },
   "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.20.0",
     "openai": "^4.0.0",
-    "@anthropic-ai/sdk": "^0.20.0"
+    "zhipuai-sdk-nodejs-v4": "^0.1.12"
   },
   "files": [
     "dist",
