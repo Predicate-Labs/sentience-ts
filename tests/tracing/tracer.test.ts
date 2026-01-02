@@ -13,6 +13,28 @@ describe('Tracer', () => {
   const testDir = path.join(__dirname, 'test-traces');
   const testFile = path.join(testDir, 'tracer-test.jsonl');
 
+  /**
+   * Helper function to read file with retry logic for Windows EPERM errors
+   * Windows file handles may not be released immediately after close()
+   */
+  async function readFileWithRetry(filePath: string, maxAttempts: number = 10): Promise<string> {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        return fs.readFileSync(filePath, 'utf-8');
+      } catch (err: any) {
+        if (err.code === 'EPERM' && attempts < maxAttempts - 1) {
+          // File still locked, wait and retry
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        } else {
+          throw err; // Re-throw if not EPERM or max attempts reached
+        }
+      }
+    }
+    throw new Error(`Failed to read file after ${maxAttempts} attempts`);
+  }
+
   beforeEach(async () => {
     // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
     await new Promise(resolve => setTimeout(resolve, 150));
@@ -143,7 +165,7 @@ describe('Tracer', () => {
         throw new Error(`Trace file not created: ${testFile}`);
       }
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
@@ -158,10 +180,10 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' }, 'step-123');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.v).toBe(1);
@@ -181,10 +203,10 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' });
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.step_id).toBeUndefined();
@@ -199,10 +221,10 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent', 'gpt-4o', { timeout: 30000 });
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_start');
@@ -219,10 +241,10 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_start');
@@ -238,10 +260,10 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-001', 1, 'Click the button', 0, 'https://example.com');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('step_start');
@@ -260,10 +282,10 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-002', 2, 'Type text');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('step_start');
@@ -278,10 +300,10 @@ describe('Tracer', () => {
       tracer.emitRunEnd(5);
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_end');
@@ -297,10 +319,10 @@ describe('Tracer', () => {
       tracer.emitRunEnd(5, 'success');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_end');
@@ -359,10 +381,10 @@ describe('Tracer', () => {
       tracer.emitRunEnd(1);
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
       expect(event.data.status).toBe('success');
     });
@@ -384,10 +406,10 @@ describe('Tracer', () => {
       tracer.emitError('step-003', 'Element not found', 2);
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('error');
@@ -404,10 +426,10 @@ describe('Tracer', () => {
       tracer.emitError('step-004', 'Timeout');
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.data.attempt).toBe(0);
@@ -429,10 +451,10 @@ describe('Tracer', () => {
       tracer.emitRunEnd(2);
 
       await tracer.close();
-      // Wait for file handle to be released on Windows
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const lines = content.trim().split('\n');
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
@@ -654,7 +676,7 @@ describe('Tracer', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // Read trace file and verify run_end event has the inferred status
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const lines = content.trim().split('\n');
       const runEndEvents = lines
         .map(line => JSON.parse(line))

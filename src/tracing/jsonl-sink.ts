@@ -115,17 +115,43 @@ export class JsonlTraceSink extends TraceSink {
     stream.removeAllListeners('error');
 
     return new Promise<void>((resolve) => {
+      // Check if stream is already closed
+      if (stream.destroyed || !stream.writable) {
+        // Stream already closed, generate index and resolve immediately
+        this.generateIndex();
+        resolve();
+        return;
+      }
+
+      let resolved = false;
+      const doResolve = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          // Generate index after closing file
+          this.generateIndex();
+          resolve();
+        }
+      };
+
+      // Fallback timeout in case 'close' event doesn't fire (shouldn't happen, but safety)
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          doResolve();
+        }
+      }, 500);
+
+      // Wait for stream to fully close (Windows needs this)
+      // The 'close' event fires after all data is flushed and file handle is released
+      stream.once('close', doResolve);
+
       stream.end((err?: Error | null) => {
         if (err) {
           // Silently ignore close errors in production
           // (they're logged during stream lifetime if needed)
         }
-
-        // Generate index after closing file
-        this.generateIndex();
-
-        // Always resolve, don't reject on close errors
-        resolve();
+        // Note: 'close' event will fire after end() completes
+        // Don't resolve here - wait for 'close' event
       });
     });
   }

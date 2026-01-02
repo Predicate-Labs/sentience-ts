@@ -10,6 +10,28 @@ describe('JsonlTraceSink', () => {
   const testDir = path.join(__dirname, 'test-traces');
   const testFile = path.join(testDir, 'test.jsonl');
 
+  /**
+   * Helper function to read file with retry logic for Windows EPERM errors
+   * Windows file handles may not be released immediately after close()
+   */
+  async function readFileWithRetry(filePath: string, maxAttempts: number = 10): Promise<string> {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        return fs.readFileSync(filePath, 'utf-8');
+      } catch (err: any) {
+        if (err.code === 'EPERM' && attempts < maxAttempts - 1) {
+          // File still locked, wait and retry
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        } else {
+          throw err; // Re-throw if not EPERM or max attempts reached
+        }
+      }
+    }
+    throw new Error(`Failed to read file after ${maxAttempts} attempts`);
+  }
+
   beforeEach(async () => {
     // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
     await new Promise(resolve => setTimeout(resolve, 150));
@@ -107,10 +129,10 @@ describe('JsonlTraceSink', () => {
     sink.emit({ type: 'test2', data: 'world' });
 
     await sink.close();
-    // Wait for file handle to be released on Windows
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for file handle to be released on Windows (increased wait time)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    const content = fs.readFileSync(testFile, 'utf-8');
+    const content = await readFileWithRetry(testFile);
     const lines = content.trim().split('\n');
 
     expect(lines.length).toBe(2);
@@ -137,7 +159,7 @@ describe('JsonlTraceSink', () => {
     // Wait for file handle to be released on Windows
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    const content = fs.readFileSync(testFile, 'utf-8');
+    const content = await readFileWithRetry(testFile);
     const lines = content.trim().split('\n');
 
     expect(lines.length).toBe(2);
@@ -221,10 +243,10 @@ describe('JsonlTraceSink', () => {
 
     sink.emit(complexEvent);
     await sink.close();
-    // Wait for file handle to be released on Windows
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for file handle to be released on Windows (increased wait time)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    const content = fs.readFileSync(testFile, 'utf-8');
+    const content = await readFileWithRetry(testFile);
     const parsed = JSON.parse(content.trim());
 
     expect(parsed).toEqual(complexEvent);
