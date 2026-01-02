@@ -12,7 +12,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
         const link = find(snap, 'role=link');
@@ -33,7 +33,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
         const link = find(snap, 'role=link');
@@ -56,7 +56,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
         const link = find(snap, 'role=link');
@@ -81,7 +81,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
         const textbox = find(snap, 'role=textbox');
@@ -103,7 +103,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const result = await press(browser, 'Enter');
         expect(result.success).toBe(true);
@@ -120,7 +120,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         // Click at a specific rectangle (top-left area)
         const result = await clickRect(browser, { x: 100, y: 100, w: 50, h: 30 });
@@ -137,7 +137,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         // Get an element and click its bbox
         const snap = await snapshot(browser);
@@ -164,7 +164,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const result = await clickRect(browser, { x: 100, y: 100, w: 50, h: 30 }, false);
         expect(result.success).toBe(true);
@@ -179,7 +179,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         // Invalid: zero width
         const result1 = await clickRect(browser, { x: 100, y: 100, w: 0, h: 30 });
@@ -202,7 +202,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const result = await clickRect(browser, { x: 100, y: 100, w: 50, h: 30 }, true, 2.0, true);
         expect(result.success).toBe(true);
@@ -219,7 +219,7 @@ describe('Actions', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const result = await clickRect(browser, { x: 100, y: 100, width: 50, height: 30 });
         expect(result.success).toBe(true);

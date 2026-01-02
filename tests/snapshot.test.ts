@@ -11,7 +11,7 @@ describe('Snapshot', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const snap = await snapshot(browser);
 
@@ -29,7 +29,7 @@ describe('Snapshot', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const snap = await snapshot(browser);
 
@@ -51,7 +51,7 @@ describe('Snapshot', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       // Test snapshot with goal
       const snap = await snapshot(browser, { goal: 'Find the main heading' });

@@ -177,7 +177,7 @@ describe('Browser Proxy Support', () => {
         // Verify viewport is preserved
         const page = browser.getPage();
         await page.goto('https://example.com');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const viewportSize = await page.evaluate(() => ({
           width: window.innerWidth,
@@ -228,7 +228,7 @@ describe('Browser Proxy Support', () => {
 
         // Test that we can use it
         await page.goto('https://example.com');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         // Verify viewport is preserved
         const viewportSize = await page.evaluate(() => ({

@@ -60,7 +60,18 @@ describe('Trace Indexing', () => {
           type: 'step_end',
           ts: '2025-12-29T10:00:02.000Z',
           step_id: 'step-1',
-          data: {},
+          data: {
+            v: 1,
+            step_id: 'step-1',
+            step_index: 1,
+            goal: 'Test goal',
+            attempt: 0,
+            pre: { url: 'https://example.com', snapshot_digest: 'sha256:test' },
+            llm: { response_text: 'CLICK(42)', response_hash: 'sha256:test' },
+            exec: { success: true, action: 'click', outcome: 'Action executed', duration_ms: 100 },
+            post: { url: 'https://example.com' },
+            verify: { passed: true, signals: {} },
+          },
         },
       ];
 
@@ -77,7 +88,7 @@ describe('Trace Indexing', () => {
       expect(step.step_id).toBe('step-1');
       expect(step.step_index).toBe(1);
       expect(step.goal).toBe('Test goal');
-      expect(step.status).toBe('ok');
+      expect(step.status).toBe('success');
       expect(step.counters.events).toBe(3);
       expect(step.counters.actions).toBe(1);
       expect(step.offset_start).toBe(0);
@@ -394,6 +405,24 @@ describe('Trace Indexing', () => {
           step_id: 'step-1',
           data: { message: 'Something failed' },
         },
+        {
+          v: 1,
+          type: 'step_end',
+          ts: '2025-12-29T10:00:02.000Z',
+          step_id: 'step-1',
+          data: {
+            v: 1,
+            step_id: 'step-1',
+            step_index: 1,
+            goal: 'Test goal',
+            attempt: 0,
+            pre: { url: 'https://example.com', snapshot_digest: 'sha256:test' },
+            llm: { response_text: 'CLICK(42)', response_hash: 'sha256:test' },
+            exec: { success: false, action: 'click', outcome: 'Action failed', duration_ms: 100 },
+            post: { url: 'https://example.com' },
+            verify: { passed: false, signals: {} },
+          },
+        },
       ];
 
       fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
@@ -401,7 +430,7 @@ describe('Trace Indexing', () => {
       const index = buildTraceIndex(tracePath);
 
       expect(index.summary.error_count).toBe(1);
-      expect(index.steps[0].status).toBe('error');
+      expect(index.steps[0].status).toBe('failure'); // Updated to match new status format
     });
 
     it('should count LLM calls correctly', () => {
@@ -487,6 +516,310 @@ describe('Trace Indexing', () => {
       expect(indexData.run_id).toBe('test');
       expect(indexData.summary).toBeDefined();
       expect(indexData.steps).toBeDefined();
+    });
+
+    it('should track line numbers for each step', () => {
+      const tracePath = path.join(tmpDir, 'line-numbers.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'run_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          data: { agent: 'TestAgent', llm_model: 'gpt-4' },
+        },
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:01.000Z',
+          step_id: 'step-1',
+          data: { goal: 'Test goal' },
+        },
+        {
+          v: 1,
+          type: 'action',
+          ts: '2025-12-29T10:00:02.000Z',
+          step_id: 'step-1',
+          data: { type: 'CLICK' },
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      // run_start creates synthetic step-0 on line 1, step-1 has events on lines 2-3
+      expect(index.steps.length).toBeGreaterThanOrEqual(2);
+      // Find step-1 (skip synthetic step-0 from run_start)
+      const step1 = index.steps.find((s) => s.step_id === 'step-1');
+      expect(step1).toBeDefined();
+      expect(step1!.line_number).toBe(3); // Last event (action) is on line 3
+      expect(index.trace_file.line_count).toBeGreaterThanOrEqual(3); // May include trailing newline
+    });
+
+    it('should extract agent name from run_start event', () => {
+      const tracePath = path.join(tmpDir, 'agent-name.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'run_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          data: { agent: 'MyTestAgent', llm_model: 'gpt-4' },
+        },
+        {
+          v: 1,
+          type: 'run_end',
+          ts: '2025-12-29T10:00:01.000Z',
+          data: {},
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      expect(index.summary.agent_name).toBe('MyTestAgent');
+    });
+
+    it('should calculate duration_ms from timestamps', () => {
+      const tracePath = path.join(tmpDir, 'duration.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'run_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          data: {},
+        },
+        {
+          v: 1,
+          type: 'run_end',
+          ts: '2025-12-29T10:01:30.000Z', // 90 seconds later
+          data: {},
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      expect(index.summary.duration_ms).toBe(90000); // 90 seconds = 90000ms
+    });
+
+    it('should aggregate counters across all steps', () => {
+      const tracePath = path.join(tmpDir, 'counters.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          step_id: 'step-1',
+          data: {},
+        },
+        {
+          v: 1,
+          type: 'snapshot',
+          ts: '2025-12-29T10:00:01.000Z',
+          step_id: 'step-1',
+          data: { url: 'https://example.com' },
+        },
+        {
+          v: 1,
+          type: 'action',
+          ts: '2025-12-29T10:00:02.000Z',
+          step_id: 'step-1',
+          data: { type: 'CLICK' },
+        },
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:03.000Z',
+          step_id: 'step-2',
+          data: {},
+        },
+        {
+          v: 1,
+          type: 'snapshot',
+          ts: '2025-12-29T10:00:04.000Z',
+          step_id: 'step-2',
+          data: { url: 'https://example.com' },
+        },
+        {
+          v: 1,
+          type: 'action',
+          ts: '2025-12-29T10:00:05.000Z',
+          step_id: 'step-2',
+          data: { type: 'TYPE' },
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      expect(index.summary.counters).toBeDefined();
+      expect(index.summary.counters?.snapshot_count).toBe(2);
+      expect(index.summary.counters?.action_count).toBe(2);
+      expect(index.summary.counters?.error_count).toBe(0);
+    });
+
+    it('should default step status to failure when no step_end', () => {
+      const tracePath = path.join(tmpDir, 'default-status.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          step_id: 'step-1',
+          data: {},
+        },
+        // No step_end event - should default to failure
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      expect(index.steps[0].status).toBe('failure');
+    });
+
+    it('should produce frontend-compatible format with toFrontendJSON', () => {
+      const tracePath = path.join(tmpDir, 'frontend-format.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'run_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          data: { agent: 'TestAgent' },
+        },
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:01.000Z',
+          step_id: 'step-1',
+          data: { goal: 'Test goal' },
+        },
+        {
+          v: 1,
+          type: 'step_end',
+          ts: '2025-12-29T10:00:02.000Z',
+          step_id: 'step-1',
+          data: {
+            v: 1,
+            step_id: 'step-1',
+            step_index: 1,
+            goal: 'Test goal',
+            attempt: 0,
+            pre: { snapshot_digest: 'sha256:test' },
+            llm: { response_text: 'CLICK(42)', response_hash: 'sha256:test' },
+            exec: { success: true, action: 'click', outcome: 'Action executed', duration_ms: 100 },
+            post: { url: 'https://example.com' },
+            verify: { passed: true, signals: {} },
+          },
+        },
+        {
+          v: 1,
+          type: 'run_end',
+          ts: '2025-12-29T10:00:03.000Z',
+          data: { steps: 1, status: 'success' },
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+      const frontendJSON = index.toSentienceStudioJSON();
+
+      // Check field name mappings
+      expect(frontendJSON.generated_at).toBeDefined(); // Renamed from created_at
+      expect(frontendJSON.trace_file).toBeDefined();
+      expect(frontendJSON.trace_file.line_count).toBeGreaterThanOrEqual(4);
+      expect(frontendJSON.summary).toBeDefined();
+      expect(frontendJSON.summary.agent_name).toBe('TestAgent');
+      expect(frontendJSON.summary.total_steps).toBeGreaterThanOrEqual(1); // Includes synthetic step
+      expect(frontendJSON.summary.start_time).toBeDefined(); // Renamed from first_ts
+      expect(frontendJSON.summary.end_time).toBeDefined(); // Renamed from last_ts
+      expect(frontendJSON.summary.duration_ms).toBeGreaterThan(0);
+      expect(frontendJSON.summary.counters).toBeDefined();
+      expect(frontendJSON.steps).toBeDefined();
+      // Find step-1 (skip synthetic step-0 from run_start)
+      const step1 = frontendJSON.steps.find((s: any) => s.action?.goal === 'Test goal');
+      expect(step1).toBeDefined();
+      expect(step1.step).toBeGreaterThanOrEqual(1); // Converted from 0-based to 1-based
+      expect(step1.line_number).toBeGreaterThanOrEqual(2);
+      expect(step1.status).toBe('success');
+      expect(step1.action).toBeDefined();
+      expect(step1.action.goal).toBe('Test goal'); // Goal moved into action
+    });
+
+    it('should write index in frontend format when frontendFormat=true', () => {
+      const tracePath = path.join(tmpDir, 'test.jsonl');
+
+      const event = {
+        v: 1,
+        type: 'run_start',
+        ts: '2025-12-29T10:00:00.000Z',
+        data: { agent: 'TestAgent' },
+      };
+
+      fs.writeFileSync(tracePath, JSON.stringify(event) + '\n');
+
+      const indexPath = writeTraceIndex(tracePath, undefined, true); // frontendFormat = true
+
+      const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+
+      // Check frontend format fields
+      expect(indexData.generated_at).toBeDefined(); // Frontend format
+      expect(indexData.summary).toBeDefined();
+      expect(indexData.summary.agent_name).toBe('TestAgent');
+    });
+
+    it('should handle both old and new event type names', () => {
+      const tracePath = path.join(tmpDir, 'event-types.jsonl');
+
+      const events = [
+        {
+          v: 1,
+          type: 'step_start',
+          ts: '2025-12-29T10:00:00.000Z',
+          step_id: 'step-1',
+          data: {},
+        },
+        {
+          v: 1,
+          type: 'snapshot_taken', // New schema name
+          ts: '2025-12-29T10:00:01.000Z',
+          step_id: 'step-1',
+          data: { url: 'https://example.com' },
+        },
+        {
+          v: 1,
+          type: 'action_executed', // New schema name
+          ts: '2025-12-29T10:00:02.000Z',
+          step_id: 'step-1',
+          data: { type: 'CLICK' },
+        },
+        {
+          v: 1,
+          type: 'llm_called', // New schema name
+          ts: '2025-12-29T10:00:03.000Z',
+          step_id: 'step-1',
+          data: {},
+        },
+      ];
+
+      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+      const index = buildTraceIndex(tracePath);
+
+      // Should process all events correctly
+      expect(index.steps[0].counters.snapshots).toBe(1);
+      expect(index.steps[0].counters.actions).toBe(1);
+      expect(index.steps[0].counters.llm_calls).toBe(1);
     });
   });
 });

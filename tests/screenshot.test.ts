@@ -10,7 +10,7 @@ describe('screenshot', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser, { format: 'png' });
 
@@ -29,7 +29,7 @@ describe('screenshot', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser, { format: 'jpeg', quality: 80 });
 
@@ -48,7 +48,7 @@ describe('screenshot', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser);
 
@@ -62,7 +62,7 @@ describe('screenshot', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       // Valid quality
       await screenshot(browser, { format: 'jpeg', quality: 50 }); // Should not throw

@@ -10,7 +10,7 @@ describe('read', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const result = await read(browser, { format: 'text' });
 
@@ -29,7 +29,7 @@ describe('read', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const result = await read(browser, { format: 'markdown' });
 
@@ -48,7 +48,7 @@ describe('read', () => {
     const browser = await createTestBrowser();
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       // Test with enhancement (default)
       const resultEnhanced = await read(browser, {

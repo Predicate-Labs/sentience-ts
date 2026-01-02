@@ -14,7 +14,7 @@ describe('ScriptGenerator', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -41,7 +41,7 @@ describe('ScriptGenerator', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -67,7 +67,7 @@ describe('ScriptGenerator', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -94,7 +94,7 @@ describe('ScriptGenerator', () => {
 
     try {
       await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle');
+      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();

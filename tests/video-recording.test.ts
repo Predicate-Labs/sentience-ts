@@ -201,7 +201,7 @@ describe('video recording', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const outputPath = path.join(videoDir, `video_${i}.webm`);
         const videoPath = await browser.close(outputPath);
@@ -250,7 +250,7 @@ describe('video recording', () => {
 
       try {
         await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle');
+        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
 
         const videoPath = await browser.close();
 

@@ -6,7 +6,8 @@ export class TraceFileInfo {
   constructor(
     public path: string,
     public size_bytes: number,
-    public sha256: string
+    public sha256: string,
+    public line_count: number | null = null  // Number of lines in the trace file
   ) {}
 
   toJSON() {
@@ -14,6 +15,7 @@ export class TraceFileInfo {
       path: this.path,
       size_bytes: this.size_bytes,
       sha256: this.sha256,
+      line_count: this.line_count,
     };
   }
 }
@@ -25,7 +27,11 @@ export class TraceSummary {
     public event_count: number,
     public step_count: number,
     public error_count: number,
-    public final_url: string | null
+    public final_url: string | null,
+    public status: 'success' | 'failure' | 'partial' | 'unknown' | null = null,
+    public agent_name: string | null = null,  // Agent name from run_start event
+    public duration_ms: number | null = null,  // Calculated duration in milliseconds
+    public counters: { snapshot_count: number; action_count: number; error_count: number } | null = null  // Aggregated counters
   ) {}
 
   toJSON() {
@@ -36,6 +42,10 @@ export class TraceSummary {
       step_count: this.step_count,
       error_count: this.error_count,
       final_url: this.final_url,
+      status: this.status,
+      agent_name: this.agent_name,
+      duration_ms: this.duration_ms,
+      counters: this.counters,
     };
   }
 }
@@ -92,7 +102,7 @@ export class StepCounters {
   }
 }
 
-export type StepStatus = 'ok' | 'error' | 'partial';
+export type StepStatus = 'success' | 'failure' | 'partial' | 'unknown';
 
 export class StepIndex {
   constructor(
@@ -104,6 +114,7 @@ export class StepIndex {
     public ts_end: string,
     public offset_start: number,
     public offset_end: number,
+    public line_number: number | null = null,  // Line number for byte-range fetching
     public url_before: string | null,
     public url_after: string | null,
     public snapshot_before: SnapshotInfo,
@@ -122,6 +133,7 @@ export class StepIndex {
       ts_end: this.ts_end,
       offset_start: this.offset_start,
       offset_end: this.offset_end,
+      line_number: this.line_number,
       url_before: this.url_before,
       url_after: this.url_after,
       snapshot_before: this.snapshot_before.toJSON(),
@@ -150,6 +162,75 @@ export class TraceIndex {
       trace_file: this.trace_file.toJSON(),
       summary: this.summary.toJSON(),
       steps: this.steps.map((s) => s.toJSON()),
+    };
+  }
+
+  /**
+   * Convert to SS format.
+   * 
+   * Maps SDK field names to frontend expectations:
+   * - created_at -> generated_at
+   * - first_ts -> start_time
+   * - last_ts -> end_time
+   * - step_index -> step (already 1-based, good!)
+   * - ts_start -> timestamp
+   * - Filters out "unknown" status
+   */
+  toSentienceStudioJSON(): any {
+    // Calculate duration if not already set
+    let durationMs = this.summary.duration_ms;
+    if (durationMs === null && this.summary.first_ts && this.summary.last_ts) {
+      const start = new Date(this.summary.first_ts);
+      const end = new Date(this.summary.last_ts);
+      durationMs = end.getTime() - start.getTime();
+    }
+
+    // Aggregate counters if not already set
+    let counters = this.summary.counters;
+    if (counters === null) {
+      const snapshotCount = this.steps.reduce((sum, s) => sum + s.counters.snapshots, 0);
+      const actionCount = this.steps.reduce((sum, s) => sum + s.counters.actions, 0);
+      counters = {
+        snapshot_count: snapshotCount,
+        action_count: actionCount,
+        error_count: this.summary.error_count,
+      };
+    }
+
+    return {
+      version: this.version,
+      run_id: this.run_id,
+      generated_at: this.created_at,  // Renamed from created_at
+      trace_file: {
+        path: this.trace_file.path,
+        size_bytes: this.trace_file.size_bytes,
+        line_count: this.trace_file.line_count,  // Added
+      },
+      summary: {
+        agent_name: this.summary.agent_name,  // Added
+        total_steps: this.summary.step_count,  // Renamed from step_count
+        status: this.summary.status !== 'unknown' ? this.summary.status : null,  // Filter out unknown
+        start_time: this.summary.first_ts,  // Renamed from first_ts
+        end_time: this.summary.last_ts,  // Renamed from last_ts
+        duration_ms: durationMs,  // Added
+        counters: counters,  // Added
+      },
+      steps: this.steps.map((s) => ({
+        step: s.step_index,  // Already 1-based ✅
+        byte_offset: s.offset_start,
+        line_number: s.line_number,  // Added
+        timestamp: s.ts_start,  // Use start time
+        action: {
+          type: s.action.type || '',
+          goal: s.goal,  // Move goal into action
+          digest: s.action.args_digest,
+        },
+        snapshot: s.snapshot_after.url ? {
+          url: s.snapshot_after.url,
+          digest: s.snapshot_after.digest,
+        } : undefined,
+        status: s.status !== 'unknown' ? s.status : undefined,  // Filter out unknown
+      })),
     };
   }
 }
