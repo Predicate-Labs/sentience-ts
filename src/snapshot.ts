@@ -43,8 +43,6 @@ function _saveTraceToFile(rawElements: any[], tracePath?: string): void {
 
   // Save the raw elements to JSON
   fs.writeFileSync(filename, JSON.stringify(rawElements, null, 2));
-
-  console.log(`[SDK] Trace saved to: ${filename}`);
 }
 
 export async function snapshot(
@@ -113,6 +111,20 @@ async function snapshotViaExtension(
   const result = await page.evaluate((opts) => {
     return (window as any).sentience.snapshot(opts);
   }, opts);
+
+  // Extract screenshot format from data URL if not provided by extension
+  if (result.screenshot && !result.screenshot_format) {
+    const screenshotDataUrl = result.screenshot;
+    if (screenshotDataUrl.startsWith('data:image/')) {
+      // Extract format from "data:image/jpeg;base64,..." or "data:image/png;base64,..."
+      const formatMatch = screenshotDataUrl.split(';')[0].split('/')[1];
+      if (formatMatch === 'jpeg' || formatMatch === 'jpg') {
+        result.screenshot_format = 'jpeg';
+      } else if (formatMatch === 'png') {
+        result.screenshot_format = 'png';
+      }
+    }
+  }
 
   // Save trace if requested
   if (options.save_trace && result.raw_elements) {
@@ -217,6 +229,21 @@ async function snapshotViaApi(
 
     const apiResult = await response.json();
 
+    // Extract screenshot format from data URL if not provided by extension
+    let screenshotFormat = rawResult.screenshot_format;
+    if (rawResult.screenshot && !screenshotFormat) {
+      const screenshotDataUrl = rawResult.screenshot;
+      if (screenshotDataUrl.startsWith('data:image/')) {
+        // Extract format from "data:image/jpeg;base64,..." or "data:image/png;base64,..."
+        const formatMatch = screenshotDataUrl.split(';')[0].split('/')[1];
+        if (formatMatch === 'jpeg' || formatMatch === 'jpg') {
+          screenshotFormat = 'jpeg';
+        } else if (formatMatch === 'png') {
+          screenshotFormat = 'png';
+        }
+      }
+    }
+
     // Merge API result with local data (screenshot, etc.)
     const snapshotData: Snapshot = {
       status: apiResult.status || 'success',
@@ -225,7 +252,7 @@ async function snapshotViaApi(
       viewport: apiResult.viewport || rawResult.viewport,
       elements: apiResult.elements || [],
       screenshot: rawResult.screenshot, // Keep local screenshot
-      screenshot_format: rawResult.screenshot_format,
+      screenshot_format: screenshotFormat,
       error: apiResult.error,
     };
 

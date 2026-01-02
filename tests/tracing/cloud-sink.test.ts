@@ -72,7 +72,31 @@ describe('CloudTraceSink', () => {
         if (file.startsWith('test-run-')) {
           const filePath = path.join(persistentCacheDir, file);
           if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+            const stats = fs.statSync(filePath);
+            if (stats.isDirectory()) {
+              // Delete directory and its contents
+              const dirFiles = fs.readdirSync(filePath);
+              dirFiles.forEach((dirFile) => {
+                fs.unlinkSync(path.join(filePath, dirFile));
+              });
+              fs.rmdirSync(filePath);
+            } else {
+              fs.unlinkSync(filePath);
+            }
+          }
+        }
+        // Also clean up screenshot directories
+        if (file.endsWith('_screenshots')) {
+          const dirPath = path.join(persistentCacheDir, file);
+          if (fs.existsSync(dirPath)) {
+            const stats = fs.statSync(dirPath);
+            if (stats.isDirectory()) {
+              const dirFiles = fs.readdirSync(dirPath);
+              dirFiles.forEach((dirFile) => {
+                fs.unlinkSync(path.join(dirPath, dirFile));
+              });
+              fs.rmdirSync(dirPath);
+            }
           }
         }
       });

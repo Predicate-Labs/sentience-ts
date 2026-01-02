@@ -23,7 +23,8 @@ export {
   LLMProvider,
   LLMResponse,
   OpenAIProvider,
-  AnthropicProvider
+  AnthropicProvider,
+  GLMProvider
 } from './llm-provider';
 export {
   SentienceAgent,

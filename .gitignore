@@ -42,6 +42,7 @@ snapshot_*.json
 *.test.js.map
 traces/
 tests/tracing/test-traces/
+playground
 
 # Temporary directories from sync workflows
 extension-temp/
