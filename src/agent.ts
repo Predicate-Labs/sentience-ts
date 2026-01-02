@@ -88,6 +88,7 @@ export class SentienceAgent {
   private stepCount: number;
   private history: HistoryEntry[];
   private tokenUsage: TokenStats;
+  private showOverlay: boolean;
 
   /**
    * Initialize Sentience Agent
@@ -96,19 +97,22 @@ export class SentienceAgent {
    * @param snapshotLimit - Maximum elements to include in context (default: 50)
    * @param verbose - Print execution logs (default: true)
    * @param tracer - Optional tracer for recording execution (default: undefined)
+   * @param showOverlay - Show green bbox overlay in browser (default: false)
    */
   constructor(
     browser: SentienceBrowser,
     llm: LLMProvider,
     snapshotLimit: number = 50,
     verbose: boolean = true,
-    tracer?: Tracer
+    tracer?: Tracer,
+    showOverlay: boolean = false
   ) {
     this.browser = browser;
     this.llm = llm;
     this.snapshotLimit = snapshotLimit;
     this.verbose = verbose;
     this.tracer = tracer;
+    this.showOverlay = showOverlay;
     this.stepCount = 0;
     this.history = [];
     this.tokenUsage = {
@@ -160,11 +164,15 @@ export class SentienceAgent {
         // 1. OBSERVE: Get refined semantic snapshot
         const startTime = Date.now();
 
-        const snapOpts = {
+        const snapOpts: SnapshotOptions = {
           ...snapshotOptions,
           goal: snapshotOptions?.goal ?? goal,
           limit: snapshotOptions?.limit || this.snapshotLimit,
         };
+        // Apply showOverlay from agent config if not explicitly set in snapshotOptions
+        if (snapshotOptions?.show_overlay === undefined) {
+          snapOpts.show_overlay = this.showOverlay;
+        }
 
         const snap = await snapshot(this.browser, snapOpts);
 
