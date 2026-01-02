@@ -11,36 +11,72 @@ import { TraceEvent } from '../../src/tracing/types';
 
 describe('Tracer', () => {
   const testDir = path.join(__dirname, 'test-traces');
-  const testFile = path.join(testDir, 'tracer-test.jsonl');
+  // Use unique filename for each test to avoid Windows file locking issues
+  let testFile: string;
 
-  beforeEach(() => {
-    // Clean up and recreate test directory
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
+  /**
+   * Helper function to read file with retry logic for Windows EPERM errors
+   * Windows file handles may not be released immediately after close()
+   */
+  async function readFileWithRetry(filePath: string, maxAttempts: number = 10): Promise<string> {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        return fs.readFileSync(filePath, 'utf-8');
+      } catch (err: any) {
+        if (err.code === 'EPERM' && attempts < maxAttempts - 1) {
+          // File still locked, wait and retry
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        } else {
+          throw err; // Re-throw if not EPERM or max attempts reached
+        }
+      }
     }
-    fs.mkdirSync(testDir, { recursive: true });
+    throw new Error(`Failed to read file after ${maxAttempts} attempts`);
+  }
+
+  beforeEach(async () => {
+    // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    // Generate unique filename for this test to avoid Windows file locking issues
+    const uniqueId = Math.random().toString(36).substring(7);
+    testFile = path.join(testDir, `trace-${uniqueId}.jsonl`);
+
+    // Ensure directory exists
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir, { recursive: true });
+    }
   });
 
   afterEach(async () => {
-    // Wait a bit for file handles to close (Windows needs this)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wait longer for file handles to close (Windows needs more time)
+    await new Promise(resolve => setTimeout(resolve, 200));
     
-    // Clean up test directory with retry logic for Windows
-    if (fs.existsSync(testDir)) {
-      // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 5; i++) {
-        try {
-          fs.rmSync(testDir, { recursive: true, force: true });
-          break; // Success
-        } catch (err: any) {
-          if (i === 4) {
-            // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
-          } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 50));
+    // Clean up the specific file for this test
+    if (testFile) {
+      try {
+        if (fs.existsSync(testFile)) {
+          // Retry deletion on Windows (file may still be locked)
+          for (let i = 0; i < 5; i++) {
+            try {
+              fs.unlinkSync(testFile);
+              break; // Success
+            } catch (err: any) {
+              if (i === 4) {
+                // Last attempt failed, log but don't throw
+                console.warn(`Could not delete ${testFile}:`, err);
+              } else {
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            }
           }
         }
+      } catch (err: any) {
+        // Ignore cleanup errors - don't fail tests
+        console.warn(`Could not delete ${testFile}:`, err);
       }
     }
   });
@@ -90,7 +126,7 @@ describe('Tracer', () => {
         throw new Error(`Trace file not created: ${testFile}`);
       }
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
@@ -105,8 +141,10 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' }, 'step-123');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.v).toBe(1);
@@ -126,8 +164,10 @@ describe('Tracer', () => {
       tracer.emit('test_event', { key: 'value' });
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.step_id).toBeUndefined();
@@ -142,8 +182,10 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent', 'gpt-4o', { timeout: 30000 });
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_start');
@@ -160,8 +202,10 @@ describe('Tracer', () => {
       tracer.emitRunStart('SentienceAgent');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_start');
@@ -177,8 +221,10 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-001', 1, 'Click the button', 0, 'https://example.com');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('step_start');
@@ -197,8 +243,10 @@ describe('Tracer', () => {
       tracer.emitStepStart('step-002', 2, 'Type text');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('step_start');
@@ -213,13 +261,103 @@ describe('Tracer', () => {
       tracer.emitRunEnd(5);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('run_end');
       expect(event.data.steps).toBe(5);
+      expect(event.data.status).toBe('unknown'); // Default status
       expect(event.step_id).toBeUndefined();
+    });
+
+    it('should emit run_end event with status parameter', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunEnd(5, 'success');
+
+      await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const content = await readFileWithRetry(testFile);
+      const event = JSON.parse(content.trim()) as TraceEvent;
+
+      expect(event.type).toBe('run_end');
+      expect(event.data.steps).toBe(5);
+      expect(event.data.status).toBe('success');
+    });
+
+    it('should track execution statistics', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      // Emit run_start (should track startedAt)
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+      expect(tracer.getStats().started_at).not.toBeNull();
+      expect(tracer.getStats().total_events).toBe(1);
+
+      // Emit step_start (should track totalSteps)
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      expect(tracer.getStats().total_steps).toBe(1);
+      expect(tracer.getStats().total_events).toBe(2);
+
+      tracer.emitStepStart('step-2', 2, 'Goal 2', 0);
+      expect(tracer.getStats().total_steps).toBe(2);
+      expect(tracer.getStats().total_events).toBe(3);
+
+      // Emit run_end (should track endedAt)
+      tracer.emitRunEnd(2);
+      expect(tracer.getStats().ended_at).not.toBeNull();
+      expect(tracer.getStats().total_events).toBe(4);
+
+      // Get stats
+      const stats = tracer.getStats();
+      expect(stats.total_steps).toBe(2);
+      expect(stats.total_events).toBe(4);
+      expect(stats.final_status).toBe('unknown');
+      expect(stats.started_at).not.toBeNull();
+      expect(stats.ended_at).not.toBeNull();
+      expect(stats.duration_ms).not.toBeNull();
+      expect(stats.duration_ms).toBeGreaterThanOrEqual(0);
+
+      await tracer.close();
+    });
+
+    it('should set final status', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      // Default status is "unknown"
+      expect(tracer.getStats().final_status).toBe('unknown');
+
+      // Set status
+      tracer.setFinalStatus('success');
+      expect(tracer.getStats().final_status).toBe('success');
+
+      // Status should be included in run_end
+      tracer.emitRunEnd(1);
+
+      await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const content = await readFileWithRetry(testFile);
+      const event = JSON.parse(content.trim()) as TraceEvent;
+      expect(event.data.status).toBe('success');
+    });
+
+    it('should reject invalid final status', () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      // Invalid status should throw error
+      expect(() => {
+        tracer.setFinalStatus('invalid' as any);
+      }).toThrow('Invalid status');
     });
 
     it('should emit error event', async () => {
@@ -229,8 +367,10 @@ describe('Tracer', () => {
       tracer.emitError('step-003', 'Element not found', 2);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.type).toBe('error');
@@ -247,8 +387,10 @@ describe('Tracer', () => {
       tracer.emitError('step-004', 'Timeout');
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const event = JSON.parse(content.trim()) as TraceEvent;
 
       expect(event.data.attempt).toBe(0);
@@ -270,8 +412,10 @@ describe('Tracer', () => {
       tracer.emitRunEnd(2);
 
       await tracer.close();
+      // Wait for file handle to be released on Windows (increased wait time)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const content = fs.readFileSync(testFile, 'utf-8');
+      const content = await readFileWithRetry(testFile);
       const lines = content.trim().split('\n');
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
@@ -357,6 +501,186 @@ describe('Tracer', () => {
       expect(tracer.getSinkType()).toBe(`JsonlTraceSink(${testFile})`);
 
       tracer.close();
+    });
+  });
+
+  describe('Automatic status inference', () => {
+    it('should automatically infer final status from step outcomes', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful step
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      // Emit another successful step
+      tracer.emitStepStart('step-2', 2, 'Goal 2', 0);
+      tracer.emit('step_end', { success: true, action: 'type' }, 'step-2');
+
+      // Close without explicitly setting status or calling emitRunEnd
+      // Status should be auto-inferred as "success"
+      await tracer.close();
+
+      // Verify status was auto-inferred
+      expect(tracer.getStats().final_status).toBe('success');
+
+      // Verify stats reflect the inferred status
+      const stats = tracer.getStats();
+      expect(stats.final_status).toBe('success');
+      expect(stats.total_steps).toBe(2);
+    });
+
+    it('should automatically infer "partial" status when there are both successes and errors', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful step
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      // Emit error
+      tracer.emitError('step-2', 'Element not found', 0);
+
+      // Close without explicitly setting status
+      await tracer.close();
+
+      // Verify status was auto-inferred as "partial" (has both successes and errors)
+      expect(tracer.getStats().final_status).toBe('partial');
+    });
+
+    it('should automatically infer "failure" status when there are only errors', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit error without any successful steps
+      tracer.emitError('step-1', 'Element not found', 0);
+
+      // Close without explicitly setting status
+      await tracer.close();
+
+      // Verify status was auto-inferred as "failure" (only errors, no successes)
+      expect(tracer.getStats().final_status).toBe('failure');
+    });
+
+    it('should not override explicitly set status', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful step
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      // Explicitly set status to "partial" (even though we have success)
+      tracer.setFinalStatus('partial');
+
+      // Close - should not override explicit status
+      await tracer.close();
+
+      // Verify explicit status was preserved
+      expect(tracer.getStats().final_status).toBe('partial');
+    });
+
+    it('should set final_status automatically when close() is called', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful steps
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      tracer.emitStepStart('step-2', 2, 'Goal 2', 0);
+      tracer.emit('step_end', { success: true, action: 'type' }, 'step-2');
+
+      // Verify status is still "unknown" before close
+      expect(tracer.getStats().final_status).toBe('unknown');
+
+      // Close should auto-infer status
+      await tracer.close();
+
+      // Verify status was auto-inferred after close
+      expect(tracer.getStats().final_status).toBe('success');
+      expect(tracer.getStats().total_steps).toBe(2);
+    });
+
+    it('should include auto-inferred final_status in run_end event when emitRunEnd is called', async () => {
+      const sink = new JsonlTraceSink(testFile);
+      const tracer = new Tracer('test-run', sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful step
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      // Verify status is still "unknown" before emitRunEnd
+      expect(tracer.getStats().final_status).toBe('unknown');
+
+      // emitRunEnd should auto-infer status if not provided
+      tracer.emitRunEnd(1);
+
+      // Verify status was auto-inferred
+      expect(tracer.getStats().final_status).toBe('success');
+
+      // Close the tracer
+      await tracer.close();
+      // Wait for file handle to be released on Windows
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Read trace file and verify run_end event has the inferred status
+      const content = await readFileWithRetry(testFile);
+      const lines = content.trim().split('\n');
+      const runEndEvents = lines
+        .map(line => JSON.parse(line))
+        .filter((event: any) => event.type === 'run_end');
+
+      expect(runEndEvents.length).toBeGreaterThan(0);
+      // The run_end event should have the auto-inferred status
+      const lastRunEnd = runEndEvents[runEndEvents.length - 1];
+      expect(lastRunEnd.data.status).toBe('success');
+    });
+
+    it('should include auto-inferred final_status in stats when close() is called with CloudTraceSink', async () => {
+      const { CloudTraceSink } = await import('../../src/tracing/cloud-sink');
+
+      const uploadUrl = 'https://sentience.nyc3.digitaloceanspaces.com/user123/run456/trace.jsonl.gz';
+      const runId = 'test-close-status-' + Date.now();
+      const apiKey = 'sk_test_123';
+      const apiUrl = 'https://api.sentience.ai';
+
+      const sink = new CloudTraceSink(uploadUrl, runId, apiKey, apiUrl);
+      const tracer = new Tracer(runId, sink);
+
+      tracer.emitRunStart('TestAgent', 'gpt-4');
+
+      // Emit successful step
+      tracer.emitStepStart('step-1', 1, 'Goal 1', 0);
+      tracer.emit('step_end', { success: true, action: 'click' }, 'step-1');
+
+      // Verify status is still "unknown" before close
+      expect(tracer.getStats().final_status).toBe('unknown');
+
+      // Note: We don't actually call close() here because it would try to upload
+      // Instead, we verify that the status inference logic works correctly
+      // The actual upload and completion request are tested in cloud-sink.test.ts
+
+      // Manually trigger the inference logic (simulating what close() does)
+      if (tracer.getStats().final_status === 'unknown') {
+        // Access private method via type assertion (for testing only)
+        (tracer as any)._inferFinalStatus();
+      }
+
+      // Verify status was auto-inferred
+      expect(tracer.getStats().final_status).toBe('success');
     });
   });
 });

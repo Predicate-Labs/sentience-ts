@@ -14,6 +14,17 @@ export class Tracer {
   private runId: string;
   private sink: TraceSink;
   private seq: number;
+  
+  // Stats tracking
+  private totalSteps: number = 0;
+  private totalEvents: number = 0;
+  private startedAt: Date | null = null;
+  private endedAt: Date | null = null;
+  private finalStatus: string = 'unknown';
+  // Track step outcomes for automatic status inference
+  private stepSuccesses: number = 0;
+  private stepFailures: number = 0;
+  private hasErrors: boolean = false;
 
   /**
    * Create a new Tracer
@@ -38,6 +49,7 @@ export class Tracer {
     stepId?: string
   ): void {
     this.seq += 1;
+    this.totalEvents += 1;
 
     // Generate timestamps
     const tsMs = Date.now();
@@ -58,6 +70,18 @@ export class Tracer {
     }
 
     this.sink.emit(event);
+
+    // Track step outcomes for automatic status inference
+    if (eventType === 'step_end') {
+      const success = (data as any).success || false;
+      if (success) {
+        this.stepSuccesses += 1;
+      } else {
+        this.stepFailures += 1;
+      }
+    } else if (eventType === 'error') {
+      this.hasErrors = true;
+    }
   }
 
   /**
@@ -71,6 +95,9 @@ export class Tracer {
     llmModel?: string,
     config?: Record<string, any>
   ): void {
+    // Track start time
+    this.startedAt = new Date();
+
     const data: TraceEventData = { agent };
     if (llmModel) data.llm_model = llmModel;
     if (config) data.config = config;
@@ -93,6 +120,11 @@ export class Tracer {
     attempt: number = 0,
     preUrl?: string
   ): void {
+    // Track step count (only count first attempt of each step)
+    if (attempt === 0) {
+      this.totalSteps = Math.max(this.totalSteps, stepIndex);
+    }
+
     const data: TraceEventData = {
       step_id: stepId,
       step_index: stepIndex,
@@ -110,9 +142,25 @@ export class Tracer {
   /**
    * Emit run_end event
    * @param steps - Total number of steps executed
+   * @param status - Optional final status ("success", "failure", "partial", "unknown")
+   *                 If not provided, infers from tracked outcomes or uses this.finalStatus
    */
-  emitRunEnd(steps: number): void {
-    this.emit('run_end', { steps });
+  emitRunEnd(steps: number, status?: string): void {
+    // Track end time
+    this.endedAt = new Date();
+
+    // Auto-infer status if not provided and not explicitly set
+    if (status === undefined && this.finalStatus === 'unknown') {
+      this._inferFinalStatus();
+    }
+
+    // Use provided status or fallback to this.finalStatus
+    const finalStatus = status || this.finalStatus;
+
+    // Ensure totalSteps is at least the provided steps value
+    this.totalSteps = Math.max(this.totalSteps, steps);
+
+    this.emit('run_end', { steps, status: finalStatus });
   }
 
   /**
@@ -126,10 +174,43 @@ export class Tracer {
   }
 
   /**
+   * Automatically infer finalStatus from tracked step outcomes if not explicitly set.
+   * This is called automatically in close() if finalStatus is still "unknown".
+   */
+  private _inferFinalStatus(): void {
+    if (this.finalStatus !== 'unknown') {
+      // Status already set explicitly, don't override
+      return;
+    }
+
+    // Infer from tracked outcomes
+    if (this.hasErrors) {
+      // Has errors - check if there were successful steps too
+      if (this.stepSuccesses > 0) {
+        this.finalStatus = 'partial';
+      } else {
+        this.finalStatus = 'failure';
+      }
+    } else if (this.stepSuccesses > 0) {
+      // Has successful steps and no errors
+      this.finalStatus = 'success';
+    }
+    // Otherwise stays "unknown" (no steps executed or no clear outcome)
+  }
+
+  /**
    * Close the underlying sink (flush buffered data)
    * @param blocking - If false, upload happens in background (default: true). Only applies to CloudTraceSink.
    */
   async close(blocking: boolean = true): Promise<void> {
+    // Auto-infer finalStatus if not explicitly set and we have step outcomes
+    if (
+      this.finalStatus === 'unknown' &&
+      (this.stepSuccesses > 0 || this.stepFailures > 0 || this.hasErrors)
+    ) {
+      this._inferFinalStatus();
+    }
+
     // Check if sink has a close method that accepts blocking parameter
     if (typeof (this.sink as any).close === 'function' && (this.sink as any).close.length > 0) {
       await (this.sink as any).close(blocking);
@@ -157,5 +238,38 @@ export class Tracer {
    */
   getSinkType(): string {
     return this.sink.getSinkType();
+  }
+
+  /**
+   * Set the final status of the trace run
+   * @param status - Final status ("success", "failure", "partial", "unknown")
+   */
+  setFinalStatus(status: string): void {
+    if (!['success', 'failure', 'partial', 'unknown'].includes(status)) {
+      throw new Error(
+        `Invalid status: ${status}. Must be one of: success, failure, partial, unknown`
+      );
+    }
+    this.finalStatus = status;
+  }
+
+  /**
+   * Get execution statistics for trace completion
+   * @returns Dictionary with stats fields for /v1/traces/complete
+   */
+  getStats(): Record<string, any> {
+    let durationMs: number | null = null;
+    if (this.startedAt && this.endedAt) {
+      durationMs = this.endedAt.getTime() - this.startedAt.getTime();
+    }
+
+    return {
+      total_steps: this.totalSteps,
+      total_events: this.totalEvents,
+      duration_ms: durationMs,
+      final_status: this.finalStatus,
+      started_at: this.startedAt ? this.startedAt.toISOString() : null,
+      ended_at: this.endedAt ? this.endedAt.toISOString() : null,
+    };
   }
 }

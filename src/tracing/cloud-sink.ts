@@ -79,6 +79,7 @@ export class CloudTraceSink extends TraceSink {
   private traceFileSizeBytes: number = 0;
   private screenshotTotalSizeBytes: number = 0;
   private screenshotCount: number = 0; // Track number of screenshots extracted
+  private indexFileSizeBytes: number = 0; // Track index file size
   
   // Upload success flag
   private uploadSuccessful: boolean = false;
@@ -332,7 +333,164 @@ export class CloudTraceSink extends TraceSink {
   }
 
   /**
-   * Call /v1/traces/complete to report file sizes to gateway.
+   * Infer final status from trace events by reading the trace file.
+   * @returns Final status: "success", "failure", "partial", or "unknown"
+   */
+  private _inferFinalStatusFromTrace(): string {
+    try {
+      // Read trace file to analyze events
+      const traceContent = fs.readFileSync(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n').filter(line => line.trim());
+      const events: any[] = [];
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line);
+          events.push(event);
+        } catch {
+          continue;
+        }
+      }
+
+      if (events.length === 0) {
+        return 'unknown';
+      }
+
+      // Check for run_end event with status
+      for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === 'run_end') {
+          const status = event.data?.status;
+          if (['success', 'failure', 'partial', 'unknown'].includes(status)) {
+            return status;
+          }
+        }
+      }
+
+      // Infer from error events
+      const hasErrors = events.some(e => e.type === 'error');
+      if (hasErrors) {
+        // Check if there are successful steps too (partial success)
+        const stepEnds = events.filter(e => e.type === 'step_end');
+        if (stepEnds.length > 0) {
+          return 'partial';
+        }
+        return 'failure';
+      }
+
+      // If we have step_end events and no errors, likely success
+      const stepEnds = events.filter(e => e.type === 'step_end');
+      if (stepEnds.length > 0) {
+        return 'success';
+      }
+
+      return 'unknown';
+    } catch {
+      // If we can't read the trace, default to unknown
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Extract execution statistics from trace file.
+   * @returns Dictionary with stats fields for /v1/traces/complete
+   */
+  private _extractStatsFromTrace(): Record<string, any> {
+    try {
+      // Read trace file to extract stats
+      const traceContent = fs.readFileSync(this.tempFilePath, 'utf-8');
+      const lines = traceContent.split('\n').filter(line => line.trim());
+      const events: any[] = [];
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line);
+          events.push(event);
+        } catch {
+          continue;
+        }
+      }
+
+      if (events.length === 0) {
+        return {
+          total_steps: 0,
+          total_events: 0,
+          duration_ms: null,
+          final_status: 'unknown',
+          started_at: null,
+          ended_at: null,
+        };
+      }
+
+      // Find run_start and run_end events
+      const runStart = events.find(e => e.type === 'run_start');
+      const runEnd = events.find(e => e.type === 'run_end');
+
+      // Extract timestamps
+      const startedAt = runStart?.ts || null;
+      const endedAt = runEnd?.ts || null;
+
+      // Calculate duration
+      let durationMs: number | null = null;
+      if (startedAt && endedAt) {
+        try {
+          const startDt = new Date(startedAt);
+          const endDt = new Date(endedAt);
+          durationMs = endDt.getTime() - startDt.getTime();
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      // Count steps (from step_start events, only first attempt)
+      const stepIndices = new Set<number>();
+      for (const event of events) {
+        if (event.type === 'step_start') {
+          const stepIndex = event.data?.step_index;
+          if (stepIndex !== undefined) {
+            stepIndices.add(stepIndex);
+          }
+        }
+      }
+      let totalSteps = stepIndices.size;
+
+      // If run_end has steps count, use that (more accurate)
+      if (runEnd) {
+        const stepsFromEnd = runEnd.data?.steps;
+        if (stepsFromEnd !== undefined) {
+          totalSteps = Math.max(totalSteps, stepsFromEnd);
+        }
+      }
+
+      // Count total events
+      const totalEvents = events.length;
+
+      // Infer final status
+      const finalStatus = this._inferFinalStatusFromTrace();
+
+      return {
+        total_steps: totalSteps,
+        total_events: totalEvents,
+        duration_ms: durationMs,
+        final_status: finalStatus,
+        started_at: startedAt,
+        ended_at: endedAt,
+      };
+    } catch (error: any) {
+      this.logger?.warn(`Error extracting stats from trace: ${error.message}`);
+      return {
+        total_steps: 0,
+        total_events: 0,
+        duration_ms: null,
+        final_status: 'unknown',
+        started_at: null,
+        ended_at: null,
+      };
+    }
+  }
+
+  /**
+   * Call /v1/traces/complete to report file sizes and stats to gateway.
    *
    * This is a best-effort call - failures are logged but don't affect upload success.
    */
@@ -346,13 +504,21 @@ export class CloudTraceSink extends TraceSink {
       const url = new URL(`${this.apiUrl}/v1/traces/complete`);
       const protocol = url.protocol === 'https:' ? https : http;
 
+      // Extract stats from trace file
+      const stats = this._extractStatsFromTrace();
+
+      // Add file size fields
+      const completeStats = {
+        ...stats,
+        trace_file_size_bytes: this.traceFileSizeBytes,
+        screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
+        screenshot_count: this.screenshotCount,
+        index_file_size_bytes: this.indexFileSizeBytes,
+      };
+
       const body = JSON.stringify({
         run_id: this.runId,
-        stats: {
-          trace_file_size_bytes: this.traceFileSizeBytes,
-          screenshot_total_size_bytes: this.screenshotTotalSizeBytes,
-          screenshot_count: this.screenshotCount,
-        },
+        stats: completeStats,
       });
 
       const options = {
@@ -447,6 +613,7 @@ export class CloudTraceSink extends TraceSink {
       const indexData = await fsPromises.readFile(indexPath);
       const compressedIndex = zlib.gzipSync(indexData);
       const indexSize = compressedIndex.length;
+      this.indexFileSizeBytes = indexSize; // Track index file size
 
       this.logger?.info(`Index file size: ${(indexSize / 1024).toFixed(2)} KB`);
       if (this.logger) {

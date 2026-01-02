@@ -372,6 +372,8 @@ describe('CloudTraceSink', () => {
             res.writeHead(200);
             res.end('OK');
           } else if (req.url === '/v1/traces/complete') {
+            // Store completion request body for verification
+            (indexServer as any).lastCompleteRequest = JSON.parse(requestBody.toString());
             // Accept completion call
             res.writeHead(200);
             res.end('OK');
@@ -544,6 +546,80 @@ describe('CloudTraceSink', () => {
       // File should be deleted after successful upload
       // (This is expected behavior - we clean up after upload)
       // If the test runs fast enough, file might still exist briefly
+    });
+
+    it('should include all required stats fields in completion request', async () => {
+      const runId = 'test-complete-stats-' + Date.now();
+      const apiUrl = `http://localhost:${indexServerPort}`;
+
+      const sink = new CloudTraceSink(
+        uploadUrl,
+        runId,
+        'sk_test_123',
+        apiUrl
+      );
+
+      // Emit events with timestamps
+      const startTime = new Date().toISOString();
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        ts: startTime,
+        run_id: runId,
+        seq: 1,
+        data: { agent: 'TestAgent' },
+      });
+
+      sink.emit({
+        v: 1,
+        type: 'step_start',
+        ts: startTime,
+        run_id: runId,
+        seq: 2,
+        step_id: 'step-1',
+        data: { step_id: 'step-1', step_index: 1, goal: 'Test', attempt: 0 },
+      });
+
+      const endTime = new Date().toISOString();
+      sink.emit({
+        v: 1,
+        type: 'run_end',
+        ts: endTime,
+        run_id: runId,
+        seq: 3,
+        data: { steps: 1, status: 'success' },
+      });
+
+      await sink.close();
+
+      // Give async operations time to complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Verify completion request was made
+      const completeRequest = (indexServer as any).lastCompleteRequest;
+      expect(completeRequest).toBeDefined();
+      expect(completeRequest.run_id).toBe(runId);
+
+      const stats = completeRequest.stats;
+      expect(stats).toBeDefined();
+
+      // Verify all required fields are present
+      expect(stats.trace_file_size_bytes).toBeDefined();
+      expect(stats.screenshot_total_size_bytes).toBeDefined();
+      expect(stats.screenshot_count).toBeDefined();
+      expect(stats.index_file_size_bytes).toBeDefined();
+      expect(stats.total_steps).toBeDefined();
+      expect(stats.total_steps).toBe(1);
+      expect(stats.total_events).toBeDefined();
+      expect(stats.total_events).toBe(3);
+      expect(stats.duration_ms).toBeDefined();
+      expect(stats.duration_ms).not.toBeNull();
+      expect(stats.final_status).toBeDefined();
+      expect(stats.final_status).toBe('success');
+      expect(stats.started_at).toBeDefined();
+      expect(stats.started_at).not.toBeNull();
+      expect(stats.ended_at).toBeDefined();
+      expect(stats.ended_at).not.toBeNull();
     });
   });
 });

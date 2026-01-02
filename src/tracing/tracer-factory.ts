@@ -94,8 +94,17 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
         const sink = new CloudTraceSink(response.data.upload_url, runId);
         await sink.close(); // This will upload the existing file
         console.log(`✅ [Sentience] Uploaded orphaned trace: ${runId}`);
+      } else if (response.status === 409) {
+        // HTTP 409 means trace already exists (already uploaded)
+        // Treat as success and delete local file
+        console.log(`✅ [Sentience] Trace ${runId} already exists in cloud (skipping re-upload)`);
+        try {
+          fs.unlinkSync(filePath);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
-      // Silently skip failures - don't log errors for orphan recovery
+      // Silently skip other failures - don't log errors for orphan recovery
       // These are expected in many scenarios (network issues, invalid API keys, etc.)
     } catch (error: any) {
       // Silently skip failures - don't log errors for orphan recovery
