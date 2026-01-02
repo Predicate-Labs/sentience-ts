@@ -8,7 +8,30 @@ import { JsonlTraceSink } from '../../src/tracing/jsonl-sink';
 
 describe('JsonlTraceSink', () => {
   const testDir = path.join(__dirname, 'test-traces');
-  const testFile = path.join(testDir, 'test.jsonl');
+  // Use unique filename for each test to avoid Windows file locking issues
+  let testFile: string;
+
+  /**
+   * Helper function to read file with retry logic for Windows EPERM errors
+   * Windows file handles may not be released immediately after close()
+   */
+  async function readFileWithRetry(filePath: string, maxAttempts: number = 10): Promise<string> {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        return fs.readFileSync(filePath, 'utf-8');
+      } catch (err: any) {
+        if (err.code === 'EPERM' && attempts < maxAttempts - 1) {
+          // File still locked, wait and retry
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        } else {
+          throw err; // Re-throw if not EPERM or max attempts reached
+        }
+      }
+    }
+    throw new Error(`Failed to read file after ${maxAttempts} attempts`);
+  }
 
   /**
    * Helper function to read file with retry logic for Windows EPERM errors
@@ -36,41 +59,13 @@ describe('JsonlTraceSink', () => {
     // Wait a bit to ensure previous test's file handles are fully released (Windows needs this)
     await new Promise(resolve => setTimeout(resolve, 150));
 
-    // Clean up test directory with retry logic for Windows
-    // Use try-catch to handle EPERM errors when checking existence
-    let exists = false;
-    try {
-      exists = fs.existsSync(testDir);
-    } catch (err: any) {
-      // On Windows, existsSync can throw EPERM if file is locked
-      // Assume it exists and try to delete it
-      exists = true;
-    }
+    // Generate unique filename for this test to avoid Windows file locking issues
+    const uniqueId = Math.random().toString(36).substring(7);
+    testFile = path.join(testDir, `trace-${uniqueId}.jsonl`);
 
-    if (exists) {
-      // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 10; i++) {
-        try {
-          // Try to delete individual files first if directory deletion fails
-          if (fs.existsSync(testFile)) {
-            try {
-              fs.unlinkSync(testFile);
-            } catch (unlinkErr: any) {
-              // File might be locked, continue to directory deletion
-            }
-          }
-          fs.rmSync(testDir, { recursive: true, force: true });
-          break; // Success
-        } catch (err: any) {
-          if (i === 9) {
-            // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
-          } else {
-            // Wait before retry (longer wait for Windows)
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-      }
+    // Ensure directory exists
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir, { recursive: true });
     }
   });
 
@@ -78,40 +73,29 @@ describe('JsonlTraceSink', () => {
     // Wait longer for file handles to close (Windows needs more time)
     await new Promise(resolve => setTimeout(resolve, 200));
     
-    // Clean up test directory with retry logic for Windows
-    // Use try-catch to handle EPERM errors when checking existence
-    let exists = false;
-    try {
-      exists = fs.existsSync(testDir);
-    } catch (err: any) {
-      // On Windows, existsSync can throw EPERM if file is locked
-      // Assume it exists and try to delete it
-      exists = true;
-    }
-
-    if (exists) {
-      // Retry deletion on Windows (files may still be locked)
-      for (let i = 0; i < 10; i++) {
-        try {
-          // Try to delete individual files first if directory deletion fails
-          if (fs.existsSync(testFile)) {
+    // Clean up the specific file for this test
+    if (testFile) {
+      try {
+        if (fs.existsSync(testFile)) {
+          // Retry deletion on Windows (file may still be locked)
+          for (let i = 0; i < 5; i++) {
             try {
               fs.unlinkSync(testFile);
-            } catch (unlinkErr: any) {
-              // File might be locked, continue to directory deletion
+              break; // Success
+            } catch (err: any) {
+              if (i === 4) {
+                // Last attempt failed, log but don't throw
+                console.warn(`Could not delete ${testFile}:`, err);
+              } else {
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
             }
           }
-          fs.rmSync(testDir, { recursive: true, force: true });
-          break; // Success
-        } catch (err: any) {
-          if (i === 9) {
-            // Last attempt failed, log but don't throw
-            console.warn(`Failed to delete test directory after 10 attempts: ${testDir}`);
-          } else {
-            // Wait before retry (longer wait for Windows)
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
         }
+      } catch (err: any) {
+        // Ignore cleanup errors - don't fail tests
+        console.warn(`Could not delete ${testFile}:`, err);
       }
     }
   });
