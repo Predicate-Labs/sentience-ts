@@ -13,10 +13,34 @@ describe('Tracer', () => {
   const testDir = path.join(__dirname, 'test-traces');
   const testFile = path.join(testDir, 'tracer-test.jsonl');
 
-  beforeEach(() => {
-    // Clean up and recreate test directory
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
+  beforeEach(async () => {
+    // Clean up and recreate test directory with retry logic for Windows
+    // Use try-catch to handle EPERM errors when checking existence
+    let exists = false;
+    try {
+      exists = fs.existsSync(testDir);
+    } catch (err: any) {
+      // On Windows, existsSync can throw EPERM if file is locked
+      // Assume it exists and try to delete it
+      exists = true;
+    }
+
+    if (exists) {
+      // Retry deletion on Windows (files may still be locked)
+      for (let i = 0; i < 5; i++) {
+        try {
+          fs.rmSync(testDir, { recursive: true, force: true });
+          break; // Success
+        } catch (err: any) {
+          if (i === 4) {
+            // Last attempt failed, log but don't throw
+            console.warn(`Failed to delete test directory after 5 attempts: ${testDir}`);
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+      }
     }
     fs.mkdirSync(testDir, { recursive: true });
   });
@@ -26,7 +50,17 @@ describe('Tracer', () => {
     await new Promise(resolve => setTimeout(resolve, 100));
     
     // Clean up test directory with retry logic for Windows
-    if (fs.existsSync(testDir)) {
+    // Use try-catch to handle EPERM errors when checking existence
+    let exists = false;
+    try {
+      exists = fs.existsSync(testDir);
+    } catch (err: any) {
+      // On Windows, existsSync can throw EPERM if file is locked
+      // Assume it exists and try to delete it
+      exists = true;
+    }
+
+    if (exists) {
       // Retry deletion on Windows (files may still be locked)
       for (let i = 0; i < 5; i++) {
         try {
