@@ -11,6 +11,7 @@ import { LLMProvider, LLMResponse } from './llm-provider';
 import { Tracer } from './tracing/tracer';
 import { TraceEventData, TraceElement } from './tracing/types';
 import { randomUUID, createHash } from 'crypto';
+import { SnapshotDiff } from './snapshot-diff';
 
 /**
  * Execution result from agent.act()
@@ -90,6 +91,7 @@ export class SentienceAgent {
   private history: HistoryEntry[];
   private tokenUsage: TokenStats;
   private showOverlay: boolean;
+  private previousSnapshot?: Snapshot;
 
   /**
    * Initialize Sentience Agent
@@ -203,21 +205,32 @@ export class SentienceAgent {
           throw new Error(`Snapshot failed: ${snap.error}`);
         }
 
+        // Compute diff_status by comparing with previous snapshot
+        const elementsWithDiff = SnapshotDiff.computeDiffStatus(snap, this.previousSnapshot);
+
+        // Create snapshot with diff_status populated
+        const snapWithDiff: Snapshot = {
+          ...snap,
+          elements: elementsWithDiff
+        };
+
+        // Update previous snapshot for next comparison
+        this.previousSnapshot = snap;
 
         // Apply element filtering based on goal
-        const filteredElements = this.filterElements(snap, goal);
+        const filteredElements = this.filterElements(snapWithDiff, goal);
 
         // Create filtered snapshot
         const filteredSnap: Snapshot = {
-          ...snap,
+          ...snapWithDiff,
           elements: filteredElements
         };
 
         // Emit snapshot event
         if (this.tracer) {
           // Include ALL elements with full data for DOM tree display
-          // Use snap.elements (all elements) not filteredSnap.elements
-          const elements: TraceElement[] = snap.elements.map(el => ({
+          // Use snapWithDiff.elements (with diff_status) not filteredSnap.elements
+          const elements: TraceElement[] = snapWithDiff.elements.map(el => ({
             id: el.id,
             role: el.role,
             text: el.text,
@@ -231,6 +244,7 @@ export class SentienceAgent {
             heuristic_index: el.heuristic_index,
             ml_probability: el.ml_probability,
             ml_score: el.ml_score,
+            diff_status: el.diff_status,
           }));
 
           const snapshotData: TraceEventData = {
