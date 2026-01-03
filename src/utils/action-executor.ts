@@ -1,11 +1,11 @@
 /**
  * ActionExecutor - Executes actions and handles retries
- * 
+ *
  * Extracted from SentienceAgent to improve separation of concerns
  */
 
-import { SentienceBrowser } from '../browser';
-import { Snapshot, Element } from '../types';
+import { IBrowser } from '../protocols/browser-protocol';
+import { Snapshot } from '../types';
 import { click, typeText, press } from '../actions';
 import { AgentActResult } from '../agent';
 
@@ -14,13 +14,13 @@ import { AgentActResult } from '../agent';
  */
 export class ActionExecutor {
   constructor(
-    private browser: SentienceBrowser,
+    private browser: IBrowser,
     private verbose: boolean = true
   ) {}
 
   /**
    * Execute an action string (e.g., "CLICK(42)", "TYPE(5, \"text\")")
-   * 
+   *
    * @param actionStr - Action string to parse and execute
    * @param snap - Current snapshot for element lookup
    * @returns Action result
@@ -28,11 +28,11 @@ export class ActionExecutor {
   async executeAction(actionStr: string, snap: Snapshot): Promise<AgentActResult> {
     // Parse action string
     const actionMatch = actionStr.match(/^(\w+)\((.*)\)$/);
-    
+
     if (!actionMatch) {
       throw new Error(
         `Unknown action format: ${actionStr}\n` +
-        `Expected: CLICK(id), TYPE(id, "text"), PRESS("key"), or FINISH()`
+          `Expected: CLICK(id), TYPE(id, "text"), PRESS("key"), or FINISH()`
       );
     }
 
@@ -47,7 +47,7 @@ export class ActionExecutor {
         durationMs: 0,
         attempt: 0,
         goal: '',
-        urlChanged: false
+        urlChanged: false,
       };
     }
 
@@ -73,7 +73,7 @@ export class ActionExecutor {
         attempt: 0,
         goal: '',
         urlChanged: result.url_changed || false,
-        error: result.error?.reason
+        error: result.error?.reason,
       };
     }
 
@@ -104,7 +104,7 @@ export class ActionExecutor {
         attempt: 0,
         goal: '',
         urlChanged: result.url_changed || false,
-        error: result.error?.reason
+        error: result.error?.reason,
       };
     }
 
@@ -126,14 +126,13 @@ export class ActionExecutor {
         attempt: 0,
         goal: '',
         urlChanged: result.url_changed || false,
-        error: result.error?.reason
+        error: result.error?.reason,
       };
     }
 
     throw new Error(
       `Unknown action: ${actionUpper}\n` +
-      `Expected: CLICK(id), TYPE(id, "text"), PRESS("key"), or FINISH()`
+        `Expected: CLICK(id), TYPE(id, "text"), PRESS("key"), or FINISH()`
     );
   }
 }
-

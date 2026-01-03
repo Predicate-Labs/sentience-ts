@@ -81,7 +81,7 @@ export class CloudTraceSink extends TraceSink {
   private screenshotTotalSizeBytes: number = 0;
   private screenshotCount: number = 0; // Track number of screenshots extracted
   private indexFileSizeBytes: number = 0; // Track index file size
-  
+
   // Upload success flag
   private uploadSuccessful: boolean = false;
 
@@ -122,7 +122,7 @@ export class CloudTraceSink extends TraceSink {
       });
 
       // Handle stream errors (suppress if closed)
-      this.writeStream.on('error', (error) => {
+      this.writeStream.on('error', error => {
         if (!this.closed) {
           console.error('[CloudTraceSink] Stream error:', error);
         }
@@ -177,7 +177,7 @@ export class CloudTraceSink extends TraceSink {
         timeout: 60000, // 1 minute timeout
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         // Consume response data (even if we don't use it)
         res.on('data', () => {});
         res.on('end', () => {
@@ -185,7 +185,7 @@ export class CloudTraceSink extends TraceSink {
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         reject(error);
       });
 
@@ -222,7 +222,7 @@ export class CloudTraceSink extends TraceSink {
       }
 
       // Upload in background (don't await)
-      this._doUpload().catch((error) => {
+      this._doUpload().catch(error => {
         console.error(`❌ [Sentience] Background upload failed: ${error.message}`);
         console.error(`   Local trace preserved at: ${this.tempFilePath}`);
       });
@@ -238,14 +238,13 @@ export class CloudTraceSink extends TraceSink {
    * Internal upload logic (called by both blocking and non-blocking close)
    */
   private async _doUpload(): Promise<void> {
-
     try {
       // 1. Close write stream
       if (this.writeStream && !this.writeStream.destroyed) {
         const stream = this.writeStream;
         stream.removeAllListeners('error');
 
-        await new Promise<void>((resolve) => {
+        await new Promise<void>(resolve => {
           stream.end(() => {
             resolve();
           });
@@ -314,7 +313,7 @@ export class CloudTraceSink extends TraceSink {
 
         // 8. Delete files on success
         await this._cleanupFiles();
-        
+
         // Clean up temporary cleaned trace file
         try {
           await fsPromises.unlink(cleanedTracePath);
@@ -362,7 +361,12 @@ export class CloudTraceSink extends TraceSink {
         const event = events[i];
         if (event.type === 'run_end') {
           const status = event.data?.status;
-          if (status === 'success' || status === 'failure' || status === 'partial' || status === 'unknown') {
+          if (
+            status === 'success' ||
+            status === 'failure' ||
+            status === 'partial' ||
+            status === 'unknown'
+          ) {
             return status;
           }
         }
@@ -501,7 +505,7 @@ export class CloudTraceSink extends TraceSink {
       return;
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const url = new URL(`${this.apiUrl}/v1/traces/complete`);
       const protocol = url.protocol === 'https:' ? https : http;
 
@@ -535,22 +539,20 @@ export class CloudTraceSink extends TraceSink {
         timeout: 10000, // 10 second timeout
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         // Consume response data
         res.on('data', () => {});
         res.on('end', () => {
           if (res.statusCode === 200) {
             this.logger?.info('Trace completion reported to gateway');
           } else {
-            this.logger?.warn(
-              `Failed to report trace completion: HTTP ${res.statusCode}`
-            );
+            this.logger?.warn(`Failed to report trace completion: HTTP ${res.statusCode}`);
           }
           resolve();
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         // Best-effort - log but don't fail
         this.logger?.warn(`Error reporting trace completion: ${error.message}`);
         resolve();
@@ -572,6 +574,7 @@ export class CloudTraceSink extends TraceSink {
    */
   private generateIndex(): void {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { writeTraceIndex } = require('./indexer');
       // Use frontend format to ensure 'step' field is present (1-based)
       // Frontend derives sequence from step.step - 1, so step must be valid
@@ -672,7 +675,7 @@ export class CloudTraceSink extends TraceSink {
    * Request index upload URL from Sentience API
    */
   private async _requestIndexUploadUrl(): Promise<string | null> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const url = new URL(`${this.apiUrl}/v1/traces/index_upload`);
       const protocol = url.protocol === 'https:' ? https : http;
 
@@ -691,9 +694,9 @@ export class CloudTraceSink extends TraceSink {
         timeout: 10000,
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         let data = '';
-        res.on('data', (chunk) => {
+        res.on('data', chunk => {
           data += chunk;
         });
         res.on('end', () => {
@@ -712,7 +715,7 @@ export class CloudTraceSink extends TraceSink {
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         this.logger?.warn(`Error requesting index upload URL: ${error.message}`);
         resolve(null);
       });
@@ -749,14 +752,14 @@ export class CloudTraceSink extends TraceSink {
         timeout: 30000, // 30 second timeout
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         res.on('data', () => {});
         res.on('end', () => {
           resolve(res.statusCode || 500);
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         reject(error);
       });
 
@@ -772,10 +775,12 @@ export class CloudTraceSink extends TraceSink {
 
   /**
    * Extract screenshots from trace events.
-   * 
+   *
    * @returns Map of sequence number to screenshot data
    */
-  private async _extractScreenshotsFromTrace(): Promise<Map<number, { base64: string; format: string; stepId?: string }>> {
+  private async _extractScreenshotsFromTrace(): Promise<
+    Map<number, { base64: string; format: string; stepId?: string }>
+  > {
     const screenshots = new Map<number, { base64: string; format: string; stepId?: string }>();
     let sequence = 0;
 
@@ -818,7 +823,7 @@ export class CloudTraceSink extends TraceSink {
 
   /**
    * Create trace file without screenshot_base64 fields.
-   * 
+   *
    * @param outputPath - Path to write cleaned trace file
    */
   private async _createCleanedTrace(outputPath: string): Promise<void> {
@@ -861,7 +866,7 @@ export class CloudTraceSink extends TraceSink {
 
   /**
    * Request pre-signed upload URLs for screenshots from gateway.
-   * 
+   *
    * @param sequences - List of screenshot sequence numbers
    * @returns Map of sequence number to upload URL
    */
@@ -870,7 +875,7 @@ export class CloudTraceSink extends TraceSink {
       return new Map();
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const url = new URL(`${this.apiUrl}/v1/screenshots/init`);
       const protocol = url.protocol === 'https:' ? https : http;
 
@@ -892,9 +897,9 @@ export class CloudTraceSink extends TraceSink {
         timeout: 10000, // 10 second timeout
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         let data = '';
-        res.on('data', (chunk) => {
+        res.on('data', chunk => {
           data += chunk;
         });
         res.on('end', () => {
@@ -903,12 +908,12 @@ export class CloudTraceSink extends TraceSink {
               const response = JSON.parse(data);
               const uploadUrls = response.upload_urls || {};
               const urlMap = new Map<number, string>();
-              
+
               // Gateway returns sequences as strings in JSON, convert to int keys
               for (const [seqStr, url] of Object.entries(uploadUrls)) {
                 urlMap.set(parseInt(seqStr, 10), url as string);
               }
-              
+
               resolve(urlMap);
             } catch {
               this.logger?.warn('Failed to parse screenshot upload URLs response');
@@ -921,7 +926,7 @@ export class CloudTraceSink extends TraceSink {
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         this.logger?.warn(`Error requesting screenshot URLs: ${error.message}`);
         resolve(new Map());
       });
@@ -939,13 +944,13 @@ export class CloudTraceSink extends TraceSink {
 
   /**
    * Upload screenshots extracted from trace events.
-   * 
+   *
    * Steps:
    * 1. Request pre-signed URLs from gateway (/v1/screenshots/init)
    * 2. Decode base64 to image bytes
    * 3. Upload screenshots in parallel (10 concurrent workers)
    * 4. Track upload progress
-   * 
+   *
    * @param screenshots - Map of sequence to screenshot data
    */
   private async _uploadScreenshots(
@@ -983,7 +988,7 @@ export class CloudTraceSink extends TraceSink {
 
     // Wait for all uploads (max 10 concurrent)
     const results = await Promise.allSettled(uploadPromises.slice(0, 10));
-    
+
     // Process remaining uploads in batches of 10
     for (let i = 10; i < uploadPromises.length; i += 10) {
       const batch = uploadPromises.slice(i, i + 10);
@@ -1000,7 +1005,7 @@ export class CloudTraceSink extends TraceSink {
       if (result.status === 'fulfilled' && result.value) {
         uploadedCount++;
       } else {
-        failedSequences.push(uploadSequences[i]!);
+        failedSequences.push(uploadSequences[i]);
       }
     }
 
@@ -1024,7 +1029,7 @@ export class CloudTraceSink extends TraceSink {
 
   /**
    * Upload a single screenshot to pre-signed URL.
-   * 
+   *
    * @param sequence - Screenshot sequence number
    * @param uploadUrl - Pre-signed upload URL
    * @param screenshotData - Screenshot data with base64 and format
@@ -1044,7 +1049,11 @@ export class CloudTraceSink extends TraceSink {
       this.screenshotTotalSizeBytes += imageSize;
 
       // Upload to pre-signed URL
-      const statusCode = await this._uploadScreenshotToCloud(uploadUrl, imageBytes, screenshotData.format as 'png' | 'jpeg');
+      const statusCode = await this._uploadScreenshotToCloud(
+        uploadUrl,
+        imageBytes,
+        screenshotData.format as 'png' | 'jpeg'
+      );
 
       if (statusCode === 200) {
         return true;
@@ -1082,14 +1091,14 @@ export class CloudTraceSink extends TraceSink {
         timeout: 30000, // 30 second timeout per screenshot
       };
 
-      const req = protocol.request(options, (res) => {
+      const req = protocol.request(options, res => {
         res.on('data', () => {});
         res.on('end', () => {
           resolve(res.statusCode || 500);
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', error => {
         reject(error);
       });
 

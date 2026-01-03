@@ -50,7 +50,7 @@ describe('JsonlTraceSink', () => {
   afterEach(async () => {
     // Wait longer for file handles to close (Windows needs more time)
     await new Promise(resolve => setTimeout(resolve, 200));
-    
+
     // Clean up the specific file for this test
     if (testFile) {
       try {
@@ -102,7 +102,7 @@ describe('JsonlTraceSink', () => {
     expect(JSON.parse(lines[1])).toEqual({ type: 'test2', data: 'world' });
   });
 
-    it('should append to existing file', async () => {
+  it('should append to existing file', async () => {
     // Ensure directory exists
     const dir = path.dirname(testFile);
     if (!fs.existsSync(dir)) {

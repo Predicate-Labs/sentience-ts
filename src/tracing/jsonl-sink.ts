@@ -43,7 +43,7 @@ export class JsonlTraceSink extends TraceSink {
       });
 
       // Handle stream errors (suppress logging if stream is closed)
-      this.writeStream.on('error', (error) => {
+      this.writeStream.on('error', error => {
         if (!this.closed) {
           console.error('[JsonlTraceSink] Stream error:', error);
         }
@@ -61,11 +61,12 @@ export class JsonlTraceSink extends TraceSink {
   emit(event: TraceEvent): void {
     if (this.closed) {
       // Only warn in non-test environments to avoid test noise
-      const isTestEnv = process.env.CI === 'true' || 
-                        process.env.NODE_ENV === 'test' ||
-                        process.env.JEST_WORKER_ID !== undefined ||
-                        (typeof global !== 'undefined' && (global as any).__JEST__);
-      
+      const isTestEnv =
+        process.env.CI === 'true' ||
+        process.env.NODE_ENV === 'test' ||
+        process.env.JEST_WORKER_ID !== undefined ||
+        (typeof global !== 'undefined' && (global as any).__JEST__);
+
       if (!isTestEnv) {
         console.warn('[JsonlTraceSink] Attempted to emit after close()');
       }
@@ -115,7 +116,7 @@ export class JsonlTraceSink extends TraceSink {
     // Remove error listener to prevent late errors
     stream.removeAllListeners('error');
 
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       // Check if stream is already closed
       if (stream.destroyed || !stream.writable) {
         // Stream already closed, generate index and resolve immediately
@@ -162,6 +163,7 @@ export class JsonlTraceSink extends TraceSink {
    */
   private generateIndex(): void {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { writeTraceIndex } = require('./indexer');
       // Use frontend format to ensure 'step' field is present (1-based)
       // Frontend derives sequence from step.step - 1, so step must be valid
@@ -273,7 +275,12 @@ export class JsonlTraceSink extends TraceSink {
       // Check for run_end event with status
       if (runEnd) {
         const status = runEnd.data?.status;
-        if (status === 'success' || status === 'failure' || status === 'partial' || status === 'unknown') {
+        if (
+          status === 'success' ||
+          status === 'failure' ||
+          status === 'partial' ||
+          status === 'unknown'
+        ) {
           finalStatus = status;
         }
       } else {

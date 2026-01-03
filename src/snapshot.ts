@@ -3,6 +3,7 @@
  */
 
 import { SentienceBrowser } from './browser';
+import { IBrowser } from './protocols/browser-protocol';
 import { Snapshot } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -47,17 +48,15 @@ function _saveTraceToFile(rawElements: any[], tracePath?: string): void {
 }
 
 export async function snapshot(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions = {}
 ): Promise<Snapshot> {
   // Get API configuration
   const apiKey = browser.getApiKey();
   const apiUrl = browser.getApiUrl();
-  
+
   // Determine if we should use server-side API
-  const shouldUseApi = options.use_api !== undefined
-    ? options.use_api
-    : (apiKey !== undefined);
+  const shouldUseApi = options.use_api !== undefined ? options.use_api : apiKey !== undefined;
 
   if (shouldUseApi && apiKey) {
     // Use server-side API (Pro/Enterprise tier)
@@ -69,10 +68,13 @@ export async function snapshot(
 }
 
 async function snapshotViaExtension(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions
 ): Promise<Snapshot> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
   // The new architecture loads injected_api.js asynchronously, so window.sentience
@@ -86,7 +88,7 @@ async function snapshotViaExtension(
   } catch (e) {
     throw new Error(
       `Sentience extension failed to inject window.sentience API. ` +
-      `Is the extension loaded? ${e instanceof Error ? e.message : String(e)}`
+        `Is the extension loaded? ${e instanceof Error ? e.message : String(e)}`
     );
   }
 
@@ -105,7 +107,7 @@ async function snapshotViaExtension(
   // Call extension API
   const result = await BrowserEvaluator.evaluate(
     page,
-    (opts) => (window as any).sentience.snapshot(opts),
+    opts => (window as any).sentience.snapshot(opts),
     opts
   );
 
@@ -150,12 +152,15 @@ async function snapshotViaExtension(
 }
 
 async function snapshotViaApi(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions,
   apiKey: string,
   apiUrl: string
 ): Promise<Snapshot> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
   // Even for API mode, we need the extension to collect raw data locally
@@ -179,7 +184,7 @@ async function snapshotViaApi(
 
   const rawResult = await BrowserEvaluator.evaluate(
     page,
-    (opts) => (window as any).sentience.snapshot(opts),
+    opts => (window as any).sentience.snapshot(opts),
     rawOpts
   );
 
@@ -192,10 +197,10 @@ async function snapshotViaApi(
   // Use raw_elements (raw data) instead of elements (processed data)
   // Server validates API key and applies proprietary ranking logic
   const payload = {
-    raw_elements: rawResult.raw_elements || [],  // Raw data needed for server processing
+    raw_elements: rawResult.raw_elements || [], // Raw data needed for server processing
     url: rawResult.url || '',
     viewport: rawResult.viewport,
-    goal: options.goal,  // Optional goal/task description
+    goal: options.goal, // Optional goal/task description
     options: {
       limit: options.limit,
       filter: options.filter,
@@ -210,12 +215,12 @@ async function snapshotViaApi(
     const limitMB = (MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(0);
     throw new Error(
       `Payload size (${sizeMB}MB) exceeds server limit (${limitMB}MB). ` +
-      `Try reducing the number of elements on the page or filtering elements.`
+        `Try reducing the number of elements on the page or filtering elements.`
     );
   }
 
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${apiKey}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
 
@@ -261,7 +266,7 @@ async function snapshotViaApi(
     };
 
     // Show visual overlay if requested (use API-ranked elements)
-    if (options.show_overlay && apiResult.elements) {
+    if (options.show_overlay && apiResult.elements && page) {
       await BrowserEvaluator.evaluate(
         page,
         (elements: any[]) => {
@@ -278,4 +283,3 @@ async function snapshotViaApi(
     throw new Error(`API request failed: ${e.message}`);
   }
 }
-

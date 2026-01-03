@@ -38,6 +38,9 @@ export class Recorder {
 
   start(): void {
     const page = this.browser.getPage();
+    if (!page) {
+      throw new Error('Browser not started. Call start() first.');
+    }
     this.active = true;
     const startUrl = page.url();
     this.startTime = new Date();
@@ -60,7 +63,7 @@ export class Recorder {
 
   private shouldMask(text: string): boolean {
     const textLower = text.toLowerCase();
-    return this.maskPatterns.some((pattern) => textLower.includes(pattern));
+    return this.maskPatterns.some(pattern => textLower.includes(pattern));
   }
 
   recordNavigation(url: string): void {
@@ -200,9 +203,10 @@ export class Recorder {
         parts.push(`text~"${textPart}"`);
       } else {
         // Try to get name/aria-label/placeholder from DOM
-        try {
-          const el = await this.browser.getPage().evaluate(
-            (id) => {
+        const page = this.browser.getPage();
+        if (page) {
+          try {
+            const el = await page.evaluate((id: number) => {
               const registry = (window as any).sentience_registry;
               if (!registry || !registry[id]) return null;
               const elem = registry[id];
@@ -211,21 +215,20 @@ export class Recorder {
                 ariaLabel: elem.getAttribute('aria-label') || null,
                 placeholder: (elem as HTMLInputElement).placeholder || null,
               };
-            },
-            elementId
-          );
+            }, elementId);
 
-          if (el) {
-            if (el.name) {
-              parts.push(`name="${el.name}"`);
-            } else if (el.ariaLabel) {
-              parts.push(`text~"${el.ariaLabel}"`);
-            } else if (el.placeholder) {
-              parts.push(`text~"${el.placeholder}"`);
+            if (el) {
+              if (el.name) {
+                parts.push(`name="${el.name}"`);
+              } else if (el.ariaLabel) {
+                parts.push(`text~"${el.ariaLabel}"`);
+              } else if (el.placeholder) {
+                parts.push(`text~"${el.placeholder}"`);
+              }
             }
+          } catch (e) {
+            // Ignore errors
           }
-        } catch (e) {
-          // Ignore errors
         }
       }
 
@@ -261,4 +264,3 @@ export class Recorder {
 export function record(browser: SentienceBrowser, captureSnapshots: boolean = false): Recorder {
   return new Recorder(browser, captureSnapshots);
 }
-

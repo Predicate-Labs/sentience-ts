@@ -43,7 +43,7 @@ export interface TraceElement {
   heuristic_index?: number;
   ml_probability?: number;
   ml_score?: number;
-  diff_status?: "ADDED" | "REMOVED" | "MODIFIED" | "MOVED";
+  diff_status?: 'ADDED' | 'REMOVED' | 'MODIFIED' | 'MOVED';
 }
 
 /**
