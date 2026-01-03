@@ -147,10 +147,12 @@ describe('CloudTraceSink', () => {
 
   describe('Upload functionality', () => {
     it('should upload gzip-compressed JSONL data', async () => {
-      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
+      const runId = 'test-run-' + Date.now();
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      const ts = new Date().toISOString();
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
-      sink.emit({ v: 1, type: 'run_end', seq: 2, data: { steps: 1 } });
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' }, ts, run_id: runId });
+      sink.emit({ v: 1, type: 'run_end', seq: 2, data: { steps: 1 }, ts, run_id: runId });
 
       await sink.close();
 
@@ -176,7 +178,7 @@ describe('CloudTraceSink', () => {
 
     it('should delete temp file on successful upload', async () => {
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       // Access private field for testing (TypeScript hack)
       const tempFilePath = (sink as any).tempFilePath;
@@ -196,7 +198,7 @@ describe('CloudTraceSink', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       const tempFilePath = (sink as any).tempFilePath;
 
@@ -226,7 +228,7 @@ describe('CloudTraceSink', () => {
 
       const sink = new CloudTraceSink(invalidUrl, 'test-run-' + Date.now());
 
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       // Should not throw, just log error
       await expect(sink.close()).resolves.not.toThrow();
@@ -255,7 +257,7 @@ describe('CloudTraceSink', () => {
         const slowUrl = `http://localhost:${address.port}/slow`;
         const sink = new CloudTraceSink(slowUrl, 'test-run-' + Date.now());
 
-        sink.emit({ v: 1, type: 'test', seq: 1 });
+        sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
         // Should timeout and handle gracefully (60s timeout in CloudTraceSink)
         await sink.close();
@@ -275,7 +277,7 @@ describe('CloudTraceSink', () => {
 
       const sink = new CloudTraceSink('http://invalid-url-that-doesnt-exist.local/upload', 'test-run-' + Date.now());
 
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       const tempFilePath = (sink as any).tempFilePath;
 
