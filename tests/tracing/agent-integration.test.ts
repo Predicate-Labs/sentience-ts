@@ -149,7 +149,7 @@ describe('Agent Integration with Tracing', () => {
       
       // Emit a test event to ensure the sink can write
       const tracer = new Tracer('test-run', sink);
-      tracer.emit('test_init', { test: true });
+      tracer.emit('test_init', { test: true } as any);
       
       // Wait a moment to ensure the test event is written
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -285,7 +285,7 @@ describe('Agent Integration with Tracing', () => {
       const tracer = new Tracer('test-run', sink);
       
       // Manually emit a test event to ensure the sink can write
-      tracer.emit('test_init', { test: true });
+      tracer.emit('test_init', { test: true } as any);
       
       // Wait a moment to ensure the test event is written
       await new Promise(resolve => setTimeout(resolve, 50));

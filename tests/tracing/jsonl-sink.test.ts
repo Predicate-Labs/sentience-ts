@@ -111,12 +111,12 @@ describe('JsonlTraceSink', () => {
 
     // Write first batch
     const sink1 = new JsonlTraceSink(testFile);
-    sink1.emit({ seq: 1 });
+    sink1.emit({ seq: 1 } as any);
     await sink1.close();
 
     // Write second batch
     const sink2 = new JsonlTraceSink(testFile);
-    sink2.emit({ seq: 2 });
+    sink2.emit({ seq: 2 } as any);
     await sink2.close();
     // Wait for file handle to be released on Windows
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -131,7 +131,7 @@ describe('JsonlTraceSink', () => {
 
   it('should handle close() multiple times gracefully', async () => {
     const sink = new JsonlTraceSink(testFile);
-    sink.emit({ test: true });
+    sink.emit({ test: true } as any);
 
     await sink.close();
     await sink.close(); // Should not throw
@@ -147,7 +147,7 @@ describe('JsonlTraceSink', () => {
     const sink = new JsonlTraceSink(testFile);
     await sink.close();
 
-    sink.emit({ test: true }); // Should attempt to warn (but suppressed in test env)
+    sink.emit({ test: true } as any); // Should attempt to warn (but suppressed in test env)
 
     // In test environments, the warning is suppressed, so we just verify
     // that emit() returns safely without crashing
@@ -197,8 +197,8 @@ describe('JsonlTraceSink', () => {
       data: {
         url: 'https://example.com',
         elements: [
-          { id: 1, text: 'Hello', bbox: { x: 0, y: 0, width: 100, height: 50 } },
-          { id: 2, text: null, bbox: { x: 100, y: 0, width: 100, height: 50 } },
+          { id: 1, role: 'button', text: 'Hello', bbox: { x: 0, y: 0, width: 100, height: 50 } },
+          { id: 2, role: 'link', text: null, bbox: { x: 100, y: 0, width: 100, height: 50 } },
         ],
       },
     };

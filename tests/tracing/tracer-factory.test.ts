@@ -293,7 +293,7 @@ describe('createTracer', () => {
 
       tracer.emitRunStart('SentienceAgent', 'gpt-4');
       tracer.emitStepStart('step-1', 1, 'Click button', 0, 'https://example.com');
-      tracer.emit('custom_event', { data: 'test' });
+      tracer.emit('custom_event', { data: 'test' } as any);
       tracer.emitRunEnd(1);
 
       await tracer.close();
