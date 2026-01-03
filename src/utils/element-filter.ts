@@ -32,7 +32,8 @@ export class ElementFilter {
    * ```
    */
   static filterByImportance(snapshot: Snapshot, maxElements: number = 50): Element[] {
-    const elements = [...snapshot.elements];
+    // Filter out REMOVED elements - they're not actionable and shouldn't be in LLM context
+    const elements = snapshot.elements.filter(el => el.diff_status !== 'REMOVED');
 
     // Sort by importance (descending)
     elements.sort((a, b) => b.importance - a.importance);
@@ -60,13 +61,16 @@ export class ElementFilter {
       return this.filterByImportance(snapshot, maxElements);
     }
 
+    // Filter out REMOVED elements - they're not actionable and shouldn't be in LLM context
+    const elements = snapshot.elements.filter(el => el.diff_status !== 'REMOVED');
+
     const goalLower = goal.toLowerCase();
     const keywords = this.extractKeywords(goalLower);
 
     // Score elements based on keyword matches
     const scoredElements: Array<[number, Element]> = [];
 
-    for (const element of snapshot.elements) {
+    for (const element of elements) {
       let score = element.importance; // Start with base importance
 
       // Boost score for keyword matches in text
@@ -115,7 +119,8 @@ export class ElementFilter {
    * ```
    */
   static filter(snapshot: Snapshot, options: FilterOptions = {}): Element[] {
-    let elements = [...snapshot.elements];
+    // Filter out REMOVED elements - they're not actionable and shouldn't be in LLM context
+    let elements = snapshot.elements.filter(el => el.diff_status !== 'REMOVED');
 
     // Apply filters
     if (options.minImportance !== undefined) {
