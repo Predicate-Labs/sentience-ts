@@ -16,18 +16,18 @@ describe('SnapshotEventBuilder', () => {
     visual_cues: {
       is_primary: false,
       background_color_name: null,
-      is_clickable: true
+      is_clickable: true,
     },
     in_viewport: true,
     is_occluded: false,
-    z_index: 1
+    z_index: 1,
   });
 
   const createMockSnapshot = (elements: Element[]): Snapshot => ({
     status: 'success',
     url: 'https://example.com',
     timestamp: new Date().toISOString(),
-    elements
+    elements,
   });
 
   describe('buildSnapshotEventData', () => {
@@ -35,7 +35,7 @@ describe('SnapshotEventBuilder', () => {
       const elements = [
         createMockElement(1, 0.1),
         createMockElement(2, 0.5),
-        createMockElement(3, 0.9)
+        createMockElement(3, 0.9),
       ];
       const snap = createMockSnapshot(elements);
 
@@ -67,7 +67,7 @@ describe('SnapshotEventBuilder', () => {
       const snap: Snapshot = {
         ...createMockSnapshot([createMockElement(1)]),
         screenshot: 'data:image/png;base64,iVBORw0KGgoAAAANS',
-        screenshot_format: 'png'
+        screenshot_format: 'png',
       };
 
       const eventData = SnapshotEventBuilder.buildSnapshotEventData(snap);
@@ -79,7 +79,7 @@ describe('SnapshotEventBuilder', () => {
     it('should extract base64 from data URL', () => {
       const snap: Snapshot = {
         ...createMockSnapshot([createMockElement(1)]),
-        screenshot: 'data:image/jpeg;base64,test123'
+        screenshot: 'data:image/jpeg;base64,test123',
       };
 
       const eventData = SnapshotEventBuilder.buildSnapshotEventData(snap);
@@ -100,7 +100,7 @@ describe('SnapshotEventBuilder', () => {
       const elements = [
         createMockElement(1, 0.5),
         createMockElement(2, 0.5),
-        createMockElement(3, 0.5)
+        createMockElement(3, 0.5),
       ];
       const snap = createMockSnapshot(elements);
 
@@ -112,4 +112,3 @@ describe('SnapshotEventBuilder', () => {
     });
   });
 });
-

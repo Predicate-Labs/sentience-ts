@@ -1,6 +1,6 @@
 /**
  * BrowserEvaluator - Common browser evaluation patterns with standardized error handling
- * 
+ *
  * This utility class extracts common page.evaluate() patterns to reduce code duplication
  * and provide consistent error handling across snapshot, actions, wait, and read modules.
  */
@@ -19,13 +19,13 @@ export interface EvaluationOptions {
 export class BrowserEvaluator {
   /**
    * Execute a browser evaluation script with standardized error handling
-   * 
+   *
    * @param page - Playwright Page instance
    * @param script - Function to execute in browser context
    * @param args - Arguments to pass to the script
    * @param options - Evaluation options (timeout, retries, error handler)
    * @returns Promise resolving to the evaluation result
-   * 
+   *
    * @example
    * ```typescript
    * const result = await BrowserEvaluator.evaluate(
@@ -42,40 +42,42 @@ export class BrowserEvaluator {
     options: EvaluationOptions = {}
   ): Promise<T> {
     const { timeout, retries = 0, onError } = options;
-    
+
     let lastError: Error | undefined;
-    
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (timeout) {
           return await Promise.race([
             page.evaluate(script, args),
-            new Promise<T>((_, reject) => 
+            new Promise<T>((_, reject) =>
               setTimeout(() => reject(new Error(`Evaluation timeout after ${timeout}ms`)), timeout)
-            )
+            ),
           ]);
         }
         return await page.evaluate(script, args);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         // Call custom error handler if provided
         if (onError) {
           onError(lastError);
         }
-        
+
         // If this was the last retry, throw the error
         if (attempt === retries) {
-          throw new Error(`Browser evaluation failed after ${retries + 1} attempt(s): ${lastError.message}`);
+          throw new Error(
+            `Browser evaluation failed after ${retries + 1} attempt(s): ${lastError.message}`
+          );
         }
-        
+
         // Wait before retry (exponential backoff)
         if (attempt < retries) {
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
         }
       }
     }
-    
+
     // This should never be reached, but TypeScript needs it
     throw lastError || new Error('Browser evaluation failed');
   }
@@ -83,13 +85,13 @@ export class BrowserEvaluator {
   /**
    * Execute a browser evaluation with navigation-aware error handling
    * Navigation may destroy the context, so we handle that gracefully
-   * 
+   *
    * @param page - Playwright Page instance
    * @param script - Function to execute in browser context
    * @param args - Arguments to pass to the script
    * @param fallbackValue - Value to return if evaluation fails due to navigation
    * @returns Promise resolving to the evaluation result or fallback value
-   * 
+   *
    * @example
    * ```typescript
    * const success = await BrowserEvaluator.evaluateWithNavigationFallback(
@@ -120,12 +122,12 @@ export class BrowserEvaluator {
 
   /**
    * Wait for a condition in the browser context with timeout
-   * 
+   *
    * @param page - Playwright Page instance
    * @param condition - Function that returns a truthy value when condition is met
    * @param timeout - Maximum time to wait in milliseconds
    * @returns Promise resolving when condition is met
-   * 
+   *
    * @example
    * ```typescript
    * await BrowserEvaluator.waitForCondition(
@@ -149,17 +151,15 @@ export class BrowserEvaluator {
         () => ({
           sentience_defined: typeof (window as any).sentience !== 'undefined',
           extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
-          url: window.location.href
+          url: window.location.href,
         }),
         undefined,
         { sentience_defined: false, extension_id: 'not set', url: 'unknown' }
       );
-      
+
       throw new Error(
-        `Condition wait failed after ${timeout}ms. ` +
-        `Diagnostics: ${JSON.stringify(diag)}`
+        `Condition wait failed after ${timeout}ms. ` + `Diagnostics: ${JSON.stringify(diag)}`
       );
     }
   }
 }
-

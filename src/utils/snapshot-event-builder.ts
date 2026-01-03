@@ -1,10 +1,10 @@
 /**
  * SnapshotEventBuilder - Helper for building snapshot trace events
- * 
+ *
  * Extracted from SentienceAgent to reduce complexity
  */
 
-import { Snapshot, Element } from '../types';
+import { Snapshot } from '../types';
 import { TraceEventData, TraceElement } from '../tracing/types';
 
 /**
@@ -13,7 +13,7 @@ import { TraceEventData, TraceElement } from '../tracing/types';
 export class SnapshotEventBuilder {
   /**
    * Build snapshot trace event data from snapshot
-   * 
+   *
    * @param snap - Snapshot to build event from
    * @param stepId - Optional step ID
    * @returns Trace event data for snapshot
@@ -79,18 +79,15 @@ export class SnapshotEventBuilder {
 
   /**
    * Extract base64 string from screenshot data URL
-   * 
+   *
    * @param screenshot - Screenshot data URL or base64 string
    * @returns Base64 string without data URL prefix
    */
   private static extractScreenshotBase64(screenshot: string): string {
     if (screenshot.startsWith('data:image')) {
       // Format: "data:image/jpeg;base64,{base64_string}"
-      return screenshot.includes(',') 
-        ? screenshot.split(',', 2)[1] 
-        : screenshot;
+      return screenshot.includes(',') ? screenshot.split(',', 2)[1] : screenshot;
     }
     return screenshot;
   }
 }
-

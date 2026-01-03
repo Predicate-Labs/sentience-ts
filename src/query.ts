@@ -6,13 +6,13 @@ import { Snapshot, Element, QuerySelector, QuerySelectorObject } from './types';
 
 /**
  * Parse a selector string into a QuerySelectorObject
- * 
+ *
  * Supports operators: =, !=, ~, ^=, $=, >, >=, <, <=
  * Supports dot notation: attr.id, css.color, bbox.x
- * 
+ *
  * @param selector - Selector string (e.g., "role=button", "text~search", "importance>0.5")
  * @returns Parsed query object
- * 
+ *
  * @example
  * ```typescript
  * const query = parseSelector('role=button clickable=true importance>0.5');
@@ -156,14 +156,14 @@ export function parseSelector(selector: string): QuerySelectorObject {
         if (!query.attr) {
           query.attr = {};
         }
-        (query.attr as any)[attrKey] = value;
+        query.attr[attrKey] = value;
       } else if (key.startsWith('css.')) {
         // Dot notation for CSS: css.color="red"
         const cssKey = key.substring(4); // Remove "css." prefix
         if (!query.css) {
           query.css = {};
         }
-        (query.css as any)[cssKey] = value;
+        query.css[cssKey] = value;
       }
     }
   }
@@ -364,19 +364,19 @@ function matchElement(
 
 /**
  * Query elements from a snapshot using a selector
- * 
+ *
  * @param snapshot - Snapshot containing elements to query
  * @param selector - Query selector (string DSL or object)
  * @returns Array of matching elements, sorted by importance (descending)
- * 
+ *
  * @example
  * ```typescript
  * const snap = await snapshot(browser);
- * 
+ *
  * // String selector
  * const buttons = query(snap, 'role=button');
  * const clickable = query(snap, 'clickable=true');
- * 
+ *
  * // Object selector
  * const results = query(snap, {
  *   role: 'button',
@@ -389,7 +389,7 @@ export function query(snapshot: Snapshot, selector: QuerySelector): Element[] {
   const queryObj = typeof selector === 'string' ? parseSelector(selector) : (selector as any);
 
   // Filter elements
-  const matches = snapshot.elements.filter((el) => matchElement(el, queryObj));
+  const matches = snapshot.elements.filter(el => matchElement(el, queryObj));
 
   // Sort by importance (descending)
   matches.sort((a, b) => b.importance - a.importance);
@@ -399,21 +399,21 @@ export function query(snapshot: Snapshot, selector: QuerySelector): Element[] {
 
 /**
  * Find the first element matching a selector
- * 
+ *
  * @param snapshot - Snapshot containing elements to search
  * @param selector - Query selector (string DSL or object)
  * @returns First matching element, or null if none found
- * 
+ *
  * @example
  * ```typescript
  * const snap = await snapshot(browser);
- * 
+ *
  * // Find first button
  * const button = find(snap, 'role=button');
  * if (button) {
  *   await click(browser, button.id);
  * }
- * 
+ *
  * // Find element by text
  * const searchBox = find(snap, 'text~search');
  * ```
@@ -422,4 +422,3 @@ export function find(snapshot: Snapshot, selector: QuerySelector): Element | nul
   const results = query(snapshot, selector);
   return results[0] || null;
 }
-

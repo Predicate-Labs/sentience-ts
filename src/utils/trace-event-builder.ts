@@ -1,6 +1,6 @@
 /**
  * TraceEventBuilder - Common trace event building patterns
- * 
+ *
  * This utility class extracts common trace event building logic to reduce duplication
  * and ensure consistency across different parts of the codebase.
  */
@@ -17,10 +17,10 @@ import { createHash } from 'crypto';
 export class TraceEventBuilder {
   /**
    * Compute SHA256 hash of text
-   * 
+   *
    * @param text - Text to hash
    * @returns SHA256 hash as hex string
-   * 
+   *
    * @private
    */
   private static computeHash(text: string): string {
@@ -29,7 +29,7 @@ export class TraceEventBuilder {
 
   /**
    * Build snapshot digest from snapshot data
-   * 
+   *
    * @param snapshot - Snapshot to compute digest for
    * @returns Digest string in format "sha256:..."
    */
@@ -40,7 +40,7 @@ export class TraceEventBuilder {
 
   /**
    * Build LLM usage data from LLM response
-   * 
+   *
    * @param llmResponse - LLM response object
    * @returns LLM usage data for trace event
    */
@@ -62,21 +62,19 @@ export class TraceEventBuilder {
 
   /**
    * Build execution data from action result
-   * 
+   *
    * @param result - Agent action result
    * @param snapshot - Snapshot used for the action
    * @returns Execution data for trace event
    */
-  static buildExecutionData(
-    result: AgentActResult,
-    snapshot: Snapshot
-  ): TraceEventData['exec'] {
+  static buildExecutionData(result: AgentActResult, snapshot: Snapshot): TraceEventData['exec'] {
     const execData: TraceEventData['exec'] = {
       success: result.success,
       action: result.action || 'unknown',
-      outcome: result.outcome || 
-        (result.success 
-          ? `Action ${result.action || 'unknown'} executed successfully` 
+      outcome:
+        result.outcome ||
+        (result.success
+          ? `Action ${result.action || 'unknown'} executed successfully`
           : `Action ${result.action || 'unknown'} failed`),
       duration_ms: result.durationMs,
     };
@@ -84,7 +82,7 @@ export class TraceEventBuilder {
     // Add optional exec fields
     if (result.elementId !== undefined) {
       execData.element_id = result.elementId;
-      
+
       // Add bounding box if element found
       const element = snapshot.elements.find(e => e.id === result.elementId);
       if (element) {
@@ -114,17 +112,14 @@ export class TraceEventBuilder {
 
   /**
    * Build verify data from action result
-   * 
+   *
    * @param result - Agent action result
    * @param snapshot - Snapshot used for the action
    * @returns Verify data for trace event
    */
-  static buildVerifyData(
-    result: AgentActResult,
-    snapshot: Snapshot
-  ): TraceEventData['verify'] {
+  static buildVerifyData(result: AgentActResult, snapshot: Snapshot): TraceEventData['verify'] {
     const verifyPassed = result.success && (result.urlChanged || result.action !== 'click');
-    
+
     const verifySignals: TraceEventData['verify'] = {
       passed: verifyPassed,
       signals: {
@@ -159,7 +154,7 @@ export class TraceEventBuilder {
 
   /**
    * Build complete step_end event data
-   * 
+   *
    * @param params - Parameters for building step_end event
    * @returns Complete step_end event data
    */
@@ -174,7 +169,8 @@ export class TraceEventBuilder {
     llmResponse: LLMResponse;
     result: AgentActResult;
   }): TraceEventData {
-    const { stepId, stepIndex, goal, attempt, preUrl, postUrl, snapshot, llmResponse, result } = params;
+    const { stepId, stepIndex, goal, attempt, preUrl, postUrl, snapshot, llmResponse, result } =
+      params;
 
     const snapshotDigest = this.buildSnapshotDigest(snapshot);
     const llmData = this.buildLLMData(llmResponse);
@@ -202,15 +198,12 @@ export class TraceEventBuilder {
 
   /**
    * Build snapshot event data
-   * 
+   *
    * @param snapshot - Snapshot to build event data for
    * @param goal - Optional goal/task description
    * @returns Snapshot event data
    */
-  static buildSnapshotData(
-    snapshot: Snapshot,
-    goal?: string
-  ): TraceEventData {
+  static buildSnapshotData(snapshot: Snapshot, goal?: string): TraceEventData {
     const data: TraceEventData = {
       url: snapshot.url,
       element_count: snapshot.elements.length,
@@ -223,18 +216,20 @@ export class TraceEventBuilder {
 
     // Convert elements to trace elements (simplified - just include IDs and basic info)
     if (snapshot.elements.length > 0) {
-      data.elements = snapshot.elements.slice(0, 100).map((el: Element): TraceElement => ({
-        id: el.id,
-        role: el.role,
-        text: el.text || undefined,
-        importance: el.importance,
-        bbox: {
-          x: el.bbox.x,
-          y: el.bbox.y,
-          width: el.bbox.width,
-          height: el.bbox.height,
-        },
-      }));
+      data.elements = snapshot.elements.slice(0, 100).map(
+        (el: Element): TraceElement => ({
+          id: el.id,
+          role: el.role,
+          text: el.text || undefined,
+          importance: el.importance,
+          bbox: {
+            x: el.bbox.x,
+            y: el.bbox.y,
+            width: el.bbox.width,
+            height: el.bbox.height,
+          },
+        })
+      );
     }
 
     if (snapshot.screenshot) {
@@ -245,4 +240,3 @@ export class TraceEventBuilder {
     return data;
   }
 }
-

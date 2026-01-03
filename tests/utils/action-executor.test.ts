@@ -20,7 +20,7 @@ describe('ActionExecutor', () => {
     mockBrowser = {
       getPage: jest.fn(),
       getApiKey: jest.fn(),
-      getApiUrl: jest.fn()
+      getApiUrl: jest.fn(),
     } as any;
 
     executor = new ActionExecutor(mockBrowser, false);
@@ -39,11 +39,11 @@ describe('ActionExecutor', () => {
           visual_cues: {
             is_primary: true,
             background_color_name: 'blue',
-            is_clickable: true
+            is_clickable: true,
           },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
+          z_index: 1,
         },
         {
           id: 2,
@@ -54,13 +54,13 @@ describe('ActionExecutor', () => {
           visual_cues: {
             is_primary: false,
             background_color_name: null,
-            is_clickable: true
+            is_clickable: true,
           },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
-        }
-      ]
+          z_index: 1,
+        },
+      ],
     };
   });
 
@@ -71,7 +71,7 @@ describe('ActionExecutor', () => {
         success: true,
         duration_ms: 100,
         outcome: 'navigated',
-        url_changed: true
+        url_changed: true,
       });
 
       const result = await executor.executeAction('CLICK(1)', mockSnapshot);
@@ -83,12 +83,14 @@ describe('ActionExecutor', () => {
     });
 
     it('should execute TYPE action', async () => {
-      const mockTypeText = actionsModule.typeText as jest.MockedFunction<typeof actionsModule.typeText>;
+      const mockTypeText = actionsModule.typeText as jest.MockedFunction<
+        typeof actionsModule.typeText
+      >;
       mockTypeText.mockResolvedValue({
         success: true,
         duration_ms: 200,
         outcome: 'dom_updated',
-        url_changed: false
+        url_changed: false,
       });
 
       const result = await executor.executeAction('TYPE(2, "hello")', mockSnapshot);
@@ -106,7 +108,7 @@ describe('ActionExecutor', () => {
         success: true,
         duration_ms: 50,
         outcome: 'dom_updated',
-        url_changed: false
+        url_changed: false,
       });
 
       const result = await executor.executeAction('PRESS("Enter")', mockSnapshot);
@@ -126,24 +128,27 @@ describe('ActionExecutor', () => {
     });
 
     it('should throw error for invalid action format', async () => {
-      await expect(executor.executeAction('INVALID', mockSnapshot))
-        .rejects.toThrow('Unknown action format');
+      await expect(executor.executeAction('INVALID', mockSnapshot)).rejects.toThrow(
+        'Unknown action format'
+      );
     });
 
     it('should throw error if element not found', async () => {
-      await expect(executor.executeAction('CLICK(999)', mockSnapshot))
-        .rejects.toThrow('Element 999 not found in snapshot');
+      await expect(executor.executeAction('CLICK(999)', mockSnapshot)).rejects.toThrow(
+        'Element 999 not found in snapshot'
+      );
     });
 
     it('should throw error for invalid TYPE format', async () => {
-      await expect(executor.executeAction('TYPE(1)', mockSnapshot))
-        .rejects.toThrow('Invalid TYPE format');
+      await expect(executor.executeAction('TYPE(1)', mockSnapshot)).rejects.toThrow(
+        'Invalid TYPE format'
+      );
     });
 
     it('should throw error for invalid PRESS format', async () => {
-      await expect(executor.executeAction('PRESS(Enter)', mockSnapshot))
-        .rejects.toThrow('Invalid PRESS format');
+      await expect(executor.executeAction('PRESS(Enter)', mockSnapshot)).rejects.toThrow(
+        'Invalid PRESS format'
+      );
     });
   });
 });
-

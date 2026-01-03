@@ -1,0 +1,9 @@
+dist/
+node_modules/
+*.js
+src/extension/
+examples/
+coverage/
+*.min.js
+package-lock.json
+

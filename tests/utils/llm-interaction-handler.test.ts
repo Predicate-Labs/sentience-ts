@@ -15,9 +15,8 @@ class MockLLMProvider extends LLMProvider {
 
   constructor(responses: LLMResponse[] = []) {
     super();
-    this.responses = responses.length > 0 
-      ? responses 
-      : [{ content: 'CLICK(1)', modelName: 'mock-model' }];
+    this.responses =
+      responses.length > 0 ? responses : [{ content: 'CLICK(1)', modelName: 'mock-model' }];
   }
 
   async generate(
@@ -60,18 +59,18 @@ describe('LLMInteractionHandler', () => {
           visual_cues: {
             is_primary: true,
             background_color_name: 'blue',
-            is_clickable: true
+            is_clickable: true,
           },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
-        }
+          z_index: 1,
+        },
       ];
 
       const snap: Snapshot = {
         status: 'success',
         url: 'https://example.com',
-        elements
+        elements,
       };
 
       const context = handler.buildContext(snap, 'test goal');
@@ -96,18 +95,18 @@ describe('LLMInteractionHandler', () => {
           visual_cues: {
             is_primary: false,
             background_color_name: null,
-            is_clickable: true
+            is_clickable: true,
           },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
-        }
+          z_index: 1,
+        },
       ];
 
       const snap: Snapshot = {
         status: 'success',
         url: 'https://example.com',
-        elements
+        elements,
       };
 
       const context = handler.buildContext(snap, 'test');
@@ -124,7 +123,7 @@ describe('LLMInteractionHandler', () => {
         modelName: 'mock-model',
         promptTokens: 100,
         completionTokens: 20,
-        totalTokens: 120
+        totalTokens: 120,
       };
       mockLLM = new MockLLMProvider([response]);
       handler = new LLMInteractionHandler(mockLLM, false);
@@ -141,7 +140,7 @@ describe('LLMInteractionHandler', () => {
           throw new Error('LLM error');
         },
         modelName: 'error-model',
-        supportsJsonMode: () => false
+        supportsJsonMode: () => false,
       } as any;
 
       handler = new LLMInteractionHandler(errorLLM, false);
@@ -157,7 +156,7 @@ describe('LLMInteractionHandler', () => {
     it('should extract action from LLM response', () => {
       const response: LLMResponse = {
         content: '  CLICK(42)  ',
-        modelName: 'mock-model'
+        modelName: 'mock-model',
       };
 
       const action = handler.extractAction(response);
@@ -168,7 +167,7 @@ describe('LLMInteractionHandler', () => {
     it('should handle empty response', () => {
       const response: LLMResponse = {
         content: '',
-        modelName: 'mock-model'
+        modelName: 'mock-model',
       };
 
       const action = handler.extractAction(response);
@@ -177,4 +176,3 @@ describe('LLMInteractionHandler', () => {
     });
   });
 });
-

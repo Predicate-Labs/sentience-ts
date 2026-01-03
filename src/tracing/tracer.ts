@@ -14,7 +14,7 @@ export class Tracer {
   private runId: string;
   private sink: TraceSink;
   private seq: number;
-  
+
   // Stats tracking
   private totalSteps: number = 0;
   private totalEvents: number = 0;
@@ -43,11 +43,7 @@ export class Tracer {
    * @param data - Event-specific payload
    * @param stepId - Optional step UUID
    */
-  emit(
-    eventType: string,
-    data: TraceEventData,
-    stepId?: string
-  ): void {
+  emit(eventType: string, data: TraceEventData, stepId?: string): void {
     this.seq += 1;
     this.totalEvents += 1;
 
@@ -90,11 +86,7 @@ export class Tracer {
    * @param llmModel - Optional LLM model name
    * @param config - Optional configuration
    */
-  emitRunStart(
-    agent: string,
-    llmModel?: string,
-    config?: Record<string, any>
-  ): void {
+  emitRunStart(agent: string, llmModel?: string, config?: Record<string, any>): void {
     // Track start time
     this.startedAt = new Date();
 
@@ -161,8 +153,11 @@ export class Tracer {
     this.totalSteps = Math.max(this.totalSteps, steps);
 
     // Ensure finalStatus is a valid status value
-    const validStatus: 'success' | 'failure' | 'partial' | 'unknown' = 
-      finalStatus === 'success' || finalStatus === 'failure' || finalStatus === 'partial' || finalStatus === 'unknown'
+    const validStatus: 'success' | 'failure' | 'partial' | 'unknown' =
+      finalStatus === 'success' ||
+      finalStatus === 'failure' ||
+      finalStatus === 'partial' ||
+      finalStatus === 'unknown'
         ? finalStatus
         : 'unknown';
 
