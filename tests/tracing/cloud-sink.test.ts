@@ -534,8 +534,8 @@ describe('CloudTraceSink', () => {
         apiUrl
       );
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
-      sink.emit({ v: 1, type: 'snapshot', seq: 2, data: { url: 'https://example.com' } });
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' }, ts: '100', run_id: runId });
+      sink.emit({ v: 1, type: 'snapshot', seq: 2, data: { url: 'https://example.com' }, ts: '101', run_id: runId });
 
       await sink.close();
 
