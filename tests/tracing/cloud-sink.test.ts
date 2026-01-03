@@ -446,7 +446,7 @@ describe('CloudTraceSink', () => {
 
       const sink = new CloudTraceSink(uploadUrl, runId); // No API key
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' }, ts: '100', run_id: runId });
 
       await sink.close();
 
@@ -485,7 +485,7 @@ describe('CloudTraceSink', () => {
         apiUrl
       );
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' }, ts: '100', run_id: runId });
 
       // Should not throw even if index upload fails
       await expect(sink.close()).resolves.not.toThrow();
