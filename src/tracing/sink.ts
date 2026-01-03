@@ -4,15 +4,17 @@
  * Defines the interface for trace event sinks (local files, cloud storage, etc.)
  */
 
+import { TraceEvent } from './types';
+
 /**
  * Abstract base class for trace sinks
  */
 export abstract class TraceSink {
   /**
    * Emit a trace event
-   * @param event - Event dictionary to emit
+   * @param event - Trace event to emit
    */
-  abstract emit(event: Record<string, any>): void;
+  abstract emit(event: TraceEvent): void;
 
   /**
    * Close the sink and flush buffered data

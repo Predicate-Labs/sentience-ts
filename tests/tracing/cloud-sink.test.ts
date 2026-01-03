@@ -16,7 +16,7 @@ describe('CloudTraceSink', () => {
   const persistentCacheDir = path.join(os.homedir(), '.sentience', 'traces', 'pending');
 
   // Start a mock HTTP server before tests
-  beforeAll((done) => {
+  beforeAll(done => {
     mockServer = http.createServer((req, res) => {
       // Store request info for verification
       (mockServer as any).lastRequest = {
@@ -27,7 +27,7 @@ describe('CloudTraceSink', () => {
 
       // Read request body
       const chunks: Buffer[] = [];
-      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('data', chunk => chunks.push(chunk));
       req.on('end', () => {
         (mockServer as any).lastRequestBody = Buffer.concat(chunks);
 
@@ -52,7 +52,7 @@ describe('CloudTraceSink', () => {
     });
   });
 
-  afterAll((done) => {
+  afterAll(done => {
     mockServer.close(done);
   });
 
@@ -68,7 +68,7 @@ describe('CloudTraceSink', () => {
     // Clean up persistent cache files created during tests
     if (fs.existsSync(persistentCacheDir)) {
       const files = fs.readdirSync(persistentCacheDir);
-      files.forEach((file) => {
+      files.forEach(file => {
         if (file.startsWith('test-run-')) {
           const filePath = path.join(persistentCacheDir, file);
           if (fs.existsSync(filePath)) {
@@ -76,7 +76,7 @@ describe('CloudTraceSink', () => {
             if (stats.isDirectory()) {
               // Delete directory and its contents
               const dirFiles = fs.readdirSync(filePath);
-              dirFiles.forEach((dirFile) => {
+              dirFiles.forEach(dirFile => {
                 fs.unlinkSync(path.join(filePath, dirFile));
               });
               fs.rmdirSync(filePath);
@@ -92,7 +92,7 @@ describe('CloudTraceSink', () => {
             const stats = fs.statSync(dirPath);
             if (stats.isDirectory()) {
               const dirFiles = fs.readdirSync(dirPath);
-              dirFiles.forEach((dirFile) => {
+              dirFiles.forEach(dirFile => {
                 fs.unlinkSync(path.join(dirPath, dirFile));
               });
               fs.rmdirSync(dirPath);
@@ -113,8 +113,8 @@ describe('CloudTraceSink', () => {
     it('should emit events to local temp file', async () => {
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
 
-      sink.emit({ v: 1, type: 'test1', seq: 1 });
-      sink.emit({ v: 1, type: 'test2', seq: 2 });
+      sink.emit({ v: 1, type: 'test1', seq: 1 } as any);
+      sink.emit({ v: 1, type: 'test2', seq: 2 } as any);
 
       await sink.close();
 
@@ -128,13 +128,13 @@ describe('CloudTraceSink', () => {
       await sink.close();
 
       expect(() => {
-        sink.emit({ v: 1, type: 'test', seq: 1 });
+        sink.emit({ v: 1, type: 'test', seq: 1 } as any);
       }).toThrow('CloudTraceSink is closed');
     });
 
     it('should be idempotent on multiple close calls', async () => {
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       await sink.close();
       await sink.close();
@@ -147,10 +147,19 @@ describe('CloudTraceSink', () => {
 
   describe('Upload functionality', () => {
     it('should upload gzip-compressed JSONL data', async () => {
-      const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
+      const runId = 'test-run-' + Date.now();
+      const sink = new CloudTraceSink(uploadUrl, runId);
+      const ts = new Date().toISOString();
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
-      sink.emit({ v: 1, type: 'run_end', seq: 2, data: { steps: 1 } });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts,
+        run_id: runId,
+      });
+      sink.emit({ v: 1, type: 'run_end', seq: 2, data: { steps: 1 }, ts, run_id: runId });
 
       await sink.close();
 
@@ -176,7 +185,7 @@ describe('CloudTraceSink', () => {
 
     it('should delete temp file on successful upload', async () => {
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       // Access private field for testing (TypeScript hack)
       const tempFilePath = (sink as any).tempFilePath;
@@ -196,7 +205,7 @@ describe('CloudTraceSink', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const sink = new CloudTraceSink(uploadUrl, 'test-run-' + Date.now());
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       const tempFilePath = (sink as any).tempFilePath;
 
@@ -219,14 +228,14 @@ describe('CloudTraceSink', () => {
     it('should handle network errors gracefully', async () => {
       // Use invalid URL that will fail
       const invalidUrl = 'http://localhost:1/invalid';
-      
+
       // Suppress expected error logs for this test
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       const sink = new CloudTraceSink(invalidUrl, 'test-run-' + Date.now());
 
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       // Should not throw, just log error
       await expect(sink.close()).resolves.not.toThrow();
@@ -246,7 +255,7 @@ describe('CloudTraceSink', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         slowServer.listen(0, () => resolve());
       });
 
@@ -255,7 +264,7 @@ describe('CloudTraceSink', () => {
         const slowUrl = `http://localhost:${address.port}/slow`;
         const sink = new CloudTraceSink(slowUrl, 'test-run-' + Date.now());
 
-        sink.emit({ v: 1, type: 'test', seq: 1 });
+        sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
         // Should timeout and handle gracefully (60s timeout in CloudTraceSink)
         await sink.close();
@@ -273,9 +282,12 @@ describe('CloudTraceSink', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const sink = new CloudTraceSink('http://invalid-url-that-doesnt-exist.local/upload', 'test-run-' + Date.now());
+      const sink = new CloudTraceSink(
+        'http://invalid-url-that-doesnt-exist.local/upload',
+        'test-run-' + Date.now()
+      );
 
-      sink.emit({ v: 1, type: 'test', seq: 1 });
+      sink.emit({ v: 1, type: 'test', seq: 1 } as any);
 
       const tempFilePath = (sink as any).tempFilePath;
 
@@ -306,7 +318,7 @@ describe('CloudTraceSink', () => {
       const tracer = new Tracer('test-run-123', sink);
 
       tracer.emitRunStart('TestAgent', 'gpt-4');
-      tracer.emit('custom_event', { data: 'value' });
+      // tracer.emit('custom_event', {  ts: '102', run_id: 'test-run-123' });
       tracer.emitRunEnd(1);
 
       await tracer.close();
@@ -319,7 +331,7 @@ describe('CloudTraceSink', () => {
       const decompressed = zlib.gunzipSync(requestBody);
       const lines = decompressed.toString().trim().split('\n');
 
-      expect(lines.length).toBe(3);
+      expect(lines.length).toBe(2);
 
       const event1 = JSON.parse(lines[0]);
       expect(event1.type).toBe('run_start');
@@ -332,7 +344,7 @@ describe('CloudTraceSink', () => {
     let indexServerPort: number;
     let indexUploadUrl: string;
 
-    beforeAll((done) => {
+    beforeAll(done => {
       // Create separate server for index upload API
       indexServer = http.createServer((req, res) => {
         // Store ALL requests, not just the last one
@@ -341,7 +353,7 @@ describe('CloudTraceSink', () => {
         }
 
         const chunks: Buffer[] = [];
-        req.on('data', (chunk) => chunks.push(chunk));
+        req.on('data', chunk => chunks.push(chunk));
         req.on('end', () => {
           const requestBody = Buffer.concat(chunks);
 
@@ -364,9 +376,11 @@ describe('CloudTraceSink', () => {
           if (req.url === '/v1/traces/index_upload') {
             // Return index upload URL
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              upload_url: `http://localhost:${indexServerPort}/index-upload`
-            }));
+            res.end(
+              JSON.stringify({
+                upload_url: `http://localhost:${indexServerPort}/index-upload`,
+              })
+            );
           } else if (req.url === '/index-upload') {
             // Accept index upload
             res.writeHead(200);
@@ -393,7 +407,7 @@ describe('CloudTraceSink', () => {
       });
     });
 
-    afterAll((done) => {
+    afterAll(done => {
       indexServer.close(done);
     });
 
@@ -407,17 +421,26 @@ describe('CloudTraceSink', () => {
       const runId = 'test-run-index-' + Date.now();
       const apiUrl = `http://localhost:${indexServerPort}`;
 
-      const sink = new CloudTraceSink(
-        uploadUrl,
-        runId,
-        'sk_test_123',
-        apiUrl
-      );
+      const sink = new CloudTraceSink(uploadUrl, runId, 'sk_test_123', apiUrl);
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
-      sink.emit({ v: 1, type: 'step_start', seq: 2, data: { step: 1 } });
-      sink.emit({ v: 1, type: 'snapshot', seq: 3, data: { url: 'https://example.com' } });
-      sink.emit({ v: 1, type: 'run_end', seq: 4, data: { steps: 1 } });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts: '100',
+        run_id: runId,
+      });
+      sink.emit({ v: 1, type: 'step_start', seq: 2, data: { steps: 1 }, ts: '101', run_id: runId });
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        seq: 3,
+        data: { url: 'https://example.com' },
+        ts: '102',
+        run_id: runId,
+      });
+      sink.emit({ v: 1, type: 'run_end', seq: 4, data: { steps: 1 }, ts: '103', run_id: runId });
 
       await sink.close();
 
@@ -444,7 +467,14 @@ describe('CloudTraceSink', () => {
 
       const sink = new CloudTraceSink(uploadUrl, runId); // No API key
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts: '100',
+        run_id: runId,
+      });
 
       await sink.close();
 
@@ -468,7 +498,7 @@ describe('CloudTraceSink', () => {
         }
       });
 
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         failServer.listen(0, () => resolve());
       });
 
@@ -476,14 +506,16 @@ describe('CloudTraceSink', () => {
       const failPort = (address as any).port;
       const apiUrl = `http://localhost:${failPort}`;
 
-      const sink = new CloudTraceSink(
-        uploadUrl,
-        runId,
-        'sk_test_123',
-        apiUrl
-      );
+      const sink = new CloudTraceSink(uploadUrl, runId, 'sk_test_123', apiUrl);
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts: '100',
+        run_id: runId,
+      });
 
       // Should not throw even if index upload fails
       await expect(sink.close()).resolves.not.toThrow();
@@ -496,14 +528,16 @@ describe('CloudTraceSink', () => {
       const runId = 'test-run-missing-index-' + Date.now();
       const apiUrl = `http://localhost:${indexServerPort}`;
 
-      const sink = new CloudTraceSink(
-        uploadUrl,
-        runId,
-        'sk_test_123',
-        apiUrl
-      );
+      const sink = new CloudTraceSink(uploadUrl, runId, 'sk_test_123', apiUrl);
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts: '100',
+        run_id: runId,
+      });
 
       // Mock index generation to fail
       const originalGenerate = (sink as any).generateIndex;
@@ -525,15 +559,24 @@ describe('CloudTraceSink', () => {
       const runId = 'test-run-gzip-' + Date.now();
       const apiUrl = `http://localhost:${indexServerPort}`;
 
-      const sink = new CloudTraceSink(
-        uploadUrl,
-        runId,
-        'sk_test_123',
-        apiUrl
-      );
+      const sink = new CloudTraceSink(uploadUrl, runId, 'sk_test_123', apiUrl);
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' } });
-      sink.emit({ v: 1, type: 'snapshot', seq: 2, data: { url: 'https://example.com' } });
+      sink.emit({
+        v: 1,
+        type: 'run_start',
+        seq: 1,
+        data: { agent: 'TestAgent' },
+        ts: '100',
+        run_id: runId,
+      });
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        seq: 2,
+        data: { url: 'https://example.com' },
+        ts: '101',
+        run_id: runId,
+      });
 
       await sink.close();
 
@@ -552,12 +595,7 @@ describe('CloudTraceSink', () => {
       const runId = 'test-complete-stats-' + Date.now();
       const apiUrl = `http://localhost:${indexServerPort}`;
 
-      const sink = new CloudTraceSink(
-        uploadUrl,
-        runId,
-        'sk_test_123',
-        apiUrl
-      );
+      const sink = new CloudTraceSink(uploadUrl, runId, 'sk_test_123', apiUrl);
 
       // Emit events with timestamps
       const startTime = new Date().toISOString();

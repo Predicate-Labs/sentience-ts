@@ -53,7 +53,7 @@ describe('Tracer', () => {
   afterEach(async () => {
     // Wait longer for file handles to close (Windows needs more time)
     await new Promise(resolve => setTimeout(resolve, 200));
-    
+
     // Clean up the specific file for this test
     if (testFile) {
       try {
@@ -113,11 +113,11 @@ describe('Tracer', () => {
       const tracer = new Tracer('test-run', sink);
 
       const before = Date.now();
-      tracer.emit('test', { data: 'test' });
+      tracer.emit('test', { goal: 'test' });
       const after = Date.now();
 
       await tracer.close();
-      
+
       // Wait a bit for file to be fully written and flushed (Windows needs this)
       await new Promise(resolve => setTimeout(resolve, 50));
 
@@ -481,8 +481,8 @@ describe('Tracer', () => {
       const mockSink = new MockSink();
       const tracer = new Tracer('test-run', mockSink);
 
-      tracer.emit('event1', { data: 1 });
-      tracer.emit('event2', { data: 2 });
+      tracer.emit('event1', { goal: 'event1' });
+      tracer.emit('event2', { goal: 'event2' });
 
       expect(mockSink.events.length).toBe(2);
       expect(mockSink.events[0].type).toBe('event1');
@@ -652,7 +652,8 @@ describe('Tracer', () => {
     it('should include auto-inferred final_status in stats when close() is called with CloudTraceSink', async () => {
       const { CloudTraceSink } = await import('../../src/tracing/cloud-sink');
 
-      const uploadUrl = 'https://sentience.nyc3.digitaloceanspaces.com/user123/run456/trace.jsonl.gz';
+      const uploadUrl =
+        'https://sentience.nyc3.digitaloceanspaces.com/user123/run456/trace.jsonl.gz';
       const runId = 'test-close-status-' + Date.now();
       const apiKey = 'sk_test_123';
       const apiUrl = 'https://api.sentience.ai';

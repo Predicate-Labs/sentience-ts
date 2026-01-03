@@ -1,6 +1,6 @@
 /**
  * Test bot evasion and stealth mode features.
- * 
+ *
  * This test verifies that stealth features are working:
  * - navigator.webdriver is false
  * - window.chrome exists
@@ -10,6 +10,7 @@
  */
 
 import { SentienceBrowser } from '../src/browser';
+import { getPageOrThrow } from './test-utils';
 
 describe('Stealth Mode / Bot Evasion', () => {
   let browser: SentienceBrowser;
@@ -25,19 +26,19 @@ describe('Stealth Mode / Bot Evasion', () => {
   });
 
   test('navigator.webdriver should be false', async () => {
-    const page = browser.getPage();
+    const page = getPageOrThrow(browser);
     const webdriver = await page.evaluate(() => (navigator as any).webdriver);
     expect(webdriver).toBeFalsy();
   });
 
   test('window.chrome should exist', async () => {
-    const page = browser.getPage();
+    const page = getPageOrThrow(browser);
     const chromeExists = await page.evaluate(() => typeof (window as any).chrome !== 'undefined');
     expect(chromeExists).toBe(true);
   });
 
   test('user-agent should not contain HeadlessChrome', async () => {
-    const page = browser.getPage();
+    const page = getPageOrThrow(browser);
     const userAgent = await page.evaluate(() => navigator.userAgent);
     expect(userAgent).not.toContain('HeadlessChrome');
     expect(userAgent).toContain('Chrome');
@@ -57,9 +58,9 @@ describe('Stealth Mode / Bot Evasion', () => {
       { width: 1920, height: 1080 } // viewport
     );
     await testBrowser.start();
-    
+
     try {
-      const page = testBrowser.getPage();
+      const page = getPageOrThrow(testBrowser);
       const viewport = await page.evaluate(() => ({
         width: window.innerWidth,
         height: window.innerHeight,
@@ -72,13 +73,13 @@ describe('Stealth Mode / Bot Evasion', () => {
   });
 
   test('navigator.plugins should exist', async () => {
-    const page = browser.getPage();
+    const page = getPageOrThrow(browser);
     const pluginsCount = await page.evaluate(() => navigator.plugins.length);
     expect(pluginsCount).toBeGreaterThan(0);
   });
 
   test('permissions API should be patched', async () => {
-    const page = browser.getPage();
+    const page = getPageOrThrow(browser);
     const hasPermissions = await page.evaluate(() => {
       return !!(navigator.permissions && navigator.permissions.query);
     });
@@ -86,8 +87,8 @@ describe('Stealth Mode / Bot Evasion', () => {
   });
 
   test('should pass basic bot detection checks', async () => {
-    const page = browser.getPage();
-    
+    const page = getPageOrThrow(browser);
+
     const detectionResults = await page.evaluate(() => {
       return {
         webdriver: (navigator as any).webdriver,
@@ -108,16 +109,16 @@ describe('Stealth Mode / Bot Evasion', () => {
   });
 
   test('should be able to navigate to bot detection test site', async () => {
-    const page = browser.getPage();
-    
+    const page = getPageOrThrow(browser);
+
     try {
       await page.goto('https://bot.sannysoft.com/', {
         waitUntil: 'domcontentloaded',
         timeout: 10000,
       });
-      
+
       await page.waitForTimeout(2000); // Wait for page to load
-      
+
       // Check detection results
       const results = await page.evaluate(() => {
         return {
@@ -126,13 +127,13 @@ describe('Stealth Mode / Bot Evasion', () => {
           plugins: navigator.plugins.length,
         };
       });
-      
+
       // At least 2 out of 3 should pass
       let passCount = 0;
       if (results.webdriver === false) passCount++;
       if (results.chrome === true) passCount++;
       if (results.plugins > 0) passCount++;
-      
+
       expect(passCount).toBeGreaterThanOrEqual(2);
     } catch (e: any) {
       // Site may be down or blocked - that's okay
@@ -140,4 +141,3 @@ describe('Stealth Mode / Bot Evasion', () => {
     }
   });
 });
-

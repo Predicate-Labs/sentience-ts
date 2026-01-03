@@ -6,6 +6,7 @@ import { SentienceBrowser } from '../src';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getPageOrThrow } from './test-utils';
 
 describe('video recording', () => {
   let tempDir: string;
@@ -38,8 +39,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -74,8 +76,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -92,15 +95,21 @@ describe('video recording', () => {
     const customPath = path.join(videoDir, 'my_recording.webm');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(customPath);
 
@@ -118,15 +127,21 @@ describe('video recording', () => {
     const nestedPath = path.join(videoDir, 'project', 'tutorials', 'video1.webm');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(nestedPath);
 
@@ -146,8 +161,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -164,15 +180,21 @@ describe('video recording', () => {
     const videoDir = path.join(tempDir, 'new_recordings', 'subdir');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -193,15 +215,21 @@ describe('video recording', () => {
     // Create 3 video recordings
     for (let i = 0; i < 3; i++) {
       const browser = new SentienceBrowser(
-        undefined, undefined, true, undefined, undefined, undefined,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
         videoDir
       );
 
       await browser.start();
 
       try {
-        await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const outputPath = path.join(videoDir, `video_${i}.webm`);
         const videoPath = await browser.close(outputPath);
@@ -222,7 +250,12 @@ describe('video recording', () => {
 
   it('should use default resolution of 1280x800', () => {
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       path.join(tempDir, 'recordings')
     );
 
@@ -232,16 +265,21 @@ describe('video recording', () => {
 
   it('should handle video recording with various resolutions', async () => {
     const resolutions = [
-      { width: 1280, height: 720 },   // 720p
-      { width: 1920, height: 1080 },  // 1080p
-      { width: 2560, height: 1440 },  // 1440p
+      { width: 1280, height: 720 }, // 720p
+      { width: 1920, height: 1080 }, // 1080p
+      { width: 2560, height: 1440 }, // 1440p
     ];
 
     for (const resolution of resolutions) {
       const videoDir = path.join(tempDir, `recordings_${resolution.width}x${resolution.height}`);
 
       const browser = new SentienceBrowser(
-        undefined, undefined, true, undefined, undefined, undefined,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
         videoDir,
         resolution
       );
@@ -249,8 +287,9 @@ describe('video recording', () => {
       await browser.start();
 
       try {
-        await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const videoPath = await browser.close();
 

@@ -47,7 +47,7 @@ export class ScriptGenerator {
       '  try {',
       '    await browser.start();',
       `    await browser.getPage().goto('${this.trace.start_url}');`,
-      '    await browser.getPage().waitForLoadState(\'networkidle\');',
+      "    await browser.getPage().waitForLoadState('networkidle');",
       '',
     ];
 
@@ -55,7 +55,14 @@ export class ScriptGenerator {
       lines.push(...this.generateTypeScriptStep(step, '    '));
     }
 
-    lines.push('  } finally {', '    await browser.close();', '  }', '}', '', 'main().catch(console.error);');
+    lines.push(
+      '  } finally {',
+      '    await browser.close();',
+      '  }',
+      '}',
+      '',
+      'main().catch(console.error);'
+    );
 
     return lines.join('\n');
   }
@@ -171,4 +178,3 @@ export function generate(trace: Trace, language: 'py' | 'ts' = 'py'): string {
     return generator.generateTypeScript();
   }
 }
-
