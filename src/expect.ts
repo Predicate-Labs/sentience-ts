@@ -7,6 +7,7 @@ import { Element, QuerySelector } from './types';
 import { waitFor } from './wait';
 import { query } from './query';
 import { snapshot } from './snapshot';
+import { selectorToString } from './utils/selector-utils';
 
 export class Expectation {
   constructor(
@@ -19,14 +20,14 @@ export class Expectation {
 
     if (!result.found) {
       throw new Error(
-        `Element not found: ${this.selector} (timeout: ${timeout}ms)`
+        `Element not found: ${selectorToString(this.selector)} (timeout: ${timeout}ms)`
       );
     }
 
     const element = result.element!;
     if (!element.in_viewport) {
       throw new Error(
-        `Element found but not visible in viewport: ${this.selector}`
+        `Element found but not visible in viewport: ${selectorToString(this.selector)}`
       );
     }
 
@@ -38,7 +39,7 @@ export class Expectation {
 
     if (!result.found) {
       throw new Error(
-        `Element does not exist: ${this.selector} (timeout: ${timeout}ms)`
+        `Element does not exist: ${selectorToString(this.selector)} (timeout: ${timeout}ms)`
       );
     }
 
@@ -50,15 +51,13 @@ export class Expectation {
 
     if (!result.found) {
       throw new Error(
-        `Element not found: ${this.selector} (timeout: ${timeout}ms)`
+        `Element not found: ${selectorToString(this.selector)} (timeout: ${timeout}ms)`
       );
     }
 
     const element = result.element!;
     if (!element.text || !element.text.includes(expectedText)) {
-      throw new Error(
-        `Element text mismatch. Expected '${expectedText}', got '${element.text}'`
-      );
+      throw new Error(`Element text mismatch. Expected '${expectedText}', got '${element.text}'`);
     }
 
     return element;
@@ -75,7 +74,7 @@ export class Expectation {
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
 
     // Final check
@@ -83,15 +82,10 @@ export class Expectation {
     const matches = query(snap, this.selector);
     const actualCount = matches.length;
 
-    throw new Error(
-      `Element count mismatch. Expected ${expectedCount}, got ${actualCount}`
-    );
+    throw new Error(`Element count mismatch. Expected ${expectedCount}, got ${actualCount}`);
   }
 }
 
 export function expect(browser: SentienceBrowser, selector: QuerySelector): Expectation {
   return new Expectation(browser, selector);
 }
-
-
-

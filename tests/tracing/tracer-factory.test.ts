@@ -16,7 +16,7 @@ describe('createTracer', () => {
   const testTracesDir = path.join(process.cwd(), 'traces');
 
   // Start a mock HTTP server before tests
-  beforeAll((done) => {
+  beforeAll(done => {
     mockServer = http.createServer((req, res) => {
       // Store request info for verification
       (mockServer as any).lastRequest = {
@@ -27,7 +27,7 @@ describe('createTracer', () => {
 
       // Read request body
       const chunks: Buffer[] = [];
-      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('data', chunk => chunks.push(chunk));
       req.on('end', () => {
         (mockServer as any).lastRequestBody = Buffer.concat(chunks);
 
@@ -40,7 +40,7 @@ describe('createTracer', () => {
             // Simulate timeout - don't respond (connection will timeout)
             return; // Don't call res.end() - this will cause a timeout
           }
-          
+
           if (authorization && (mockServer as any).shouldError) {
             // Simulate error - return 500 without upload_url
             res.writeHead(500);
@@ -84,7 +84,7 @@ describe('createTracer', () => {
     });
   });
 
-  afterAll((done) => {
+  afterAll(done => {
     mockServer.close(done);
   });
 
@@ -105,7 +105,7 @@ describe('createTracer', () => {
     // Cleanup traces directory
     if (fs.existsSync(testTracesDir)) {
       const files = fs.readdirSync(testTracesDir);
-      files.forEach((file) => {
+      files.forEach(file => {
         const filePath = path.join(testTracesDir, file);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
@@ -241,7 +241,7 @@ describe('createTracer', () => {
         runId: 'test-run',
         apiUrl: 'http://localhost:1/invalid', // Invalid port
       });
-      
+
       expect(tracer).toBeDefined();
       expect(tracer.getSinkType()).toContain('JsonlTraceSink');
 
@@ -260,7 +260,7 @@ describe('createTracer', () => {
         }
       });
 
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         tempServer.listen(0, () => resolve());
       });
 
@@ -342,7 +342,7 @@ describe('createLocalTracer', () => {
     // Cleanup traces directory
     if (fs.existsSync(testTracesDir)) {
       const files = fs.readdirSync(testTracesDir);
-      files.forEach((file) => {
+      files.forEach(file => {
         const filePath = path.join(testTracesDir, file);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);

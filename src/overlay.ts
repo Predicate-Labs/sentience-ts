@@ -56,6 +56,9 @@ export async function showOverlay(
   targetElementId: number | null = null
 ): Promise<void> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   // Handle different input types
   let elementsList: any[];
@@ -94,6 +97,9 @@ export async function showOverlay(
  */
 export async function clearOverlay(browser: SentienceBrowser): Promise<void> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   await page.evaluate(() => {
     if ((window as any).sentience && (window as any).sentience.clearOverlay) {

@@ -11,6 +11,9 @@ export class Inspector {
 
   async start(): Promise<void> {
     const page = this.browser.getPage();
+    if (!page) {
+      throw new Error('Browser not started. Call start() first.');
+    }
     this.active = true;
 
     // Inject inspector script into page
@@ -124,7 +127,10 @@ export class Inspector {
                 .then((snap: any) => {
                   const element = snap.elements.find((el: any) => el.id === elementId);
                   if (element) {
-                    console.log('[Sentience Inspector] Snapshot element:', JSON.stringify(element, null, 2));
+                    console.log(
+                      '[Sentience Inspector] Snapshot element:',
+                      JSON.stringify(element, null, 2)
+                    );
                   }
                 })
                 .catch(() => {});
@@ -144,12 +150,17 @@ export class Inspector {
         (window as any).__sentience_inspector_active = false;
       };
 
-      console.log('[Sentience Inspector] ✅ Inspection mode active. Hover elements to see info, click to see full details.');
+      console.log(
+        '[Sentience Inspector] ✅ Inspection mode active. Hover elements to see info, click to see full details.'
+      );
     });
   }
 
   async stop(): Promise<void> {
     const page = this.browser.getPage();
+    if (!page) {
+      return; // Already stopped or never started
+    }
     this.active = false;
 
     // Cleanup inspector
@@ -164,6 +175,3 @@ export class Inspector {
 export function inspect(browser: SentienceBrowser): Inspector {
   return new Inspector(browser);
 }
-
-
-

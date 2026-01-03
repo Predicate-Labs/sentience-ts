@@ -24,14 +24,9 @@ export {
   LLMResponse,
   OpenAIProvider,
   AnthropicProvider,
-  GLMProvider
+  GLMProvider,
 } from './llm-provider';
-export {
-  SentienceAgent,
-  AgentActResult,
-  HistoryEntry,
-  TokenStats
-} from './agent';
+export { SentienceAgent, AgentActResult, HistoryEntry, TokenStats } from './agent';
 
 // Conversational Agent Layer (v0.3.0+)
 export {
@@ -41,15 +36,8 @@ export {
   StepResult,
   ConversationEntry,
   ActionType,
-  ActionParameters
+  ActionParameters,
 } from './conversational-agent';
 
 // Tracing Layer (v0.3.1+)
-export {
-  Tracer,
-  TraceSink,
-  JsonlTraceSink,
-  TraceEvent,
-  TraceEventData
-} from './tracing';
-
+export { Tracer, TraceSink, JsonlTraceSink, TraceEvent, TraceEventData } from './tracing';

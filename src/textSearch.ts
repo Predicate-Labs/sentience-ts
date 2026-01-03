@@ -2,8 +2,8 @@
  * Text search utilities - find text and get pixel coordinates
  */
 
-import { Page } from "playwright";
-import { FindTextRectOptions, TextRectSearchResult } from "./types";
+import { Page } from 'playwright';
+import { FindTextRectOptions, TextRectSearchResult } from './types';
 
 /**
  * Find all occurrences of text on the page and get their exact pixel coordinates.
@@ -67,20 +67,14 @@ export async function findTextRect(
   options: FindTextRectOptions | string
 ): Promise<TextRectSearchResult> {
   // Support simple string input for convenience
-  const opts: FindTextRectOptions =
-    typeof options === "string" ? { text: options } : options;
+  const opts: FindTextRectOptions = typeof options === 'string' ? { text: options } : options;
 
-  const {
-    text,
-    caseSensitive = false,
-    wholeWord = false,
-    maxResults = 10,
-  } = opts;
+  const { text, caseSensitive = false, wholeWord = false, maxResults = 10 } = opts;
 
   if (!text || text.trim().length === 0) {
     return {
-      status: "error",
-      error: "Text parameter is required and cannot be empty",
+      status: 'error',
+      error: 'Text parameter is required and cannot be empty',
     };
   }
 
@@ -91,21 +85,22 @@ export async function findTextRect(
   // The new architecture loads injected_api.js asynchronously, so window.sentience
   // may not be immediately available after page load
   try {
-    await page.waitForFunction(
-      () => typeof (window as any).sentience !== 'undefined',
-      { timeout: 5000 }
-    );
+    await page.waitForFunction(() => typeof (window as any).sentience !== 'undefined', {
+      timeout: 5000,
+    });
   } catch (e) {
     // Gather diagnostics if wait fails
-    const diag = await page.evaluate(() => ({
-      sentience_defined: typeof (window as any).sentience !== 'undefined',
-      extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
-      url: window.location.href
-    })).catch(() => ({ error: 'Could not gather diagnostics' }));
+    const diag = await page
+      .evaluate(() => ({
+        sentience_defined: typeof (window as any).sentience !== 'undefined',
+        extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
+        url: window.location.href,
+      }))
+      .catch(() => ({ error: 'Could not gather diagnostics' }));
 
     throw new Error(
       `Sentience extension failed to inject window.sentience API. ` +
-      `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
+        `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
     );
   }
 
@@ -116,13 +111,13 @@ export async function findTextRect(
   if (!hasFindTextRect) {
     throw new Error(
       'window.sentience.findTextRect is not available. ' +
-      'Please update the Sentience extension to the latest version.'
+        'Please update the Sentience extension to the latest version.'
     );
   }
 
   // Call the extension's findTextRect method
   const result = await page.evaluate(
-    (evalOptions) => {
+    evalOptions => {
       return (window as any).sentience.findTextRect(evalOptions);
     },
     {

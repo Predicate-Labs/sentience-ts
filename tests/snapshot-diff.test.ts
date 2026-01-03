@@ -14,7 +14,7 @@ function createVisualCues(): VisualCues {
   return {
     is_primary: false,
     background_color_name: null,
-    is_clickable: true
+    is_clickable: true,
   };
 }
 
@@ -38,7 +38,7 @@ function createElement(
     visual_cues: createVisualCues(),
     in_viewport: true,
     is_occluded: false,
-    z_index: 0
+    z_index: 0,
   };
 }
 
@@ -48,7 +48,7 @@ function createSnapshot(elements: Element[], url: string = 'http://example.com')
     status: 'success',
     url,
     viewport,
-    elements
+    elements,
   };
 }
 
@@ -57,7 +57,7 @@ describe('SnapshotDiff', () => {
     it('should mark all elements as ADDED when no previous snapshot', () => {
       const elements = [
         createElement(1, { text: 'Button 1' }),
-        createElement(2, { text: 'Button 2' })
+        createElement(2, { text: 'Button 2' }),
       ];
       const current = createSnapshot(elements);
 
@@ -86,7 +86,7 @@ describe('SnapshotDiff', () => {
       const previousElements = [createElement(1, { text: 'Button 1' })];
       const currentElements = [
         createElement(1, { text: 'Button 1' }),
-        createElement(2, { text: 'Button 2' }) // New element
+        createElement(2, { text: 'Button 2' }), // New element
       ];
 
       const previous = createSnapshot(previousElements);
@@ -106,7 +106,7 @@ describe('SnapshotDiff', () => {
     it('should include removed elements with REMOVED status', () => {
       const previousElements = [
         createElement(1, { text: 'Button 1' }),
-        createElement(2, { text: 'Button 2' })
+        createElement(2, { text: 'Button 2' }),
       ];
       const currentElements = [createElement(1, { text: 'Button 1' })];
 
@@ -198,7 +198,7 @@ describe('SnapshotDiff', () => {
         createElement(1, { text: 'Unchanged' }),
         createElement(2, { text: 'Will be removed' }),
         createElement(3, { text: 'Old text' }),
-        createElement(4, { x: 100 })
+        createElement(4, { x: 100 }),
       ];
 
       const currentElements = [
@@ -206,7 +206,7 @@ describe('SnapshotDiff', () => {
         // Element 2 removed
         createElement(3, { text: 'New text' }), // Modified
         createElement(4, { x: 200 }), // Moved
-        createElement(5, { text: 'New element' }) // Added
+        createElement(5, { text: 'New element' }), // Added
       ];
 
       const previous = createSnapshot(previousElements);

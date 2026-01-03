@@ -35,17 +35,21 @@ function getPersistentCacheDir(): string {
 /**
  * Recover orphaned traces from previous crashes
  * PRODUCTION FIX: Risk #3 - Upload traces from crashed sessions
- * 
+ *
  * Note: Silently skips in test environments to avoid test noise
  */
-async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_API_URL): Promise<void> {
+async function recoverOrphanedTraces(
+  apiKey: string,
+  apiUrl: string = SENTIENCE_API_URL
+): Promise<void> {
   // Skip orphan recovery in test environments (CI, Jest, etc.)
   // This prevents test failures from orphan recovery attempts
-  const isTestEnv = process.env.CI === 'true' || 
-                    process.env.NODE_ENV === 'test' ||
-                    process.env.JEST_WORKER_ID !== undefined ||
-                    (typeof global !== 'undefined' && (global as any).__JEST__);
-  
+  const isTestEnv =
+    process.env.CI === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.JEST_WORKER_ID !== undefined ||
+    (typeof global !== 'undefined' && (global as any).__JEST__);
+
   if (isTestEnv) {
     return;
   }
@@ -68,7 +72,9 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
     return;
   }
 
-  console.log(`⚠️  [Sentience] Found ${orphanedFiles.length} un-uploaded trace(s) from previous run(s)`);
+  console.log(
+    `⚠️  [Sentience] Found ${orphanedFiles.length} un-uploaded trace(s) from previous run(s)`
+  );
   console.log('   Attempting to upload now...');
 
   for (const file of orphanedFiles) {
@@ -84,9 +90,9 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
           { run_id: runId },
           { Authorization: `Bearer ${apiKey}` }
         ),
-        new Promise<{ status: number; data: any }>((resolve) => 
+        new Promise<{ status: number; data: any }>(resolve =>
           setTimeout(() => resolve({ status: 500, data: {} }), 5000)
-        )
+        ),
       ]);
 
       if (response.status === 200 && response.data.upload_url) {
@@ -116,7 +122,11 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
 /**
  * Make HTTP/HTTPS POST request using built-in Node modules
  */
-function httpPost(url: string, data: any, headers: Record<string, string>): Promise<{
+function httpPost(
+  url: string,
+  data: any,
+  headers: Record<string, string>
+): Promise<{
   status: number;
   data: any;
 }> {
@@ -139,10 +149,10 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
       timeout: 10000, // 10 second timeout
     };
 
-    const req = protocol.request(options, (res) => {
+    const req = protocol.request(options, res => {
       let responseBody = '';
 
-      res.on('data', (chunk) => {
+      res.on('data', chunk => {
         responseBody += chunk;
       });
 
@@ -156,7 +166,7 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
       });
     });
 
-    req.on('error', (error) => {
+    req.on('error', error => {
       reject(error);
     });
 

@@ -38,7 +38,7 @@ class MockLLMProvider extends LLMProvider {
     this.calls.push({
       system: systemPrompt,
       user: userPrompt,
-      options
+      options,
     });
 
     const response = this.responses[this.callCount % this.responses.length];
@@ -49,7 +49,7 @@ class MockLLMProvider extends LLMProvider {
       promptTokens: 100,
       completionTokens: 20,
       totalTokens: 120,
-      modelName: 'mock-model'
+      modelName: 'mock-model',
     };
   }
 
@@ -72,7 +72,7 @@ describe('LLMProvider', () => {
         promptTokens: 100,
         completionTokens: 20,
         totalTokens: 120,
-        modelName: 'gpt-4o'
+        modelName: 'gpt-4o',
       };
 
       expect(response.content).toBe('CLICK(42)');
@@ -131,8 +131,8 @@ describe('LLMProvider', () => {
 function createMockBrowser(): SentienceBrowser {
   const browser = {
     getPage: jest.fn().mockReturnValue({
-      url: 'https://example.com'
-    })
+      url: 'https://example.com',
+    }),
   } as any;
   return browser;
 }
@@ -148,11 +148,11 @@ function createMockSnapshot(): Snapshot {
       visual_cues: {
         is_primary: true,
         is_clickable: true,
-        background_color_name: 'blue'
+        background_color_name: 'blue',
       } as VisualCues,
       in_viewport: true,
       is_occluded: false,
-      z_index: 10
+      z_index: 10,
     },
     {
       id: 2,
@@ -163,12 +163,12 @@ function createMockSnapshot(): Snapshot {
       visual_cues: {
         is_primary: false,
         is_clickable: true,
-        background_color_name: null
+        background_color_name: null,
       } as VisualCues,
       in_viewport: true,
       is_occluded: false,
-      z_index: 5
-    }
+      z_index: 5,
+    },
   ];
 
   return {
@@ -176,7 +176,7 @@ function createMockSnapshot(): Snapshot {
     timestamp: '2024-12-24T10:00:00Z',
     url: 'https://example.com',
     viewport: { width: 1920, height: 1080 } as Viewport,
-    elements
+    elements,
   };
 }
 
@@ -229,7 +229,7 @@ describe('SentienceAgent', () => {
         success: true,
         duration_ms: 150,
         outcome: 'dom_updated',
-        url_changed: false
+        url_changed: false,
       } as ActionResult);
 
       jest.spyOn(actionsModule, 'click').mockImplementation(mockClick);
@@ -252,7 +252,7 @@ describe('SentienceAgent', () => {
       const mockType = jest.fn().mockResolvedValue({
         success: true,
         duration_ms: 200,
-        outcome: 'dom_updated'
+        outcome: 'dom_updated',
       } as ActionResult);
 
       jest.spyOn(actionsModule, 'typeText').mockImplementation(mockType);
@@ -276,7 +276,7 @@ describe('SentienceAgent', () => {
       const mockPress = jest.fn().mockResolvedValue({
         success: true,
         duration_ms: 50,
-        outcome: 'dom_updated'
+        outcome: 'dom_updated',
       } as ActionResult);
 
       jest.spyOn(actionsModule, 'press').mockImplementation(mockPress);
@@ -308,9 +308,9 @@ describe('SentienceAgent', () => {
 
       const snap = createMockSnapshot();
 
-      await expect(
-        (agent as any).executeAction('INVALID_ACTION', snap)
-      ).rejects.toThrow('Unknown action format');
+      await expect((agent as any).executeAction('INVALID_ACTION', snap)).rejects.toThrow(
+        'Unknown action format'
+      );
     });
   });
 
@@ -329,7 +329,7 @@ describe('SentienceAgent', () => {
         success: true,
         duration_ms: 150,
         outcome: 'dom_updated',
-        url_changed: false
+        url_changed: false,
       } as ActionResult);
       jest.spyOn(actionsModule, 'click').mockImplementation(mockClick);
 
@@ -359,13 +359,13 @@ describe('SentienceAgent', () => {
         content: 'CLICK(1)',
         promptTokens: 100,
         completionTokens: 20,
-        totalTokens: 120
+        totalTokens: 120,
       };
       const response2: LLMResponse = {
         content: 'TYPE(2, "test")',
         promptTokens: 150,
         completionTokens: 30,
-        totalTokens: 180
+        totalTokens: 180,
       };
 
       (agent as any).trackTokens('goal 1', response1);
@@ -407,7 +407,7 @@ describe('SentienceAgent', () => {
       const mockResult: ActionResult = {
         success: true,
         duration_ms: 100,
-        outcome: 'dom_updated'
+        outcome: 'dom_updated',
       };
 
       const mockClick = jest.fn().mockResolvedValue(mockResult);

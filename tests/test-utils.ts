@@ -23,12 +23,11 @@ export async function createTestBrowser(headless?: boolean): Promise<SentienceBr
     // Enhance error message but don't log here (Jest will handle it)
     const enhancedError = new Error(
       `Browser startup failed: ${e.message}\n` +
-      'Make sure:\n' +
-      '1. Playwright browsers are installed: npx playwright install chromium\n' +
-      '2. Extension is built: cd sentience-chrome && ./build.sh'
+        'Make sure:\n' +
+        '1. Playwright browsers are installed: npx playwright install chromium\n' +
+        '2. Extension is built: cd sentience-chrome && ./build.sh'
     );
     enhancedError.stack = e.stack;
     throw enhancedError;
   }
 }
-
