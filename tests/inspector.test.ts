@@ -3,29 +3,30 @@
  */
 
 import { SentienceBrowser, inspect } from '../src';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('Inspector', () => {
   it('should start and stop', async () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const inspector = inspect(browser);
       await inspector.start();
 
-      const active = await browser
-        .getPage()
-        .evaluate(() => (window as any).__sentience_inspector_active === true);
+      const active = await page.evaluate(
+        () => (window as any).__sentience_inspector_active === true
+      );
       expect(active).toBe(true);
 
       await inspector.stop();
 
-      const inactive = await browser
-        .getPage()
-        .evaluate(() => (window as any).__sentience_inspector_active === true);
+      const inactive = await page.evaluate(
+        () => (window as any).__sentience_inspector_active === true
+      );
       expect(inactive).toBe(false);
     } finally {
       await browser.close();

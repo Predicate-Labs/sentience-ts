@@ -6,15 +6,16 @@ import { SentienceBrowser, record, Recorder } from '../src';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('Recorder', () => {
   it('should start and stop', async () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -32,8 +33,9 @@ describe('Recorder', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -56,8 +58,9 @@ describe('Recorder', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -80,8 +83,9 @@ describe('Recorder', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -102,8 +106,9 @@ describe('Recorder', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();

@@ -193,12 +193,24 @@ function httpPost(
  * @param options.apiUrl - Sentience API base URL (default: https://api.sentienceapi.com)
  * @param options.logger - Optional logger instance for logging file sizes and errors
  * @param options.uploadTrace - Enable cloud trace upload (default: true for backward compatibility)
+ * @param options.goal - User's goal/objective for this trace run. This will be displayed as the trace name in the frontend. Should be descriptive and action-oriented. Example: "Add wireless headphones to cart on Amazon"
+ * @param options.agentType - Type of agent running (e.g., "SentienceAgent", "CustomAgent")
+ * @param options.llmModel - LLM model used (e.g., "gpt-4-turbo", "claude-3-5-sonnet")
+ * @param options.startUrl - Starting URL of the agent run (e.g., "https://amazon.com")
  * @returns Tracer configured with appropriate sink
  *
  * @example
  * ```typescript
- * // Pro tier user with cloud upload
- * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo", uploadTrace: true });
+ * // Pro tier user with goal and metadata
+ * const tracer = await createTracer({
+ *   apiKey: "sk_pro_xyz",
+ *   runId: "demo",
+ *   goal: "Add headphones to cart",
+ *   agentType: "SentienceAgent",
+ *   llmModel: "gpt-4-turbo",
+ *   startUrl: "https://amazon.com",
+ *   uploadTrace: true
+ * });
  * // Returns: Tracer with CloudTraceSink
  *
  * // Pro tier user with local-only tracing
@@ -221,6 +233,10 @@ export async function createTracer(options: {
   apiUrl?: string;
   logger?: SentienceLogger;
   uploadTrace?: boolean;
+  goal?: string;
+  agentType?: string;
+  llmModel?: string;
+  startUrl?: string;
 }): Promise<Tracer> {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || SENTIENCE_API_URL;
@@ -242,12 +258,32 @@ export async function createTracer(options: {
   // Only attempt cloud init if uploadTrace is enabled
   if (options.apiKey && uploadTrace) {
     try {
+      // Build metadata object for trace initialization
+      // Only include non-empty fields to avoid sending empty strings
+      const metadata: Record<string, string> = {};
+      if (options.goal && options.goal.trim()) {
+        metadata.goal = options.goal.trim();
+      }
+      if (options.agentType && options.agentType.trim()) {
+        metadata.agent_type = options.agentType.trim();
+      }
+      if (options.llmModel && options.llmModel.trim()) {
+        metadata.llm_model = options.llmModel.trim();
+      }
+      if (options.startUrl && options.startUrl.trim()) {
+        metadata.start_url = options.startUrl.trim();
+      }
+
+      // Build request payload
+      const payload: Record<string, any> = { run_id: runId };
+      if (Object.keys(metadata).length > 0) {
+        payload.metadata = metadata;
+      }
+
       // Request pre-signed upload URL from backend
-      const response = await httpPost(
-        `${apiUrl}/v1/traces/init`,
-        { run_id: runId },
-        { Authorization: `Bearer ${options.apiKey}` }
-      );
+      const response = await httpPost(`${apiUrl}/v1/traces/init`, payload, {
+        Authorization: `Bearer ${options.apiKey}`,
+      });
 
       if (response.status === 200 && response.data.upload_url) {
         const uploadUrl = response.data.upload_url;

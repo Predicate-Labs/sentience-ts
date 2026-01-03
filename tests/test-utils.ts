@@ -3,6 +3,7 @@
  */
 
 import { SentienceBrowser } from '../src';
+import { Page } from 'playwright';
 
 /**
  * Creates a browser instance and starts it with better error handling
@@ -30,4 +31,16 @@ export async function createTestBrowser(headless?: boolean): Promise<SentienceBr
     enhancedError.stack = e.stack;
     throw enhancedError;
   }
+}
+
+/**
+ * Gets the page from browser and throws if it's null
+ * Helper function for tests to avoid repetitive null checks
+ */
+export function getPageOrThrow(browser: SentienceBrowser): Page {
+  const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser page is not available. Make sure browser.start() was called.');
+  }
+  return page;
 }

@@ -3,14 +3,15 @@
  */
 
 import { SentienceBrowser, read } from '../src';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('read', () => {
   it('should read page as text', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const result = await read(browser, { format: 'text' });
 
@@ -28,8 +29,9 @@ describe('read', () => {
   it('should read page as markdown', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const result = await read(browser, { format: 'markdown' });
 
@@ -47,8 +49,9 @@ describe('read', () => {
   it('should enhance markdown by default', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       // Test with enhancement (default)
       const resultEnhanced = await read(browser, {

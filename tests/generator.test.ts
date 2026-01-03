@@ -6,15 +6,16 @@ import { SentienceBrowser, record, ScriptGenerator } from '../src';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('ScriptGenerator', () => {
   it('should generate Python code', async () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -40,8 +41,9 @@ describe('ScriptGenerator', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -66,8 +68,9 @@ describe('ScriptGenerator', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();
@@ -93,8 +96,9 @@ describe('ScriptGenerator', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const rec = record(browser);
       rec.start();

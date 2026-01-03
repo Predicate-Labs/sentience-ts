@@ -6,6 +6,7 @@ import { SentienceBrowser } from '../src';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getPageOrThrow } from './test-utils';
 
 describe('video recording', () => {
   let tempDir: string;
@@ -38,8 +39,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -74,8 +76,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -104,8 +107,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(customPath);
 
@@ -135,8 +139,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close(nestedPath);
 
@@ -156,8 +161,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -186,8 +192,9 @@ describe('video recording', () => {
     await browser.start();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('domcontentloaded');
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('domcontentloaded');
 
       const videoPath = await browser.close();
 
@@ -220,8 +227,9 @@ describe('video recording', () => {
       await browser.start();
 
       try {
-        await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const outputPath = path.join(videoDir, `video_${i}.webm`);
         const videoPath = await browser.close(outputPath);
@@ -279,8 +287,9 @@ describe('video recording', () => {
       await browser.start();
 
       try {
-        await browser.getPage().goto('https://example.com');
-        await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const videoPath = await browser.close();
 

@@ -3,15 +3,16 @@
  */
 
 import { SentienceBrowser, snapshot } from '../src';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('Snapshot', () => {
   it('should take a basic snapshot', async () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const snap = await snapshot(browser);
 
@@ -28,8 +29,9 @@ describe('Snapshot', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const snap = await snapshot(browser);
 
@@ -50,8 +52,9 @@ describe('Snapshot', () => {
     const browser = await createTestBrowser();
 
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       // Test snapshot with goal
       const snap = await snapshot(browser, { goal: 'Find the main heading' });

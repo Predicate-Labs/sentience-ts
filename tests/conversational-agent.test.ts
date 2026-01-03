@@ -188,8 +188,10 @@ describe('ConversationalAgent', () => {
 
       const response = await agent.execute('Go to Google');
 
-      expect(mockBrowser.getPage().goto).toHaveBeenCalledWith('https://google.com');
-      expect(mockBrowser.getPage().waitForLoadState).toHaveBeenCalledWith('domcontentloaded');
+      const mockPage = mockBrowser.getPage();
+      expect(mockPage).not.toBeNull();
+      expect(mockPage!.goto).toHaveBeenCalledWith('https://google.com');
+      expect(mockPage!.waitForLoadState).toHaveBeenCalledWith('domcontentloaded');
       expect(response).toContain('Google');
     });
   });
@@ -281,7 +283,9 @@ describe('ConversationalAgent', () => {
 
       const response = await agent.execute('Press Enter');
 
-      expect(mockBrowser.getPage().keyboard.press).toHaveBeenCalledWith('Enter');
+      const mockPage = mockBrowser.getPage();
+      expect(mockPage).not.toBeNull();
+      expect(mockPage!.keyboard.press).toHaveBeenCalledWith('Enter');
       expect(response).toBeTruthy();
     });
   });
@@ -311,7 +315,9 @@ describe('ConversationalAgent', () => {
 
       const response = await agent.execute('Wait 3 seconds');
 
-      expect(mockBrowser.getPage().waitForTimeout).toHaveBeenCalledWith(3000);
+      const mockPage = mockBrowser.getPage();
+      expect(mockPage).not.toBeNull();
+      expect(mockPage!.waitForTimeout).toHaveBeenCalledWith(3000);
       expect(response).toBeTruthy();
     });
 
@@ -339,7 +345,9 @@ describe('ConversationalAgent', () => {
 
       await agent.execute('Wait a moment');
 
-      expect(mockBrowser.getPage().waitForTimeout).toHaveBeenCalledWith(2000);
+      const mockPage = mockBrowser.getPage();
+      expect(mockPage).not.toBeNull();
+      expect(mockPage!.waitForTimeout).toHaveBeenCalledWith(2000);
     });
   });
 
@@ -484,9 +492,11 @@ describe('ConversationalAgent', () => {
 
       const response = await agent.execute('Search Google for TypeScript');
 
-      expect(mockBrowser.getPage().goto).toHaveBeenCalled();
+      const mockPage = mockBrowser.getPage();
+      expect(mockPage).not.toBeNull();
+      expect(mockPage!.goto).toHaveBeenCalled();
       expect(mockActFn).toHaveBeenCalled();
-      expect(mockBrowser.getPage().keyboard.press).toHaveBeenCalledWith('Enter');
+      expect(mockPage!.keyboard.press).toHaveBeenCalledWith('Enter');
       expect(response).toContain('TypeScript');
     });
 

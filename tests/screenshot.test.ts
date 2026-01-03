@@ -3,14 +3,15 @@
  */
 
 import { SentienceBrowser, screenshot } from '../src';
-import { createTestBrowser } from './test-utils';
+import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('screenshot', () => {
   it('should capture PNG screenshot', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser, { format: 'png' });
 
@@ -28,8 +29,9 @@ describe('screenshot', () => {
   it('should capture JPEG screenshot', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser, { format: 'jpeg', quality: 80 });
 
@@ -47,8 +49,9 @@ describe('screenshot', () => {
   it('should use PNG as default format', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       const dataUrl = await screenshot(browser);
 
@@ -61,8 +64,9 @@ describe('screenshot', () => {
   it('should validate JPEG quality', async () => {
     const browser = await createTestBrowser();
     try {
-      await browser.getPage().goto('https://example.com');
-      await browser.getPage().waitForLoadState('networkidle', { timeout: 10000 });
+      const page = getPageOrThrow(browser);
+      await page.goto('https://example.com');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
 
       // Valid quality
       await screenshot(browser, { format: 'jpeg', quality: 50 }); // Should not throw

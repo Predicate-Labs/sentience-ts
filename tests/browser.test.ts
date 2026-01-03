@@ -221,6 +221,9 @@ describe('Browser Proxy Support', () => {
 
         // Verify viewport is preserved
         const page = browser.getPage();
+        if (!page) {
+          throw new Error('Browser page is not available');
+        }
         await page.goto('https://example.com');
         await page.waitForLoadState('networkidle', { timeout: 10000 });
 
