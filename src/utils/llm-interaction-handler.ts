@@ -20,14 +20,20 @@ export class LLMInteractionHandler {
   /**
    * Build context string from snapshot for LLM prompt
    *
+   * Format: [ID] <role> "text" {cues} @ (x,y) size:WxH importance:score [status]
+   *
    * @param snap - Snapshot containing elements
-   * @param goal - Goal/task description
+   * @param goal - Goal/task description (unused but kept for API consistency)
    * @returns Formatted context string
    */
   buildContext(snap: Snapshot, _goal: string): string {
     const lines: string[] = [];
 
     for (const el of snap.elements) {
+      // Skip REMOVED elements - they're not actionable and shouldn't be in LLM context
+      if (el.diff_status === 'REMOVED') {
+        continue;
+      }
       // Extract visual cues
       const cues: string[] = [];
       if (el.visual_cues.is_primary) cues.push('PRIMARY');
@@ -36,14 +42,44 @@ export class LLMInteractionHandler {
         cues.push(`color:${el.visual_cues.background_color_name}`);
       }
 
-      // Format element line
+      // Format element line with improved readability
       const cuesStr = cues.length > 0 ? ` {${cues.join(',')}}` : '';
-      const text = el.text || '';
-      const textPreview = text.length > 50 ? text.substring(0, 50) + '...' : text;
 
+      // Better text handling - show truncation indicator
+      let textPreview = '';
+      if (el.text) {
+        if (el.text.length > 50) {
+          textPreview = `"${el.text.substring(0, 50)}..."`;
+        } else {
+          textPreview = `"${el.text}"`;
+        }
+      }
+
+      // Build position and size info
+      const x = Math.floor(el.bbox.x);
+      const y = Math.floor(el.bbox.y);
+      const width = Math.floor(el.bbox.width);
+      const height = Math.floor(el.bbox.height);
+      const positionStr = `@ (${x},${y})`;
+      const sizeStr = `size:${width}x${height}`;
+
+      // Build status indicators (only include if relevant)
+      const statusParts: string[] = [];
+      if (!el.in_viewport) {
+        statusParts.push('not_in_viewport');
+      }
+      if (el.is_occluded) {
+        statusParts.push('occluded');
+      }
+      if (el.diff_status) {
+        statusParts.push(`diff:${el.diff_status}`);
+      }
+      const statusStr = statusParts.length > 0 ? ` [${statusParts.join(',')}]` : '';
+
+      // Format: [ID] <role> "text" {cues} @ (x,y) size:WxH importance:score [status]
       lines.push(
-        `[${el.id}] <${el.role}> "${textPreview}"${cuesStr} ` +
-          `@ (${Math.floor(el.bbox.x)},${Math.floor(el.bbox.y)}) (Imp:${el.importance})`
+        `[${el.id}] <${el.role}> ${textPreview}${cuesStr} ` +
+          `${positionStr} ${sizeStr} importance:${el.importance}${statusStr}`
       );
     }
 
@@ -59,23 +95,60 @@ export class LLMInteractionHandler {
    */
   async queryLLM(domContext: string, goal: string): Promise<LLMResponse> {
     const systemPrompt = `You are an AI web automation agent.
-Your job is to analyze the current page state and decide the next action to take.
 
-Available actions:
-- CLICK(id) - Click element with ID
-- TYPE(id, "text") - Type text into element with ID
-- PRESS("key") - Press keyboard key (e.g., "Enter", "Escape", "Tab")
-- FINISH() - Task is complete
+GOAL: ${goal}
 
-Format your response as a single action command on one line.
-Example: CLICK(42) or TYPE(5, "search query") or PRESS("Enter")`;
-
-    const userPrompt = `Goal: ${goal}
-
-Current page elements:
+VISIBLE ELEMENTS (sorted by importance):
 ${domContext}
 
-What action should I take next? Respond with only the action command (e.g., CLICK(42)).`;
+VISUAL CUES EXPLAINED:
+After the text, you may see visual cues in curly braces like {CLICKABLE} or {PRIMARY,CLICKABLE,color:white}:
+- PRIMARY: Main call-to-action element on the page
+- CLICKABLE: Element is clickable/interactive
+- color:X: Background color name (e.g., color:white, color:blue)
+Multiple cues are comma-separated inside the braces: {CLICKABLE,color:white}
+
+ELEMENT FORMAT EXPLAINED:
+Each element line follows this format:
+[ID] <role> "text" {cues} @ (x,y) size:WxH importance:score [status]
+
+Example: [346] <button> "Computer Accessories" {CLICKABLE,color:white} @ (664,100) size:150x40 importance:811
+
+Breaking down each part:
+- [ID]: The number in brackets is the element ID - use this EXACT number in CLICK/TYPE commands
+  Example: If you see [346], use CLICK(346) or TYPE(346, "text")
+- <role>: Element type (button, link, textbox, etc.)
+- "text": Visible text content (truncated with "..." if long)
+- {cues}: Optional visual cues in curly braces (e.g., {CLICKABLE}, {PRIMARY,CLICKABLE}, {CLICKABLE,color:white})
+  If no cues, this part is omitted entirely
+- @ (x,y): Element position in pixels from top-left corner
+- size:WxH: Element dimensions (width x height in pixels)
+- importance: Score indicating element relevance (higher = more important)
+- [status]: Optional status flags in brackets (not_in_viewport, occluded, diff:ADDED/MODIFIED/etc)
+
+CRITICAL RESPONSE FORMAT:
+You MUST respond with ONLY ONE of these exact action formats:
+- CLICK(id) - Click element by ID (use the number from [ID] brackets)
+- TYPE(id, "text") - Type text into element (use the number from [ID] brackets)
+- PRESS("key") - Press keyboard key (Enter, Escape, Tab, ArrowDown, etc)
+- FINISH() - Task complete
+
+DO NOT include any explanation, reasoning, or natural language.
+DO NOT use markdown formatting or code blocks.
+DO NOT say "The next step is..." or anything similar.
+
+CORRECT Examples (matching element IDs from the list above):
+If element is [346] <button> "Click me" → respond: CLICK(346)
+If element is [15] <textbox> "Search" → respond: TYPE(15, "magic mouse")
+PRESS("Enter")
+FINISH()
+
+INCORRECT Examples (DO NOT DO THIS):
+"The next step is to click..."
+"I will type..."
+\`\`\`CLICK(42)\`\`\``;
+
+    const userPrompt = 'Return the single action command:';
 
     try {
       const response = await this.llm.generate(systemPrompt, userPrompt, {
