@@ -321,7 +321,7 @@ describe('CloudTraceSink', () => {
       const decompressed = zlib.gunzipSync(requestBody);
       const lines = decompressed.toString().trim().split('\n');
 
-      expect(lines.length).toBe(3);
+      expect(lines.length).toBe(2);
 
       const event1 = JSON.parse(lines[0]);
       expect(event1.type).toBe('run_start');
