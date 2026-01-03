@@ -75,7 +75,7 @@ describe('TraceFileManager', () => {
         ts: '2024-01-01T00:00:00.000Z',
         run_id: 'test-run',
         seq: 1,
-        data: { goal: 'test goal' }
+        data: { goal: 'test goal' },
       };
 
       const result = TraceFileManager.writeEvent(stream, event);
@@ -136,4 +136,3 @@ describe('TraceFileManager', () => {
     });
   });
 });
-

@@ -3,7 +3,7 @@
  * Natural language interface for browser automation
  */
 
-import { SentienceAgent, AgentActResult } from './agent';
+import { SentienceAgent } from './agent';
 import { LLMProvider } from './llm-provider';
 import { snapshot } from './snapshot';
 import { SentienceBrowser } from './browser';
@@ -93,12 +93,7 @@ export class ConversationalAgent {
     this.planningModel = options.planningModel;
     this.executionModel = options.executionModel;
 
-    this.sentienceAgent = new SentienceAgent(
-      this.browser,
-      this.llmProvider,
-      50,
-      this.verbose
-    );
+    this.sentienceAgent = new SentienceAgent(this.browser, this.llmProvider, 50, this.verbose);
   }
 
   /**
@@ -116,7 +111,7 @@ export class ConversationalAgent {
     this.conversationHistory.push({
       role: 'user',
       content: userInput,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     try {
@@ -152,7 +147,7 @@ export class ConversationalAgent {
         content: response,
         timestamp: new Date(),
         plan,
-        results
+        results,
       });
 
       const duration = Date.now() - startTime;
@@ -161,7 +156,6 @@ export class ConversationalAgent {
       }
 
       return response;
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const response = `I encountered an error while trying to help: ${errorMessage}`;
@@ -169,7 +163,7 @@ export class ConversationalAgent {
       this.conversationHistory.push({
         role: 'assistant',
         content: response,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return response;
@@ -215,7 +209,7 @@ Return a JSON object with this structure:
     const userPrompt = `Create an execution plan for this request: ${userInput}`;
 
     const llmResponse = await this.llmProvider.generate(systemPrompt, userPrompt, {
-      json_mode: this.llmProvider.supportsJsonMode()
+      json_mode: this.llmProvider.supportsJsonMode(),
     });
 
     const plan = JSON.parse(llmResponse.content) as ExecutionPlan;
@@ -242,8 +236,12 @@ Return a JSON object with this structure:
           if (!step.parameters.url) {
             throw new Error('NAVIGATE requires url parameter');
           }
-          await this.browser.getPage().goto(step.parameters.url);
-          await this.browser.getPage().waitForLoadState('domcontentloaded');
+          const navPage = this.browser.getPage();
+          if (!navPage) {
+            throw new Error('Browser not started. Call start() first.');
+          }
+          await navPage.goto(step.parameters.url);
+          await navPage.waitForLoadState('domcontentloaded');
           snap = await snapshot(this.browser);
           result = { navigated_to: step.parameters.url };
           break;
@@ -272,14 +270,22 @@ Return a JSON object with this structure:
           if (!step.parameters.key) {
             throw new Error('PRESS_KEY requires key parameter');
           }
-          await this.browser.getPage().keyboard.press(step.parameters.key);
+          const pressPage = this.browser.getPage();
+          if (!pressPage) {
+            throw new Error('Browser not started. Call start() first.');
+          }
+          await pressPage.keyboard.press(step.parameters.key);
           snap = await snapshot(this.browser);
           result = { key_pressed: step.parameters.key };
           break;
 
         case 'WAIT':
           const seconds = step.parameters.seconds ?? 2;
-          await this.browser.getPage().waitForTimeout(seconds * 1000);
+          const waitPage = this.browser.getPage();
+          if (!waitPage) {
+            throw new Error('Browser not started. Call start() first.');
+          }
+          await waitPage.waitForTimeout(seconds * 1000);
           snap = await snapshot(this.browser);
           result = { waited_seconds: seconds };
           break;
@@ -289,10 +295,7 @@ Return a JSON object with this structure:
             throw new Error('EXTRACT_INFO requires info_type parameter');
           }
           snap = await snapshot(this.browser);
-          const extractedInfo = await this.extractInformation(
-            snap,
-            step.parameters.info_type
-          );
+          const extractedInfo = await this.extractInformation(snap, step.parameters.info_type);
           result = { info: extractedInfo };
           break;
 
@@ -315,16 +318,15 @@ Return a JSON object with this structure:
         action: step.action,
         result,
         snapshot: snap,
-        duration_ms: duration
+        duration_ms: duration,
       };
-
     } catch (error) {
       const duration = Date.now() - startTime;
       return {
         success: false,
         action: step.action,
         error: error instanceof Error ? error.message : String(error),
-        duration_ms: duration
+        duration_ms: duration,
       };
     }
   }
@@ -426,16 +428,18 @@ Given the user's request and execution results, provide a natural, conversationa
    */
   async getSummary(): Promise<string> {
     if (this.conversationHistory.length === 0) {
-      return "No conversation history yet.";
+      return 'No conversation history yet.';
     }
 
-    const context = this.conversationHistory.map((entry, i) => {
-      let text = `${i + 1}. [${entry.role}]: ${entry.content}`;
-      if (entry.plan) {
-        text += ` (${entry.plan.steps.length} steps)`;
-      }
-      return text;
-    }).join('\n');
+    const context = this.conversationHistory
+      .map((entry, i) => {
+        let text = `${i + 1}. [${entry.role}]: ${entry.content}`;
+        if (entry.plan) {
+          text += ` (${entry.plan.steps.length} steps)`;
+        }
+        return text;
+      })
+      .join('\n');
 
     const systemPrompt = `You are summarizing a browser automation conversation session.
 Provide a brief summary of what was accomplished.`;

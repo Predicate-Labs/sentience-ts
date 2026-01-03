@@ -1,6 +1,6 @@
 /**
  * Test bot evasion and stealth mode features.
- * 
+ *
  * This test verifies that stealth features are working:
  * - navigator.webdriver is false
  * - window.chrome exists
@@ -57,7 +57,7 @@ describe('Stealth Mode / Bot Evasion', () => {
       { width: 1920, height: 1080 } // viewport
     );
     await testBrowser.start();
-    
+
     try {
       const page = testBrowser.getPage();
       const viewport = await page.evaluate(() => ({
@@ -87,7 +87,7 @@ describe('Stealth Mode / Bot Evasion', () => {
 
   test('should pass basic bot detection checks', async () => {
     const page = browser.getPage();
-    
+
     const detectionResults = await page.evaluate(() => {
       return {
         webdriver: (navigator as any).webdriver,
@@ -109,15 +109,15 @@ describe('Stealth Mode / Bot Evasion', () => {
 
   test('should be able to navigate to bot detection test site', async () => {
     const page = browser.getPage();
-    
+
     try {
       await page.goto('https://bot.sannysoft.com/', {
         waitUntil: 'domcontentloaded',
         timeout: 10000,
       });
-      
+
       await page.waitForTimeout(2000); // Wait for page to load
-      
+
       // Check detection results
       const results = await page.evaluate(() => {
         return {
@@ -126,13 +126,13 @@ describe('Stealth Mode / Bot Evasion', () => {
           plugins: navigator.plugins.length,
         };
       });
-      
+
       // At least 2 out of 3 should pass
       let passCount = 0;
       if (results.webdriver === false) passCount++;
       if (results.chrome === true) passCount++;
       if (results.plugins > 0) passCount++;
-      
+
       expect(passCount).toBeGreaterThanOrEqual(2);
     } catch (e: any) {
       // Site may be down or blocked - that's okay
@@ -140,4 +140,3 @@ describe('Stealth Mode / Bot Evasion', () => {
     }
   });
 });
-

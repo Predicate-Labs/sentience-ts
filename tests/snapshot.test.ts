@@ -140,4 +140,3 @@ describe('Element ML Fields', () => {
     expect(element).not.toHaveProperty('ml_score');
   });
 });
-

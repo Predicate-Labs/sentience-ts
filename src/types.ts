@@ -32,23 +32,23 @@ export interface Element {
   z_index: number;
 
   // ML reranking metadata (optional - can be absent or null)
-  rerank_index?: number;  // 0-based, The rank after ML reranking
-  heuristic_index?: number;  // 0-based, Where it would have been without ML
-  ml_probability?: number;  // Confidence score from ONNX model (0.0 - 1.0)
-  ml_score?: number;  // Raw logit score (optional, for debugging)
+  rerank_index?: number; // 0-based, The rank after ML reranking
+  heuristic_index?: number; // 0-based, Where it would have been without ML
+  ml_probability?: number; // Confidence score from ONNX model (0.0 - 1.0)
+  ml_score?: number; // Raw logit score (optional, for debugging)
 
   // Diff status for frontend Diff Overlay feature
-  diff_status?: "ADDED" | "REMOVED" | "MODIFIED" | "MOVED";
+  diff_status?: 'ADDED' | 'REMOVED' | 'MODIFIED' | 'MOVED';
 }
 
 export interface Snapshot {
-  status: "success" | "error";
+  status: 'success' | 'error';
   timestamp?: string;
   url: string;
   viewport?: Viewport;
   elements: Element[];
   screenshot?: string;
-  screenshot_format?: "png" | "jpeg";
+  screenshot_format?: 'png' | 'jpeg';
   error?: string;
   requires_license?: boolean;
 }
@@ -59,7 +59,7 @@ export interface Snapshot {
  */
 export interface ScreenshotMetadata {
   sequence: number;
-  format: "png" | "jpeg";
+  format: 'png' | 'jpeg';
   sizeBytes: number;
   stepId: string | null;
   filepath: string;
@@ -68,7 +68,7 @@ export interface ScreenshotMetadata {
 export interface ActionResult {
   success: boolean;
   duration_ms: number;
-  outcome?: "navigated" | "dom_updated" | "no_change" | "error";
+  outcome?: 'navigated' | 'dom_updated' | 'no_change' | 'error';
   url_changed?: boolean;
   snapshot_after?: Snapshot;
   error?: {
@@ -110,7 +110,7 @@ export interface Cookie {
   expires?: number; // Unix timestamp
   httpOnly?: boolean;
   secure?: boolean;
-  sameSite?: "Strict" | "Lax" | "None";
+  sameSite?: 'Strict' | 'Lax' | 'None';
 }
 
 /**
@@ -211,7 +211,7 @@ export interface TextMatch {
  * Returns all occurrences of text on the page with their exact pixel coordinates.
  */
 export interface TextRectSearchResult {
-  status: "success" | "error";
+  status: 'success' | 'error';
   /** The search text that was queried */
   query?: string;
   /** Whether search was case-sensitive */
@@ -246,6 +246,3 @@ export interface FindTextRectOptions {
   /** Maximum number of results to return (default: 10) */
   maxResults?: number;
 }
-
-
-

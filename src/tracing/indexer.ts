@@ -60,13 +60,15 @@ function computeSnapshotDigest(snapshotData: any): string {
   const canonicalElements = elements.map((elem: any) => {
     // Extract is_primary and is_clickable from visual_cues if present
     const visualCues = elem.visual_cues || {};
-    const isPrimary = (typeof visualCues === 'object' && visualCues !== null)
-      ? (visualCues.is_primary || false)
-      : (elem.is_primary || false);
-    const isClickable = (typeof visualCues === 'object' && visualCues !== null)
-      ? (visualCues.is_clickable || false)
-      : (elem.is_clickable || false);
-    
+    const isPrimary =
+      typeof visualCues === 'object' && visualCues !== null
+        ? visualCues.is_primary || false
+        : elem.is_primary || false;
+    const isClickable =
+      typeof visualCues === 'object' && visualCues !== null
+        ? visualCues.is_clickable || false
+        : elem.is_clickable || false;
+
     return {
       id: elem.id,
       role: elem.role || '',
@@ -214,12 +216,12 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
           stepOrder.length,
           stepId,
           null,
-          'failure',  // Default to failure (will be updated by step_end event)
+          'failure', // Default to failure (will be updated by step_end event)
           ts,
           ts,
           byteOffset,
           byteOffset + lineBytes,
-          lineNumber,  // Track line number
+          lineNumber, // Track line number
           null,
           null,
           new SnapshotInfo(),
@@ -235,7 +237,7 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
     // Update step metadata
     step.ts_end = ts;
     step.offset_end = byteOffset + lineBytes;
-    step.line_number = lineNumber;  // Update line number on each event
+    step.line_number = lineNumber; // Update line number on each event
     step.counters.events++;
 
     // Handle specific event types
@@ -280,10 +282,10 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
       //        failure = !exec.success
       const execData = data.exec || {};
       const verifyData = data.verify || {};
-      
+
       const execSuccess = execData.success === true;
       const verifyPassed = verifyData.passed === true;
-      
+
       if (execSuccess && verifyPassed) {
         step.status = 'success';
       } else if (execSuccess && !verifyPassed) {
@@ -326,13 +328,13 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
       } else if (stepStatuses.some(s => s === 'partial')) {
         summaryStatus = 'partial';
       } else {
-        summaryStatus = 'failure';  // Default to failure instead of unknown
+        summaryStatus = 'failure'; // Default to failure instead of unknown
       }
     } else {
-      summaryStatus = 'failure';  // Default to failure instead of unknown
+      summaryStatus = 'failure'; // Default to failure instead of unknown
     }
   }
-  
+
   // Calculate duration
   let durationMs: number | null = null;
   if (firstTs && lastTs) {
@@ -342,16 +344,20 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
   }
 
   // Aggregate counters
-  const snapshotCount = Array.from(stepsById.values())
-    .reduce((sum, s) => sum + s.counters.snapshots, 0);
-  const actionCount = Array.from(stepsById.values())
-    .reduce((sum, s) => sum + s.counters.actions, 0);
+  const snapshotCount = Array.from(stepsById.values()).reduce(
+    (sum, s) => sum + s.counters.snapshots,
+    0
+  );
+  const actionCount = Array.from(stepsById.values()).reduce(
+    (sum, s) => sum + s.counters.actions,
+    0
+  );
   const counters = {
     snapshot_count: snapshotCount,
     action_count: actionCount,
     error_count: errorCount,
   };
-  
+
   // Build summary
   const summary = new TraceSummary(
     firstTs,
@@ -367,7 +373,7 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
   );
 
   // Build steps list in order
-  const stepsList = stepOrder.map((sid) => stepsById.get(sid)!);
+  const stepsList = stepOrder.map(sid => stepsById.get(sid)!);
 
   // Build trace file info
   const traceFile = new TraceFileInfo(
@@ -378,14 +384,7 @@ export function buildTraceIndex(tracePath: string): TraceIndex {
   );
 
   // Build final index
-  const index = new TraceIndex(
-    1,
-    runId,
-    new Date().toISOString(),
-    traceFile,
-    summary,
-    stepsList
-  );
+  const index = new TraceIndex(1, runId, new Date().toISOString(), traceFile, summary, stepsList);
 
   return index;
 }
@@ -419,11 +418,7 @@ export function writeTraceIndex(
 /**
  * Read events for a specific step using byte offsets from index
  */
-export function readStepEvents(
-  tracePath: string,
-  offsetStart: number,
-  offsetEnd: number
-): any[] {
+export function readStepEvents(tracePath: string, offsetStart: number, offsetEnd: number): any[] {
   const events: any[] = [];
 
   const fd = fs.openSync(tracePath, 'r');

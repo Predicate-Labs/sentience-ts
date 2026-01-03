@@ -1,6 +1,6 @@
 /**
  * LLMInteractionHandler - Handles LLM queries and response parsing
- * 
+ *
  * Extracted from SentienceAgent to improve separation of concerns
  */
 
@@ -19,12 +19,12 @@ export class LLMInteractionHandler {
 
   /**
    * Build context string from snapshot for LLM prompt
-   * 
+   *
    * @param snap - Snapshot containing elements
    * @param goal - Goal/task description
    * @returns Formatted context string
    */
-  buildContext(snap: Snapshot, goal: string): string {
+  buildContext(snap: Snapshot, _goal: string): string {
     const lines: string[] = [];
 
     for (const el of snap.elements) {
@@ -43,7 +43,7 @@ export class LLMInteractionHandler {
 
       lines.push(
         `[${el.id}] <${el.role}> "${textPreview}"${cuesStr} ` +
-        `@ (${Math.floor(el.bbox.x)},${Math.floor(el.bbox.y)}) (Imp:${el.importance})`
+          `@ (${Math.floor(el.bbox.x)},${Math.floor(el.bbox.y)}) (Imp:${el.importance})`
       );
     }
 
@@ -52,7 +52,7 @@ export class LLMInteractionHandler {
 
   /**
    * Query LLM with standardized prompt template
-   * 
+   *
    * @param domContext - DOM context string (formatted elements)
    * @param goal - Goal/task description
    * @returns LLM response
@@ -79,7 +79,7 @@ What action should I take next? Respond with only the action command (e.g., CLIC
 
     try {
       const response = await this.llm.generate(systemPrompt, userPrompt, {
-        temperature: 0.0
+        temperature: 0.0,
       });
 
       // Validate response
@@ -102,7 +102,7 @@ What action should I take next? Respond with only the action command (e.g., CLIC
 
   /**
    * Extract action string from LLM response
-   * 
+   *
    * @param response - LLM response
    * @returns Action string (e.g., "CLICK(42)")
    */
@@ -110,4 +110,3 @@ What action should I take next? Respond with only the action command (e.g., CLIC
     return response.content.trim();
   }
 }
-

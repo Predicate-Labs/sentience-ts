@@ -75,7 +75,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -129,7 +129,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -175,7 +175,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -339,7 +339,7 @@ describe('Trace Indexing', () => {
         { v: 1, type: 'run_end', ts: '2025-12-29T10:00:02.000Z', data: {} },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -368,7 +368,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index1 = buildTraceIndex(tracePath);
       const index2 = buildTraceIndex(tracePath);
@@ -425,7 +425,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -460,7 +460,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -544,14 +544,14 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
       // run_start creates synthetic step-0 on line 1, step-1 has events on lines 2-3
       expect(index.steps.length).toBeGreaterThanOrEqual(2);
       // Find step-1 (skip synthetic step-0 from run_start)
-      const step1 = index.steps.find((s) => s.step_id === 'step-1');
+      const step1 = index.steps.find(s => s.step_id === 'step-1');
       expect(step1).toBeDefined();
       expect(step1!.line_number).toBe(3); // Last event (action) is on line 3
       expect(index.trace_file.line_count).toBeGreaterThanOrEqual(3); // May include trailing newline
@@ -575,7 +575,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -600,7 +600,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -655,7 +655,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -679,7 +679,7 @@ describe('Trace Indexing', () => {
         // No step_end event - should default to failure
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 
@@ -729,7 +729,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
       const frontendJSON = index.toSentienceStudioJSON();
@@ -812,7 +812,7 @@ describe('Trace Indexing', () => {
         },
       ];
 
-      fs.writeFileSync(tracePath, events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      fs.writeFileSync(tracePath, events.map(e => JSON.stringify(e)).join('\n') + '\n');
 
       const index = buildTraceIndex(tracePath);
 

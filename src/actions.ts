@@ -2,7 +2,7 @@
  * Actions v1 - click, type, press
  */
 
-import { SentienceBrowser } from './browser';
+import { IBrowser } from './protocols/browser-protocol';
 import { ActionResult, Snapshot, BBox } from './types';
 import { snapshot } from './snapshot';
 import { BrowserEvaluator } from './utils/browser-evaluator';
@@ -20,11 +20,14 @@ export interface ClickRect {
  * Highlight a rectangle with a red border overlay
  */
 async function highlightRect(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   rect: ClickRect,
   durationSec: number = 2.0
 ): Promise<void> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const highlightId = `sentience_highlight_${Date.now()}`;
 
   // Combine all arguments into a single object for Playwright
@@ -41,7 +44,11 @@ async function highlightRect(
 
   await BrowserEvaluator.evaluate(
     page,
-    (args: { rect: { x: number; y: number; w: number; h: number }; highlightId: string; durationSec: number }) => {
+    (args: {
+      rect: { x: number; y: number; w: number; h: number };
+      highlightId: string;
+      durationSec: number;
+    }) => {
       const { rect, highlightId, durationSec } = args;
       // Create overlay div
       const overlay = document.createElement('div');
@@ -77,17 +84,17 @@ async function highlightRect(
 
 /**
  * Click an element by its ID
- * 
+ *
  * Uses a hybrid approach: gets element bounding box from snapshot and calculates center,
  * then uses Playwright's native mouse.click() for realistic event simulation.
  * Falls back to JavaScript click if element not found in snapshot.
- * 
+ *
  * @param browser - SentienceBrowser instance
  * @param elementId - Element ID from snapshot
  * @param useMouse - Use mouse simulation (default: true). If false, uses JavaScript click.
  * @param takeSnapshot - Take snapshot after action (default: false)
  * @returns ActionResult with success status, outcome, duration, and optional snapshot
- * 
+ *
  * @example
  * ```typescript
  * const snap = await snapshot(browser);
@@ -99,12 +106,15 @@ async function highlightRect(
  * ```
  */
 export async function click(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   elementId: number,
   useMouse: boolean = true,
   takeSnapshot: boolean = false
 ): Promise<ActionResult> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const startTime = Date.now();
   const urlBefore = page.url();
 
@@ -114,7 +124,7 @@ export async function click(
     // Hybrid approach: Get element bbox from snapshot, calculate center, use mouse.click()
     try {
       const snap = await snapshot(browser);
-      const element = snap.elements.find((el) => el.id === elementId);
+      const element = snap.elements.find(el => el.id === elementId);
 
       if (element) {
         // Calculate center of element bbox
@@ -127,16 +137,16 @@ export async function click(
         // Fallback to JS click if element not found in snapshot
         success = await BrowserEvaluator.evaluateWithNavigationFallback(
           page,
-          (id) => (window as any).sentience.click(id),
+          id => (window as any).sentience.click(id),
           elementId,
           true // Assume success if navigation destroyed context
         );
       }
-    } catch (error) {
+    } catch {
       // Fallback to JS click on error
       success = await BrowserEvaluator.evaluateWithNavigationFallback(
         page,
-        (id) => (window as any).sentience.click(id),
+        id => (window as any).sentience.click(id),
         elementId,
         true // Assume success if navigation destroyed context
       );
@@ -145,7 +155,7 @@ export async function click(
     // Legacy JS-based click
     success = await BrowserEvaluator.evaluateWithNavigationFallback(
       page,
-      (id) => (window as any).sentience.click(id),
+      id => (window as any).sentience.click(id),
       elementId,
       true // Assume success if navigation destroyed context
     );
@@ -154,7 +164,7 @@ export async function click(
   // Wait a bit for navigation/DOM updates
   try {
     await page.waitForTimeout(500);
-  } catch (error) {
+  } catch {
     // Navigation might have happened, context destroyed
   }
 
@@ -166,7 +176,7 @@ export async function click(
   try {
     urlAfter = page.url();
     urlChanged = urlBefore !== urlAfter;
-  } catch (error) {
+  } catch {
     // Context destroyed due to navigation - assume URL changed
     urlAfter = urlBefore;
     urlChanged = true;
@@ -187,7 +197,7 @@ export async function click(
   if (takeSnapshot) {
     try {
       snapshotAfter = await snapshot(browser);
-    } catch (error) {
+    } catch {
       // Navigation might have destroyed context
     }
   }
@@ -206,15 +216,15 @@ export async function click(
 
 /**
  * Type text into an input element
- * 
+ *
  * Focuses the element first, then types the text using Playwright's keyboard simulation.
- * 
+ *
  * @param browser - SentienceBrowser instance
  * @param elementId - Element ID from snapshot (must be a text input element)
  * @param text - Text to type
  * @param takeSnapshot - Take snapshot after action (default: false)
  * @returns ActionResult with success status, outcome, duration, and optional snapshot
- * 
+ *
  * @example
  * ```typescript
  * const snap = await snapshot(browser);
@@ -225,19 +235,22 @@ export async function click(
  * ```
  */
 export async function typeText(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   elementId: number,
   text: string,
   takeSnapshot: boolean = false
 ): Promise<ActionResult> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const startTime = Date.now();
   const urlBefore = page.url();
 
   // Focus element first
   const focused = await BrowserEvaluator.evaluate(
     page,
-    (id) => {
+    id => {
       const el = (window as any).sentience_registry[id];
       if (el) {
         el.focus();
@@ -282,15 +295,15 @@ export async function typeText(
 
 /**
  * Press a keyboard key
- * 
+ *
  * Simulates pressing a key using Playwright's keyboard API.
  * Common keys: 'Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', etc.
- * 
+ *
  * @param browser - SentienceBrowser instance
  * @param key - Key to press (e.g., 'Enter', 'Escape', 'Tab')
  * @param takeSnapshot - Take snapshot after action (default: false)
  * @returns ActionResult with success status, outcome, duration, and optional snapshot
- * 
+ *
  * @example
  * ```typescript
  * // Press Enter after typing
@@ -299,11 +312,14 @@ export async function typeText(
  * ```
  */
 export async function press(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   key: string,
   takeSnapshot: boolean = false
 ): Promise<ActionResult> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const startTime = Date.now();
   const urlBefore = page.url();
 
@@ -370,13 +386,16 @@ export async function press(
  * ```
  */
 export async function clickRect(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   rect: ClickRect | BBox,
   highlight: boolean = true,
   highlightDuration: number = 2.0,
   takeSnapshot: boolean = false
 ): Promise<ActionResult> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const startTime = Date.now();
   const urlBefore = page.url();
 
@@ -392,7 +411,7 @@ export async function clickRect(
     h = bbox.height;
   } else {
     // ClickRect dict
-    const clickRect = rect as ClickRect;
+    const clickRect = rect;
     x = clickRect.x;
     y = clickRect.y;
     w = clickRect.w || clickRect.width || 0;
@@ -462,9 +481,6 @@ export async function clickRect(
     outcome,
     url_changed: urlChanged,
     snapshot_after: snapshotAfter,
-    error: success
-      ? undefined
-      : { code: 'click_failed', reason: errorMsg || 'Click failed' },
+    error: success ? undefined : { code: 'click_failed', reason: errorMsg || 'Click failed' },
   };
 }
-

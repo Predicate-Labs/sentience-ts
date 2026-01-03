@@ -28,6 +28,7 @@ export abstract class LLMProvider {
   abstract generate(
     systemPrompt: string,
     userPrompt: string,
+
     options?: Record<string, any>
   ): Promise<LLMResponse>;
 
@@ -55,13 +56,11 @@ export class OpenAIProvider extends LLMProvider {
 
     // Lazy import to avoid requiring openai package if not used
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { OpenAI } = require('openai');
       this.client = new OpenAI({ apiKey });
-    } catch (error) {
-      throw new Error(
-        'OpenAI package not installed. Run: npm install openai'
-      );
+    } catch {
+      throw new Error('OpenAI package not installed. Run: npm install openai');
     }
 
     this._modelName = model;
@@ -76,10 +75,10 @@ export class OpenAIProvider extends LLMProvider {
       model: this._modelName,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
+        { role: 'user', content: userPrompt },
       ],
       temperature: options.temperature ?? 0.0,
-      ...options
+      ...options,
     });
 
     const choice = response.choices[0];
@@ -88,7 +87,7 @@ export class OpenAIProvider extends LLMProvider {
       promptTokens: response.usage?.prompt_tokens,
       completionTokens: response.usage?.completion_tokens,
       totalTokens: response.usage?.total_tokens,
-      modelName: this._modelName
+      modelName: this._modelName,
     };
   }
 
@@ -113,13 +112,11 @@ export class AnthropicProvider extends LLMProvider {
     super();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Anthropic } = require('@anthropic-ai/sdk');
       this.client = new Anthropic({ apiKey });
-    } catch (error) {
-      throw new Error(
-        'Anthropic SDK not installed. Run: npm install @anthropic-ai/sdk'
-      );
+    } catch {
+      throw new Error('Anthropic SDK not installed. Run: npm install @anthropic-ai/sdk');
     }
 
     this._modelName = model;
@@ -134,11 +131,9 @@ export class AnthropicProvider extends LLMProvider {
       model: this._modelName,
       max_tokens: options.max_tokens ?? 1024,
       system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ],
+      messages: [{ role: 'user', content: userPrompt }],
       temperature: options.temperature ?? 0.0,
-      ...options
+      ...options,
     });
 
     const content = response.content[0].text;
@@ -147,7 +142,7 @@ export class AnthropicProvider extends LLMProvider {
       promptTokens: response.usage?.input_tokens,
       completionTokens: response.usage?.output_tokens,
       totalTokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
-      modelName: this._modelName
+      modelName: this._modelName,
     };
   }
 
@@ -175,13 +170,11 @@ export class GLMProvider extends LLMProvider {
     super();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const ZhipuAI = require('zhipuai-sdk-nodejs-v4');
       this.client = new ZhipuAI({ apiKey });
-    } catch (error) {
-      throw new Error(
-        'ZhipuAI SDK not installed. Run: npm install zhipuai-sdk-nodejs-v4'
-      );
+    } catch {
+      throw new Error('ZhipuAI SDK not installed. Run: npm install zhipuai-sdk-nodejs-v4');
     }
 
     this._modelName = model;
@@ -203,7 +196,7 @@ export class GLMProvider extends LLMProvider {
       messages,
       temperature: options.temperature ?? 0.0,
       max_tokens: options.max_tokens,
-      ...options
+      ...options,
     });
 
     const choice = response.choices[0];
@@ -214,7 +207,7 @@ export class GLMProvider extends LLMProvider {
       promptTokens: usage?.prompt_tokens,
       completionTokens: usage?.completion_tokens,
       totalTokens: usage?.total_tokens,
-      modelName: this._modelName
+      modelName: this._modelName,
     };
   }
 
@@ -242,11 +235,11 @@ export class GeminiProvider extends LLMProvider {
     super();
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { GoogleGenerativeAI } = require('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(apiKey);
       this.model = genAI.getGenerativeModel({ model });
-    } catch (error) {
+    } catch {
       throw new Error(
         'Google Generative AI SDK not installed. Run: npm install @google/generative-ai'
       );
@@ -278,7 +271,7 @@ export class GeminiProvider extends LLMProvider {
     // Call Gemini API
     const result = await this.model.generateContent({
       contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      generationConfig
+      generationConfig,
     });
 
     const response = result.response;
@@ -300,7 +293,7 @@ export class GeminiProvider extends LLMProvider {
       promptTokens,
       completionTokens,
       totalTokens,
-      modelName: this._modelName
+      modelName: this._modelName,
     };
   }
 
