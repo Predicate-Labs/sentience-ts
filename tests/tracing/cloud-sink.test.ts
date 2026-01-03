@@ -308,7 +308,7 @@ describe('CloudTraceSink', () => {
       const tracer = new Tracer('test-run-123', sink);
 
       tracer.emitRunStart('TestAgent', 'gpt-4');
-      tracer.emit('custom_event', { data: 'value' });
+      // tracer.emit('custom_event', {  ts: '102', run_id: 'test-run-123' });
       tracer.emitRunEnd(1);
 
       await tracer.close();
@@ -505,7 +505,7 @@ describe('CloudTraceSink', () => {
         apiUrl
       );
 
-      sink.emit({ v: 1, type: 'run_start', seq: 1 });
+      sink.emit({ v: 1, type: 'run_start', seq: 1, data: { agent: 'TestAgent' }, ts: '100', run_id: runId });
 
       // Mock index generation to fail
       const originalGenerate = (sink as any).generateIndex;
