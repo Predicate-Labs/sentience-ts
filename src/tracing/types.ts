@@ -34,6 +34,7 @@ export interface TraceElement {
   role: string;
   text?: string | null;
   importance?: number;
+  importance_score?: number;
   visual_cues?: TraceVisualCues;
   in_viewport?: boolean;
   is_occluded?: boolean;
