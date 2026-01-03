@@ -3,6 +3,7 @@
  */
 
 import { SentienceBrowser } from '../src';
+import { Page } from 'playwright';
 
 /**
  * Creates a browser instance and starts it with better error handling
@@ -23,12 +24,23 @@ export async function createTestBrowser(headless?: boolean): Promise<SentienceBr
     // Enhance error message but don't log here (Jest will handle it)
     const enhancedError = new Error(
       `Browser startup failed: ${e.message}\n` +
-      'Make sure:\n' +
-      '1. Playwright browsers are installed: npx playwright install chromium\n' +
-      '2. Extension is built: cd sentience-chrome && ./build.sh'
+        'Make sure:\n' +
+        '1. Playwright browsers are installed: npx playwright install chromium\n' +
+        '2. Extension is built: cd sentience-chrome && ./build.sh'
     );
     enhancedError.stack = e.stack;
     throw enhancedError;
   }
 }
 
+/**
+ * Gets the page from browser and throws if it's null
+ * Helper function for tests to avoid repetitive null checks
+ */
+export function getPageOrThrow(browser: SentienceBrowser): Page {
+  const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser page is not available. Make sure browser.start() was called.');
+  }
+  return page;
+}

@@ -21,6 +21,9 @@ export async function screenshot(
   options: ScreenshotOptions = {}
 ): Promise<string> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
   const format = options.format || 'png';
   const quality = options.quality;
 
@@ -47,6 +50,3 @@ export async function screenshot(
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   return `data:${mimeType};base64,${base64Data}`;
 }
-
-
-

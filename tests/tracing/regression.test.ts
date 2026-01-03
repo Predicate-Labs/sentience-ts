@@ -103,7 +103,7 @@ describe('Tracing Module - Regression Tests', () => {
 
       // Emit 1000 events
       for (let i = 0; i < 1000; i++) {
-        tracer.emit('test', { index: i });
+        tracer.emit('test', { index: i } as any);
       }
 
       const duration = Date.now() - start;
@@ -120,12 +120,12 @@ describe('Tracing Module - Regression Tests', () => {
       const sink = new JsonlTraceSink('/tmp/memory-test.jsonl');
       const tracer = new Tracer('memory-test', sink);
 
-      tracer.emit('test', { data: 'test' });
+      tracer.emit('test', { data: 'test' } as any);
 
       await tracer.close();
 
       // Attempting to emit after close should be safe (no crash)
-      sink.emit({ test: 'after close' });
+      sink.emit({ test: 'after close' } as any);
 
       expect(sink.isClosed()).toBe(true);
     });

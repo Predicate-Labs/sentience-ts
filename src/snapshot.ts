@@ -3,9 +3,11 @@
  */
 
 import { SentienceBrowser } from './browser';
+import { IBrowser } from './protocols/browser-protocol';
 import { Snapshot } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import { BrowserEvaluator } from './utils/browser-evaluator';
 
 // Maximum payload size for API requests (10MB server limit)
 const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024;
@@ -46,17 +48,15 @@ function _saveTraceToFile(rawElements: any[], tracePath?: string): void {
 }
 
 export async function snapshot(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions = {}
 ): Promise<Snapshot> {
   // Get API configuration
   const apiKey = browser.getApiKey();
   const apiUrl = browser.getApiUrl();
-  
+
   // Determine if we should use server-side API
-  const shouldUseApi = options.use_api !== undefined
-    ? options.use_api
-    : (apiKey !== undefined);
+  const shouldUseApi = options.use_api !== undefined ? options.use_api : apiKey !== undefined;
 
   if (shouldUseApi && apiKey) {
     // Use server-side API (Pro/Enterprise tier)
@@ -68,30 +68,27 @@ export async function snapshot(
 }
 
 async function snapshotViaExtension(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions
 ): Promise<Snapshot> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
   // The new architecture loads injected_api.js asynchronously, so window.sentience
   // may not be immediately available after page load
   try {
-    await page.waitForFunction(
+    await BrowserEvaluator.waitForCondition(
+      page,
       () => typeof (window as any).sentience !== 'undefined',
-      { timeout: 5000 }
+      5000
     );
   } catch (e) {
-    // Gather diagnostics if wait fails
-    const diag = await page.evaluate(() => ({
-      sentience_defined: typeof (window as any).sentience !== 'undefined',
-      extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
-      url: window.location.href
-    })).catch(() => ({ error: 'Could not gather diagnostics' }));
-
     throw new Error(
       `Sentience extension failed to inject window.sentience API. ` +
-      `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
+        `Is the extension loaded? ${e instanceof Error ? e.message : String(e)}`
     );
   }
 
@@ -108,9 +105,11 @@ async function snapshotViaExtension(
   }
 
   // Call extension API
-  const result = await page.evaluate((opts) => {
-    return (window as any).sentience.snapshot(opts);
-  }, opts);
+  const result = await BrowserEvaluator.evaluate(
+    page,
+    opts => (window as any).sentience.snapshot(opts),
+    opts
+  );
 
   // Extract screenshot format from data URL if not provided by extension
   if (result.screenshot && !result.screenshot_format) {
@@ -133,11 +132,15 @@ async function snapshotViaExtension(
 
   // Show visual overlay if requested
   if (options.show_overlay && result.raw_elements) {
-    await page.evaluate((elements: any[]) => {
-      if ((window as any).sentience && (window as any).sentience.showOverlay) {
-        (window as any).sentience.showOverlay(elements, null);
-      }
-    }, result.raw_elements);
+    await BrowserEvaluator.evaluate(
+      page,
+      (elements: any[]) => {
+        if ((window as any).sentience && (window as any).sentience.showOverlay) {
+          (window as any).sentience.showOverlay(elements, null);
+        }
+      },
+      result.raw_elements
+    );
   }
 
   // Basic validation
@@ -149,19 +152,23 @@ async function snapshotViaExtension(
 }
 
 async function snapshotViaApi(
-  browser: SentienceBrowser,
+  browser: IBrowser,
   options: SnapshotOptions,
   apiKey: string,
   apiUrl: string
 ): Promise<Snapshot> {
   const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
 
   // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
   // Even for API mode, we need the extension to collect raw data locally
   try {
-    await page.waitForFunction(
+    await BrowserEvaluator.waitForCondition(
+      page,
       () => typeof (window as any).sentience !== 'undefined',
-      { timeout: 5000 }
+      5000
     );
   } catch (e) {
     throw new Error(
@@ -175,9 +182,11 @@ async function snapshotViaApi(
     rawOpts.screenshot = options.screenshot;
   }
 
-  const rawResult = await page.evaluate((opts) => {
-    return (window as any).sentience.snapshot(opts);
-  }, rawOpts);
+  const rawResult = await BrowserEvaluator.evaluate(
+    page,
+    opts => (window as any).sentience.snapshot(opts),
+    rawOpts
+  );
 
   // Save trace if requested (save raw data before API processing)
   if (options.save_trace && rawResult.raw_elements) {
@@ -188,10 +197,10 @@ async function snapshotViaApi(
   // Use raw_elements (raw data) instead of elements (processed data)
   // Server validates API key and applies proprietary ranking logic
   const payload = {
-    raw_elements: rawResult.raw_elements || [],  // Raw data needed for server processing
+    raw_elements: rawResult.raw_elements || [], // Raw data needed for server processing
     url: rawResult.url || '',
     viewport: rawResult.viewport,
-    goal: options.goal,  // Optional goal/task description
+    goal: options.goal, // Optional goal/task description
     options: {
       limit: options.limit,
       filter: options.filter,
@@ -206,12 +215,12 @@ async function snapshotViaApi(
     const limitMB = (MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(0);
     throw new Error(
       `Payload size (${sizeMB}MB) exceeds server limit (${limitMB}MB). ` +
-      `Try reducing the number of elements on the page or filtering elements.`
+        `Try reducing the number of elements on the page or filtering elements.`
     );
   }
 
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${apiKey}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
 
@@ -257,12 +266,16 @@ async function snapshotViaApi(
     };
 
     // Show visual overlay if requested (use API-ranked elements)
-    if (options.show_overlay && apiResult.elements) {
-      await page.evaluate((elements: any[]) => {
-        if ((window as any).sentience && (window as any).sentience.showOverlay) {
-          (window as any).sentience.showOverlay(elements, null);
-        }
-      }, apiResult.elements);
+    if (options.show_overlay && apiResult.elements && page) {
+      await BrowserEvaluator.evaluate(
+        page,
+        (elements: any[]) => {
+          if ((window as any).sentience && (window as any).sentience.showOverlay) {
+            (window as any).sentience.showOverlay(elements, null);
+          }
+        },
+        apiResult.elements
+      );
     }
 
     return snapshotData;
@@ -270,4 +283,3 @@ async function snapshotViaApi(
     throw new Error(`API request failed: ${e.message}`);
   }
 }
-
