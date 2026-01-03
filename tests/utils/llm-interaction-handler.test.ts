@@ -81,6 +81,9 @@ describe('LLMInteractionHandler', () => {
       expect(context).toContain('PRIMARY');
       expect(context).toContain('CLICKABLE');
       expect(context).toContain('color:blue');
+      expect(context).toContain('@ (10,20)');
+      expect(context).toContain('size:100x30');
+      expect(context).toContain('importance:0.9');
     });
 
     it('should truncate long text', () => {
@@ -113,6 +116,94 @@ describe('LLMInteractionHandler', () => {
       const match = context.match(/"([^"]+)"/);
       expect(match).toBeTruthy();
       expect(match![1].length).toBeLessThanOrEqual(53); // 50 chars + "..."
+    });
+
+    it('should include status indicators when present', () => {
+      const elements: Element[] = [
+        {
+          id: 1,
+          role: 'button',
+          text: 'Test',
+          importance: 0.9,
+          bbox: { x: 10, y: 20, width: 100, height: 30 },
+          visual_cues: {
+            is_primary: false,
+            background_color_name: null,
+            is_clickable: true,
+          },
+          in_viewport: false, // Not in viewport
+          is_occluded: true, // Occluded
+          z_index: 1,
+          diff_status: 'ADDED', // Has diff status
+        },
+      ];
+
+      const snap: Snapshot = {
+        status: 'success',
+        url: 'https://example.com',
+        elements,
+      };
+
+      const context = handler.buildContext(snap, 'test');
+      expect(context).toContain('not_in_viewport');
+      expect(context).toContain('occluded');
+      expect(context).toContain('diff:ADDED');
+      expect(context).toContain('size:100x30');
+      expect(context).toContain('importance:0.9');
+    });
+
+    it('should exclude REMOVED elements from context', () => {
+      const elements: Element[] = [
+        {
+          id: 1,
+          role: 'button',
+          text: 'Click me',
+          importance: 100,
+          bbox: { x: 10, y: 20, width: 100, height: 30 },
+          visual_cues: {
+            is_primary: true,
+            background_color_name: 'blue',
+            is_clickable: true,
+          },
+          in_viewport: true,
+          is_occluded: false,
+          z_index: 1,
+          diff_status: undefined,
+        },
+        {
+          id: 6344,
+          role: 'button',
+          text: '5.0 out of 5 stars Excellent product',
+          importance: 0,
+          bbox: { x: 429, y: 9175, width: 204, height: 17 },
+          visual_cues: {
+            is_primary: true,
+            background_color_name: 'black',
+            is_clickable: true,
+          },
+          in_viewport: false,
+          is_occluded: false,
+          z_index: 0,
+          diff_status: 'REMOVED', // This should be excluded
+        },
+      ];
+
+      const snap: Snapshot = {
+        status: 'success',
+        url: 'https://example.com',
+        elements,
+      };
+
+      const context = handler.buildContext(snap, 'test goal');
+
+      // Should include normal element
+      expect(context).toContain('[1]');
+      expect(context).toContain('Click me');
+
+      // Should NOT include REMOVED element
+      expect(context).not.toContain('[6344]');
+      expect(context).not.toContain('5.0 out of 5 stars');
+      expect(context).not.toContain('diff:REMOVED');
     });
   });
 

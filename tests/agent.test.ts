@@ -201,8 +201,8 @@ describe('SentienceAgent', () => {
       const agent = new SentienceAgent(browser, llm, 50, false);
 
       const snap = createMockSnapshot();
-      // Access private method through any cast for testing
-      const context = (agent as any).buildContext(snap, 'test goal');
+      // Access LLMInteractionHandler through agent for testing
+      const context = (agent as any).llmHandler.buildContext(snap, 'test goal');
 
       expect(context).toContain('[1]');
       expect(context).toContain('[2]');
@@ -212,7 +212,8 @@ describe('SentienceAgent', () => {
       expect(context).toContain('PRIMARY');
       expect(context).toContain('CLICKABLE');
       expect(context).toContain('color:blue');
-      expect(context).toContain('(Imp:900)');
+      expect(context).toContain('importance:900');
+      expect(context).toContain('size:80x30');
     });
   });
 
