@@ -68,19 +68,16 @@ describe('screenshot', () => {
       await screenshot(browser, { format: 'jpeg', quality: 50 }); // Should not throw
 
       // Invalid quality - too low
-      await expect(
-        screenshot(browser, { format: 'jpeg', quality: 0 })
-      ).rejects.toThrow('Quality must be between 1 and 100');
+      await expect(screenshot(browser, { format: 'jpeg', quality: 0 })).rejects.toThrow(
+        'Quality must be between 1 and 100'
+      );
 
       // Invalid quality - too high
-      await expect(
-        screenshot(browser, { format: 'jpeg', quality: 101 })
-      ).rejects.toThrow('Quality must be between 1 and 100');
+      await expect(screenshot(browser, { format: 'jpeg', quality: 101 })).rejects.toThrow(
+        'Quality must be between 1 and 100'
+      );
     } finally {
       await browser.close();
     }
   });
 });
-
-
-

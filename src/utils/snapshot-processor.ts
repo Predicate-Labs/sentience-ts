@@ -1,6 +1,6 @@
 /**
  * SnapshotProcessor - Helper for processing snapshots in agent
- * 
+ *
  * Extracted from SentienceAgent to reduce complexity
  */
 
@@ -20,7 +20,7 @@ export interface ProcessedSnapshot {
 export class SnapshotProcessor {
   /**
    * Process a snapshot: compute diff status, filter elements
-   * 
+   *
    * @param snap - Original snapshot
    * @param previousSnapshot - Previous snapshot for diff computation
    * @param goal - Goal/task description for filtering
@@ -39,7 +39,7 @@ export class SnapshotProcessor {
     // Create snapshot with diff_status populated
     const snapWithDiff: Snapshot = {
       ...snap,
-      elements: elementsWithDiff
+      elements: elementsWithDiff,
     };
 
     // Apply element filtering based on goal using ElementFilter
@@ -48,14 +48,13 @@ export class SnapshotProcessor {
     // Create filtered snapshot
     const filteredSnap: Snapshot = {
       ...snapWithDiff,
-      elements: filteredElements
+      elements: filteredElements,
     };
 
     return {
       original: snap,
       withDiff: snapWithDiff,
-      filtered: filteredSnap
+      filtered: filteredSnap,
     };
   }
 }
-

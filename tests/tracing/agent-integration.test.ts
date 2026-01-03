@@ -66,7 +66,7 @@ describe('Agent Integration with Tracing', () => {
   afterEach(async () => {
     // Wait a bit for file handles to close (Windows needs this)
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // Only delete the test file, not the directory
     // The directory is unique to this test file and will be cleaned up in afterAll
     if (fs.existsSync(testFile)) {
@@ -88,7 +88,14 @@ describe('Agent Integration with Tracing', () => {
         status: 'success',
         url: 'https://example.com',
         elements: [
-          { id: 1, role: 'button', text: 'Click me', importance: 0.8, bbox: { x: 0, y: 0, width: 100, height: 50 }, visual_cues: {} },
+          {
+            id: 1,
+            role: 'button',
+            text: 'Click me',
+            importance: 0.8,
+            bbox: { x: 0, y: 0, width: 100, height: 50 },
+            visual_cues: {},
+          },
         ],
       });
 
@@ -126,7 +133,7 @@ describe('Agent Integration with Tracing', () => {
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
-      
+
       // Ensure file doesn't exist from previous test runs
       if (fs.existsSync(testFile)) {
         try {
@@ -135,9 +142,9 @@ describe('Agent Integration with Tracing', () => {
           // Ignore unlink errors
         }
       }
-      
+
       const sink = new JsonlTraceSink(testFile);
-      
+
       // Verify sink initialized properly
       const writeStream = (sink as any).writeStream;
       if (!writeStream) {
@@ -146,14 +153,14 @@ describe('Agent Integration with Tracing', () => {
       if (writeStream.destroyed) {
         throw new Error('JsonlTraceSink writeStream is already destroyed');
       }
-      
+
       // Emit a test event to ensure the sink can write
       const tracer = new Tracer('test-run', sink);
       tracer.emit('test_init', { test: true } as any);
-      
+
       // Wait a moment to ensure the test event is written
       await new Promise(resolve => setTimeout(resolve, 50));
-      
+
       const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
 
       // Mock snapshot
@@ -200,17 +207,21 @@ describe('Agent Integration with Tracing', () => {
       // Verify file exists before reading with better diagnostics
       if (!fileExists) {
         const dirExists = fs.existsSync(testDir);
-        const dirWritable = dirExists ? (() => {
-          try {
-            fs.accessSync(testDir, fs.constants.W_OK);
-            return true;
-          } catch {
-            return false;
-          }
-        })() : false;
+        const dirWritable = dirExists
+          ? (() => {
+              try {
+                fs.accessSync(testDir, fs.constants.W_OK);
+                return true;
+              } catch {
+                return false;
+              }
+            })()
+          : false;
         const currentWriteStream = (sink as any).writeStream;
         const streamDestroyed = currentWriteStream?.destroyed ?? true;
-        throw new Error(`Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}`);
+        throw new Error(
+          `Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}`
+        );
       }
 
       // Read trace file - verify it exists one more time before reading
@@ -219,13 +230,16 @@ describe('Agent Integration with Tracing', () => {
       }
 
       const content = fs.readFileSync(testFile, 'utf-8');
-      const lines = content.trim().split('\n').filter(line => line.length > 0);
-      
+      const lines = content
+        .trim()
+        .split('\n')
+        .filter(line => line.length > 0);
+
       // If no lines, no events were written
       if (lines.length === 0) {
         throw new Error(`Trace file exists but is empty: ${testFile}`);
       }
-      
+
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
       // Should have at least: step_start, snapshot, llm_response, action
@@ -259,9 +273,11 @@ describe('Agent Integration with Tracing', () => {
         // Verify directory is writable
         fs.accessSync(testDir, fs.constants.W_OK);
       } catch (err: any) {
-        throw new Error(`Failed to create/write to test directory: ${testDir}. Error: ${err.message}`);
+        throw new Error(
+          `Failed to create/write to test directory: ${testDir}. Error: ${err.message}`
+        );
       }
-      
+
       // Ensure file doesn't exist from previous test runs
       if (fs.existsSync(testFile)) {
         try {
@@ -270,9 +286,9 @@ describe('Agent Integration with Tracing', () => {
           // Ignore unlink errors
         }
       }
-      
+
       const sink = new JsonlTraceSink(testFile);
-      
+
       // Verify sink initialized properly (writeStream should exist and not be destroyed)
       const writeStream = (sink as any).writeStream;
       if (!writeStream) {
@@ -281,15 +297,15 @@ describe('Agent Integration with Tracing', () => {
       if (writeStream.destroyed) {
         throw new Error('JsonlTraceSink writeStream is already destroyed');
       }
-      
+
       const tracer = new Tracer('test-run', sink);
-      
+
       // Manually emit a test event to ensure the sink can write
       tracer.emit('test_init', { test: true } as any);
-      
+
       // Wait a moment to ensure the test event is written
       await new Promise(resolve => setTimeout(resolve, 50));
-      
+
       const agent = new SentienceAgent(mockBrowser, mockLLM, 50, false, tracer);
 
       // Mock snapshot to fail
@@ -318,7 +334,7 @@ describe('Agent Integration with Tracing', () => {
             // Directory creation failed, continue trying
           }
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, 100));
         if (fs.existsSync(testFile)) {
           // Also check that file has content (not just empty file)
@@ -339,7 +355,7 @@ describe('Agent Integration with Tracing', () => {
         // Re-check directory state (may have changed during wait)
         let dirExists = fs.existsSync(testDir);
         let dirWritable = false;
-        
+
         // If directory doesn't exist, try to recreate it for diagnostics
         if (!dirExists) {
           try {
@@ -358,12 +374,16 @@ describe('Agent Integration with Tracing', () => {
             // Directory not writable
           }
         }
-        
+
         const currentWriteStream = (sink as any).writeStream;
         const streamDestroyed = currentWriteStream?.destroyed ?? true;
-        const streamErrored = currentWriteStream?.errored ? String(currentWriteStream.errored) : null;
+        const streamErrored = currentWriteStream?.errored
+          ? String(currentWriteStream.errored)
+          : null;
         const sinkClosed = sink.isClosed();
-        throw new Error(`Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}, Sink closed: ${sinkClosed}${streamErrored ? `, Stream error: ${streamErrored}` : ''}`);
+        throw new Error(
+          `Trace file not created after 3s: ${testFile}. Directory exists: ${dirExists}, Directory writable: ${dirWritable}, Stream destroyed: ${streamDestroyed}, Sink closed: ${sinkClosed}${streamErrored ? `, Stream error: ${streamErrored}` : ''}`
+        );
       }
 
       // Read trace file - verify it exists one more time before reading
@@ -372,13 +392,16 @@ describe('Agent Integration with Tracing', () => {
       }
 
       const content = fs.readFileSync(testFile, 'utf-8');
-      const lines = content.trim().split('\n').filter(line => line.length > 0);
-      
+      const lines = content
+        .trim()
+        .split('\n')
+        .filter(line => line.length > 0);
+
       // If no lines, no events were written
       if (lines.length === 0) {
         throw new Error(`Trace file exists but is empty: ${testFile}`);
       }
-      
+
       const events = lines.map(line => JSON.parse(line) as TraceEvent);
 
       // Should have step_start and error events

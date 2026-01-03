@@ -59,7 +59,7 @@ describe('LLMResponseBuilder', () => {
         modelName: 'test-model',
         promptTokens: 100,
         completionTokens: 20,
-        totalTokens: 120
+        totalTokens: 120,
       };
 
       expect(LLMResponseBuilder.validate(response)).toBe(true);
@@ -67,7 +67,7 @@ describe('LLMResponseBuilder', () => {
 
     it('should reject response without content', () => {
       const response: any = {
-        modelName: 'test-model'
+        modelName: 'test-model',
       };
 
       expect(LLMResponseBuilder.validate(response)).toBe(false);
@@ -76,7 +76,7 @@ describe('LLMResponseBuilder', () => {
     it('should reject response with invalid token counts', () => {
       const response: any = {
         content: 'CLICK(1)',
-        promptTokens: 'invalid'
+        promptTokens: 'invalid',
       };
 
       expect(LLMResponseBuilder.validate(response)).toBe(false);
@@ -101,4 +101,3 @@ describe('LLMResponseBuilder', () => {
     });
   });
 });
-

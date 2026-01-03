@@ -1,6 +1,6 @@
 /**
  * ElementFilter - Consolidates element filtering logic
- * 
+ *
  * This utility class extracts common element filtering patterns from agent.ts and query.ts
  * to reduce code duplication and improve maintainability.
  */
@@ -21,25 +21,22 @@ export interface FilterOptions {
 export class ElementFilter {
   /**
    * Filter elements by importance score
-   * 
+   *
    * @param snapshot - Snapshot containing elements
    * @param maxElements - Maximum number of elements to return (default: 50)
    * @returns Filtered and sorted array of elements
-   * 
+   *
    * @example
    * ```typescript
    * const filtered = ElementFilter.filterByImportance(snap, 50);
    * ```
    */
-  static filterByImportance(
-    snapshot: Snapshot,
-    maxElements: number = 50
-  ): Element[] {
+  static filterByImportance(snapshot: Snapshot, maxElements: number = 50): Element[] {
     const elements = [...snapshot.elements];
-    
+
     // Sort by importance (descending)
     elements.sort((a, b) => b.importance - a.importance);
-    
+
     // Return top N elements
     return elements.slice(0, maxElements);
   }
@@ -47,22 +44,18 @@ export class ElementFilter {
   /**
    * Filter elements relevant to a goal using keyword matching
    * Applies goal-based keyword matching to boost relevant elements
-   * 
+   *
    * @param snapshot - Snapshot containing elements
    * @param goal - Goal/task description to match against
    * @param maxElements - Maximum number of elements to return (default: 50)
    * @returns Filtered and scored array of elements
-   * 
+   *
    * @example
    * ```typescript
    * const filtered = ElementFilter.filterByGoal(snap, "Click the search box", 50);
    * ```
    */
-  static filterByGoal(
-    snapshot: Snapshot,
-    goal: string,
-    maxElements: number = 50
-  ): Element[] {
+  static filterByGoal(snapshot: Snapshot, goal: string, maxElements: number = 50): Element[] {
     if (!goal) {
       return this.filterByImportance(snapshot, maxElements);
     }
@@ -72,10 +65,10 @@ export class ElementFilter {
 
     // Score elements based on keyword matches
     const scoredElements: Array<[number, Element]> = [];
-    
+
     for (const element of snapshot.elements) {
       let score = element.importance; // Start with base importance
-      
+
       // Boost score for keyword matches in text
       if (element.text) {
         const textLower = element.text.toLowerCase();
@@ -85,7 +78,7 @@ export class ElementFilter {
           }
         }
       }
-      
+
       // Boost score for keyword matches in role
       const roleLower = element.role.toLowerCase();
       for (const keyword of keywords) {
@@ -93,7 +86,7 @@ export class ElementFilter {
           score += 0.3; // Smaller boost for role match
         }
       }
-      
+
       scoredElements.push([score, element]);
     }
 
@@ -106,11 +99,11 @@ export class ElementFilter {
 
   /**
    * Filter elements using multiple criteria
-   * 
+   *
    * @param snapshot - Snapshot containing elements
    * @param options - Filter options
    * @returns Filtered array of elements
-   * 
+   *
    * @example
    * ```typescript
    * const filtered = ElementFilter.filter(snap, {
@@ -121,10 +114,7 @@ export class ElementFilter {
    * });
    * ```
    */
-  static filter(
-    snapshot: Snapshot,
-    options: FilterOptions = {}
-  ): Element[] {
+  static filter(snapshot: Snapshot, options: FilterOptions = {}): Element[] {
     let elements = [...snapshot.elements];
 
     // Apply filters
@@ -158,30 +148,72 @@ export class ElementFilter {
   /**
    * Extract keywords from a goal string
    * Removes common stop words and returns meaningful keywords
-   * 
+   *
    * @param goal - Goal string to extract keywords from
    * @returns Array of keywords
-   * 
+   *
    * @private
    */
   private static extractKeywords(goal: string): string[] {
     // Common stop words to filter out
     const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-      'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
-      'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-      'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this',
-      'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'
+      'the',
+      'a',
+      'an',
+      'and',
+      'or',
+      'but',
+      'in',
+      'on',
+      'at',
+      'to',
+      'for',
+      'of',
+      'with',
+      'by',
+      'from',
+      'as',
+      'is',
+      'was',
+      'are',
+      'were',
+      'be',
+      'been',
+      'being',
+      'have',
+      'has',
+      'had',
+      'do',
+      'does',
+      'did',
+      'will',
+      'would',
+      'should',
+      'could',
+      'may',
+      'might',
+      'must',
+      'can',
+      'this',
+      'that',
+      'these',
+      'those',
+      'i',
+      'you',
+      'he',
+      'she',
+      'it',
+      'we',
+      'they',
     ]);
 
     // Split by whitespace and punctuation, filter out stop words and short words
     const words = goal
       .toLowerCase()
-      .split(/[\s,.;:!?()\[\]{}'"]+/)
+      .split(/[\s,.;:!?()[\]{}'"]+/)
       .filter(word => word.length > 2 && !stopWords.has(word));
 
     // Remove duplicates
     return Array.from(new Set(words));
   }
 }
-

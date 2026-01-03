@@ -3,16 +3,16 @@
  */
 
 import { SentienceBrowser } from './browser';
-import { WaitResult, Element, QuerySelector } from './types';
+import { WaitResult, QuerySelector } from './types';
 import { snapshot } from './snapshot';
 import { find } from './query';
 
 /**
  * Wait for an element matching a selector to appear on the page
- * 
+ *
  * Polls the page at regular intervals until the element is found or timeout is reached.
  * Automatically adjusts polling interval based on whether using local extension or remote API.
- * 
+ *
  * @param browser - SentienceBrowser instance
  * @param selector - Query selector (string DSL or object) to match elements
  * @param timeout - Maximum time to wait in milliseconds (default: 10000ms / 10 seconds)
@@ -22,7 +22,7 @@ import { find } from './query';
  * @param useApi - Force use of server-side API if true, local extension if false.
  *                 If undefined, uses API if apiKey is set, otherwise uses local extension.
  * @returns WaitResult with found status, element (if found), duration, and timeout flag
- * 
+ *
  * @example
  * ```typescript
  * // Wait for a button to appear
@@ -30,7 +30,7 @@ import { find } from './query';
  * if (result.found) {
  *   console.log(`Found element ${result.element!.id} after ${result.duration_ms}ms`);
  * }
- * 
+ *
  * // Wait with custom interval
  * const result2 = await waitFor(browser, 'text~Submit', 10000, 500);
  * ```
@@ -45,9 +45,7 @@ export async function waitFor(
   // Auto-detect optimal interval based on API usage
   if (interval === undefined) {
     // Determine if using API
-    const willUseApi = useApi !== undefined
-      ? useApi
-      : (browser.getApiKey() !== undefined);
+    const willUseApi = useApi !== undefined ? useApi : browser.getApiKey() !== undefined;
     if (willUseApi) {
       interval = 1500; // Longer interval for API calls (network latency)
     } else {
@@ -75,7 +73,7 @@ export async function waitFor(
     }
 
     // Wait before next poll
-    await new Promise((resolve) => setTimeout(resolve, interval));
+    await new Promise(resolve => setTimeout(resolve, interval));
   }
 
   // Timeout
@@ -87,4 +85,3 @@ export async function waitFor(
     timeout: true,
   };
 }
-

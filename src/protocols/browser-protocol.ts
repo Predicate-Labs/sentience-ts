@@ -1,12 +1,13 @@
 /**
  * Browser Protocol Interfaces for Testability
- * 
+ *
  * These interfaces allow classes to depend on abstractions rather than concrete implementations,
  * making them easier to test with mocks.
  */
 
 import { Page } from 'playwright';
-import { Snapshot, SnapshotOptions } from '../types';
+import { Snapshot } from '../types';
+import { SnapshotOptions } from '../snapshot';
 
 /**
  * Interface for browser operations
@@ -31,6 +32,7 @@ export interface IBrowser {
   /**
    * Get the browser context
    */
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   getContext(): any | null;
 
   /**
@@ -52,6 +54,7 @@ export interface IPage {
   /**
    * Evaluate JavaScript in the page context
    */
+
   evaluate<T>(script: string | ((...args: any[]) => T), ...args: any[]): Promise<T>;
 
   /**
@@ -89,4 +92,3 @@ export interface IPage {
     press(key: string): Promise<void>;
   };
 }
-

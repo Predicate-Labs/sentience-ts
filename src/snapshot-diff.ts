@@ -61,7 +61,7 @@ export class SnapshotDiff {
     if (!previous) {
       return current.elements.map(el => ({
         ...el,
-        diff_status: "ADDED" as const
+        diff_status: 'ADDED' as const,
       }));
     }
 
@@ -80,7 +80,7 @@ export class SnapshotDiff {
         // Element is new - mark as ADDED
         result.push({
           ...el,
-          diff_status: "ADDED"
+          diff_status: 'ADDED',
         });
       } else {
         // Element existed before - check for changes
@@ -93,25 +93,25 @@ export class SnapshotDiff {
           // Both position and content changed - mark as MODIFIED
           result.push({
             ...el,
-            diff_status: "MODIFIED"
+            diff_status: 'MODIFIED',
           });
         } else if (bboxChanged) {
           // Only position changed - mark as MOVED
           result.push({
             ...el,
-            diff_status: "MOVED"
+            diff_status: 'MOVED',
           });
         } else if (contentChanged) {
           // Only content changed - mark as MODIFIED
           result.push({
             ...el,
-            diff_status: "MODIFIED"
+            diff_status: 'MODIFIED',
           });
         } else {
           // No change - don't set diff_status (frontend expects undefined)
           result.push({
             ...el,
-            diff_status: undefined
+            diff_status: undefined,
           });
         }
       }
@@ -123,7 +123,7 @@ export class SnapshotDiff {
         const prevEl = previousById.get(prevId)!;
         result.push({
           ...prevEl,
-          diff_status: "REMOVED"
+          diff_status: 'REMOVED',
         });
       }
     }

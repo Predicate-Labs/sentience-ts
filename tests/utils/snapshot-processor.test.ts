@@ -15,18 +15,18 @@ describe('SnapshotProcessor', () => {
     visual_cues: {
       is_primary: false,
       background_color_name: null,
-      is_clickable: true
+      is_clickable: true,
     },
     in_viewport: true,
     is_occluded: false,
-    z_index: 1
+    z_index: 1,
   });
 
   const createMockSnapshot = (elements: Element[]): Snapshot => ({
     status: 'success',
     url: 'https://example.com',
     timestamp: new Date().toISOString(),
-    elements
+    elements,
   });
 
   describe('process', () => {
@@ -36,7 +36,7 @@ describe('SnapshotProcessor', () => {
         createMockElement(2, 0.8),
         createMockElement(3, 0.7),
         createMockElement(4, 0.6),
-        createMockElement(5, 0.5)
+        createMockElement(5, 0.5),
       ];
       const snap = createMockSnapshot(elements);
 
@@ -75,7 +75,7 @@ describe('SnapshotProcessor', () => {
       const elements = [
         { ...createMockElement(1, 0.9), text: 'search button' },
         { ...createMockElement(2, 0.8), text: 'submit button' },
-        { ...createMockElement(3, 0.7), text: 'cancel button' }
+        { ...createMockElement(3, 0.7), text: 'cancel button' },
       ];
       const snap = createMockSnapshot(elements);
 
@@ -88,4 +88,3 @@ describe('SnapshotProcessor', () => {
     });
   });
 });
-

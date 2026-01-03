@@ -1,6 +1,6 @@
 /**
  * TraceFileManager - Common trace file operations
- * 
+ *
  * Extracts common file operations from CloudTraceSink and JsonlTraceSink
  * to reduce duplication and standardize error handling
  */
@@ -21,7 +21,7 @@ export interface TraceFileOptions {
 export class TraceFileManager {
   /**
    * Ensure directory exists and is writable
-   * 
+   *
    * @param dirPath - Directory path to ensure exists
    * @throws Error if directory cannot be created or is not writable
    */
@@ -39,7 +39,7 @@ export class TraceFileManager {
 
   /**
    * Create a write stream for trace file
-   * 
+   *
    * @param filePath - Path to trace file
    * @param options - Stream options
    * @returns WriteStream or null if creation fails
@@ -67,7 +67,7 @@ export class TraceFileManager {
 
   /**
    * Write a trace event as JSON line
-   * 
+   *
    * @param stream - Write stream
    * @param event - Trace event to write
    * @returns True if written successfully, false otherwise
@@ -76,14 +76,14 @@ export class TraceFileManager {
     try {
       const jsonLine = JSON.stringify(event) + '\n';
       const written = stream.write(jsonLine);
-      
+
       // Handle backpressure
       if (!written) {
         stream.once('drain', () => {
           // Stream is ready again
         });
       }
-      
+
       return true;
     } catch (error) {
       console.error('[TraceFileManager] Failed to write event:', error);
@@ -93,7 +93,7 @@ export class TraceFileManager {
 
   /**
    * Close and flush a write stream
-   * 
+   *
    * @param stream - Write stream to close
    * @returns Promise that resolves when stream is closed
    */
@@ -108,7 +108,7 @@ export class TraceFileManager {
         resolve();
       });
 
-      stream.once('error', (error) => {
+      stream.once('error', error => {
         reject(error);
       });
 
@@ -124,7 +124,7 @@ export class TraceFileManager {
 
   /**
    * Check if a file exists
-   * 
+   *
    * @param filePath - File path to check
    * @returns True if file exists, false otherwise
    */
@@ -138,7 +138,7 @@ export class TraceFileManager {
 
   /**
    * Get file size in bytes
-   * 
+   *
    * @param filePath - File path
    * @returns File size in bytes, or 0 if file doesn't exist
    */
@@ -156,7 +156,7 @@ export class TraceFileManager {
 
   /**
    * Delete a file safely
-   * 
+   *
    * @param filePath - File path to delete
    * @returns True if deleted successfully, false otherwise
    */
@@ -173,4 +173,3 @@ export class TraceFileManager {
     }
   }
 }
-
