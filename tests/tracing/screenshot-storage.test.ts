@@ -39,11 +39,11 @@ describe('Screenshot Extraction and Upload', () => {
     // Cleanup test files
     const tracePath = path.join(cacheDir, `${runId}.jsonl`);
     const cleanedTracePath = path.join(cacheDir, `${runId}.cleaned.jsonl`);
-    
+
     if (fs.existsSync(tracePath)) {
       fs.unlinkSync(tracePath);
     }
-    
+
     if (fs.existsSync(cleanedTracePath)) {
       fs.unlinkSync(cleanedTracePath);
     }
@@ -52,10 +52,11 @@ describe('Screenshot Extraction and Upload', () => {
   describe('_extractScreenshotsFromTrace', () => {
     it('should extract screenshots from trace events', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      
+
       // Create a trace file with screenshot events
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      
+      const testImageBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
       // Emit a snapshot event with screenshot
       sink.emit({
         v: 1,
@@ -74,13 +75,13 @@ describe('Screenshot Extraction and Upload', () => {
 
       // Close to write file
       await sink.close(false);
-      
+
       // Wait a bit for file to be written
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Extract screenshots
       const screenshots = await (sink as any)._extractScreenshotsFromTrace();
-      
+
       expect(screenshots.size).toBe(1);
       expect(screenshots.get(1)).toBeDefined();
       expect(screenshots.get(1)?.base64).toBe(testImageBase64);
@@ -90,8 +91,9 @@ describe('Screenshot Extraction and Upload', () => {
 
     it('should handle multiple screenshots', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      
+      const testImageBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
       // Emit multiple snapshot events with screenshots
       for (let i = 1; i <= 3; i++) {
         sink.emit({
@@ -119,7 +121,7 @@ describe('Screenshot Extraction and Upload', () => {
 
     it('should skip events without screenshots', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      
+
       // Emit snapshot without screenshot
       sink.emit({
         v: 1,
@@ -145,8 +147,9 @@ describe('Screenshot Extraction and Upload', () => {
   describe('_createCleanedTrace', () => {
     it('should remove screenshot_base64 from events', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      
+      const testImageBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
       // Emit snapshot event with screenshot
       sink.emit({
         v: 1,
@@ -182,7 +185,7 @@ describe('Screenshot Extraction and Upload', () => {
 
     it('should preserve other event types unchanged', async () => {
       const sink = new CloudTraceSink(uploadUrl, runId);
-      
+
       // Emit non-snapshot event
       sink.emit({
         v: 1,

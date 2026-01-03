@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TraceSink } from './sink';
+import { TraceEvent, TraceStats } from './types';
 
 /**
  * JsonlTraceSink writes trace events to a JSONL file (one JSON object per line)
@@ -42,7 +43,7 @@ export class JsonlTraceSink extends TraceSink {
       });
 
       // Handle stream errors (suppress logging if stream is closed)
-      this.writeStream.on('error', (error) => {
+      this.writeStream.on('error', error => {
         if (!this.closed) {
           console.error('[JsonlTraceSink] Stream error:', error);
         }
@@ -55,16 +56,17 @@ export class JsonlTraceSink extends TraceSink {
 
   /**
    * Emit a trace event (write as JSON line)
-   * @param event - Event dictionary
+   * @param event - Trace event to emit
    */
-  emit(event: Record<string, any>): void {
+  emit(event: TraceEvent): void {
     if (this.closed) {
       // Only warn in non-test environments to avoid test noise
-      const isTestEnv = process.env.CI === 'true' || 
-                        process.env.NODE_ENV === 'test' ||
-                        process.env.JEST_WORKER_ID !== undefined ||
-                        (typeof global !== 'undefined' && (global as any).__JEST__);
-      
+      const isTestEnv =
+        process.env.CI === 'true' ||
+        process.env.NODE_ENV === 'test' ||
+        process.env.JEST_WORKER_ID !== undefined ||
+        (typeof global !== 'undefined' && (global as any).__JEST__);
+
       if (!isTestEnv) {
         console.warn('[JsonlTraceSink] Attempted to emit after close()');
       }
@@ -114,7 +116,7 @@ export class JsonlTraceSink extends TraceSink {
     // Remove error listener to prevent late errors
     stream.removeAllListeners('error');
 
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       // Check if stream is already closed
       if (stream.destroyed || !stream.writable) {
         // Stream already closed, generate index and resolve immediately
@@ -161,6 +163,7 @@ export class JsonlTraceSink extends TraceSink {
    */
   private generateIndex(): void {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { writeTraceIndex } = require('./indexer');
       // Use frontend format to ensure 'step' field is present (1-based)
       // Frontend derives sequence from step.step - 1, so step must be valid
@@ -195,14 +198,14 @@ export class JsonlTraceSink extends TraceSink {
 
   /**
    * Extract execution statistics from trace file (for local traces).
-   * @returns Dictionary with stats fields (same format as Tracer.getStats())
+   * @returns Trace statistics
    */
-  getStats(): Record<string, any> {
+  getStats(): TraceStats {
     try {
       // Read trace file to extract stats
       const traceContent = fs.readFileSync(this.path, 'utf-8');
       const lines = traceContent.split('\n').filter(line => line.trim());
-      const events: any[] = [];
+      const events: TraceEvent[] = [];
 
       for (const line of lines) {
         try {
@@ -268,11 +271,16 @@ export class JsonlTraceSink extends TraceSink {
       const totalEvents = events.length;
 
       // Infer final status
-      let finalStatus = 'unknown';
+      let finalStatus: TraceStats['final_status'] = 'unknown';
       // Check for run_end event with status
       if (runEnd) {
         const status = runEnd.data?.status;
-        if (['success', 'failure', 'partial', 'unknown'].includes(status)) {
+        if (
+          status === 'success' ||
+          status === 'failure' ||
+          status === 'partial' ||
+          status === 'unknown'
+        ) {
           finalStatus = status;
         }
       } else {

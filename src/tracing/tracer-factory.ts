@@ -35,17 +35,21 @@ function getPersistentCacheDir(): string {
 /**
  * Recover orphaned traces from previous crashes
  * PRODUCTION FIX: Risk #3 - Upload traces from crashed sessions
- * 
+ *
  * Note: Silently skips in test environments to avoid test noise
  */
-async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_API_URL): Promise<void> {
+async function recoverOrphanedTraces(
+  apiKey: string,
+  apiUrl: string = SENTIENCE_API_URL
+): Promise<void> {
   // Skip orphan recovery in test environments (CI, Jest, etc.)
   // This prevents test failures from orphan recovery attempts
-  const isTestEnv = process.env.CI === 'true' || 
-                    process.env.NODE_ENV === 'test' ||
-                    process.env.JEST_WORKER_ID !== undefined ||
-                    (typeof global !== 'undefined' && (global as any).__JEST__);
-  
+  const isTestEnv =
+    process.env.CI === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.JEST_WORKER_ID !== undefined ||
+    (typeof global !== 'undefined' && (global as any).__JEST__);
+
   if (isTestEnv) {
     return;
   }
@@ -68,7 +72,9 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
     return;
   }
 
-  console.log(`⚠️  [Sentience] Found ${orphanedFiles.length} un-uploaded trace(s) from previous run(s)`);
+  console.log(
+    `⚠️  [Sentience] Found ${orphanedFiles.length} un-uploaded trace(s) from previous run(s)`
+  );
   console.log('   Attempting to upload now...');
 
   for (const file of orphanedFiles) {
@@ -84,9 +90,9 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
           { run_id: runId },
           { Authorization: `Bearer ${apiKey}` }
         ),
-        new Promise<{ status: number; data: any }>((resolve) => 
+        new Promise<{ status: number; data: any }>(resolve =>
           setTimeout(() => resolve({ status: 500, data: {} }), 5000)
-        )
+        ),
       ]);
 
       if (response.status === 200 && response.data.upload_url) {
@@ -116,7 +122,11 @@ async function recoverOrphanedTraces(apiKey: string, apiUrl: string = SENTIENCE_
 /**
  * Make HTTP/HTTPS POST request using built-in Node modules
  */
-function httpPost(url: string, data: any, headers: Record<string, string>): Promise<{
+function httpPost(
+  url: string,
+  data: any,
+  headers: Record<string, string>
+): Promise<{
   status: number;
   data: any;
 }> {
@@ -139,10 +149,10 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
       timeout: 10000, // 10 second timeout
     };
 
-    const req = protocol.request(options, (res) => {
+    const req = protocol.request(options, res => {
       let responseBody = '';
 
-      res.on('data', (chunk) => {
+      res.on('data', chunk => {
         responseBody += chunk;
       });
 
@@ -156,7 +166,7 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
       });
     });
 
-    req.on('error', (error) => {
+    req.on('error', error => {
       reject(error);
     });
 
@@ -183,12 +193,24 @@ function httpPost(url: string, data: any, headers: Record<string, string>): Prom
  * @param options.apiUrl - Sentience API base URL (default: https://api.sentienceapi.com)
  * @param options.logger - Optional logger instance for logging file sizes and errors
  * @param options.uploadTrace - Enable cloud trace upload (default: true for backward compatibility)
+ * @param options.goal - User's goal/objective for this trace run. This will be displayed as the trace name in the frontend. Should be descriptive and action-oriented. Example: "Add wireless headphones to cart on Amazon"
+ * @param options.agentType - Type of agent running (e.g., "SentienceAgent", "CustomAgent")
+ * @param options.llmModel - LLM model used (e.g., "gpt-4-turbo", "claude-3-5-sonnet")
+ * @param options.startUrl - Starting URL of the agent run (e.g., "https://amazon.com")
  * @returns Tracer configured with appropriate sink
  *
  * @example
  * ```typescript
- * // Pro tier user with cloud upload
- * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo", uploadTrace: true });
+ * // Pro tier user with goal and metadata
+ * const tracer = await createTracer({
+ *   apiKey: "sk_pro_xyz",
+ *   runId: "demo",
+ *   goal: "Add headphones to cart",
+ *   agentType: "SentienceAgent",
+ *   llmModel: "gpt-4-turbo",
+ *   startUrl: "https://amazon.com",
+ *   uploadTrace: true
+ * });
  * // Returns: Tracer with CloudTraceSink
  *
  * // Pro tier user with local-only tracing
@@ -211,6 +233,10 @@ export async function createTracer(options: {
   apiUrl?: string;
   logger?: SentienceLogger;
   uploadTrace?: boolean;
+  goal?: string;
+  agentType?: string;
+  llmModel?: string;
+  startUrl?: string;
 }): Promise<Tracer> {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || SENTIENCE_API_URL;
@@ -232,12 +258,32 @@ export async function createTracer(options: {
   // Only attempt cloud init if uploadTrace is enabled
   if (options.apiKey && uploadTrace) {
     try {
+      // Build metadata object for trace initialization
+      // Only include non-empty fields to avoid sending empty strings
+      const metadata: Record<string, string> = {};
+      if (options.goal && options.goal.trim()) {
+        metadata.goal = options.goal.trim();
+      }
+      if (options.agentType && options.agentType.trim()) {
+        metadata.agent_type = options.agentType.trim();
+      }
+      if (options.llmModel && options.llmModel.trim()) {
+        metadata.llm_model = options.llmModel.trim();
+      }
+      if (options.startUrl && options.startUrl.trim()) {
+        metadata.start_url = options.startUrl.trim();
+      }
+
+      // Build request payload
+      const payload: Record<string, any> = { run_id: runId };
+      if (Object.keys(metadata).length > 0) {
+        payload.metadata = metadata;
+      }
+
       // Request pre-signed upload URL from backend
-      const response = await httpPost(
-        `${apiUrl}/v1/traces/init`,
-        { run_id: runId },
-        { Authorization: `Bearer ${options.apiKey}` }
-      );
+      const response = await httpPost(`${apiUrl}/v1/traces/init`, payload, {
+        Authorization: `Bearer ${options.apiKey}`,
+      });
 
       if (response.status === 200 && response.data.upload_url) {
         const uploadUrl = response.data.upload_url;
