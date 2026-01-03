@@ -1,6 +1,6 @@
 /**
  * Mock implementations for testing
- * 
+ *
  * Provides mock implementations of IBrowser and IPage interfaces
  * for unit testing without requiring real browser instances
  */
@@ -30,7 +30,7 @@ export class MockPage implements IPage {
 
   async evaluate<T>(script: string | ((...args: any[]) => T), ...args: any[]): Promise<T> {
     this.evaluateCalls.push({ script, args });
-    
+
     // Default mock behavior - return empty object for snapshot calls
     if (typeof script === 'function') {
       try {
@@ -39,17 +39,17 @@ export class MockPage implements IPage {
         return {} as T;
       }
     }
-    
+
     // For string scripts, try to execute them (simplified)
     if (typeof script === 'string' && script.includes('snapshot')) {
       return {
         status: 'success',
         url: this._url,
         elements: [],
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       } as T;
     }
-    
+
     return {} as T;
   }
 
@@ -77,7 +77,7 @@ export class MockPage implements IPage {
   mouse = {
     click: async (x: number, y: number): Promise<void> => {
       this.mouseClickCalls.push({ x, y });
-    }
+    },
   };
 
   keyboard = {
@@ -86,7 +86,7 @@ export class MockPage implements IPage {
     },
     press: async (key: string): Promise<void> => {
       this.keyboardPressCalls.push(key);
-    }
+    },
   };
 }
 
@@ -114,7 +114,7 @@ export class MockBrowser implements IBrowser {
       status: 'success',
       url: this.mockPage.url(),
       elements: [],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -141,4 +141,3 @@ export class MockBrowser implements IBrowser {
     return this.mockPage;
   }
 }
-

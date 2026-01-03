@@ -29,21 +29,21 @@ describe('ConversationalAgent', () => {
       outcome: 'Success',
       durationMs: 100,
       attempt: 1,
-      goal: 'test'
+      goal: 'test',
     });
     MockedSentienceAgent.prototype.act = mockActFn;
     MockedSentienceAgent.prototype.getTokenStats = jest.fn().mockReturnValue({
       totalPromptTokens: 200,
       totalCompletionTokens: 300,
       totalTokens: 500,
-      byAction: []
+      byAction: [],
     });
 
     // Mock LLM Provider
     mockLLMProvider = {
       generate: jest.fn(),
       supportsJsonMode: jest.fn().mockReturnValue(true),
-      modelName: 'test-model'
+      modelName: 'test-model',
     } as any;
 
     // Mock SentienceBrowser
@@ -51,15 +51,15 @@ describe('ConversationalAgent', () => {
       goto: jest.fn(),
       waitForLoadState: jest.fn(),
       keyboard: {
-        press: jest.fn()
+        press: jest.fn(),
       },
-      waitForTimeout: jest.fn()
+      waitForTimeout: jest.fn(),
     } as any;
 
     mockBrowser = {
       getPage: jest.fn().mockReturnValue(mockPage),
       getApiKey: jest.fn(),
-      getApiUrl: jest.fn()
+      getApiUrl: jest.fn(),
     } as any;
 
     // Mock snapshot function
@@ -76,7 +76,7 @@ describe('ConversationalAgent', () => {
           visual_cues: { is_primary: true, background_color_name: 'blue', is_clickable: true },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
+          z_index: 1,
         },
         {
           id: 2,
@@ -87,9 +87,9 @@ describe('ConversationalAgent', () => {
           visual_cues: { is_primary: false, background_color_name: 'white', is_clickable: true },
           in_viewport: true,
           is_occluded: false,
-          z_index: 1
-        }
-      ]
+          z_index: 1,
+        },
+      ],
     };
     mockSnapshot.mockResolvedValue(mockSnap);
 
@@ -97,7 +97,7 @@ describe('ConversationalAgent', () => {
     agent = new ConversationalAgent({
       llmProvider: mockLLMProvider,
       browser: mockBrowser,
-      verbose: false
+      verbose: false,
     });
   });
 
@@ -118,7 +118,7 @@ describe('ConversationalAgent', () => {
         verbose: true,
         maxTokens: 8000,
         planningModel: 'gpt-4',
-        executionModel: 'gpt-3.5-turbo'
+        executionModel: 'gpt-3.5-turbo',
       });
 
       expect(customAgent).toBeInstanceOf(ConversationalAgent);
@@ -133,19 +133,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'NAVIGATE',
             parameters: { url: 'https://google.com' },
-            reasoning: 'Go to Google homepage'
+            reasoning: 'Go to Google homepage',
           },
           {
             action: 'FIND_AND_TYPE',
             parameters: { description: 'search box', text: 'TypeScript' },
-            reasoning: 'Enter search term'
-          }
-        ]
+            reasoning: 'Enter search term',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValue({
         content: JSON.stringify(mockPlan),
-        totalTokens: 100
+        totalTokens: 100,
       });
 
       const response = await agent.execute('Search Google for TypeScript');
@@ -171,19 +171,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'NAVIGATE',
             parameters: { url: 'https://google.com' },
-            reasoning: 'Go to Google'
-          }
-        ]
+            reasoning: 'Go to Google',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Successfully navigated to Google.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Go to Google');
@@ -202,26 +202,24 @@ describe('ConversationalAgent', () => {
           {
             action: 'FIND_AND_CLICK',
             parameters: { description: 'login button' },
-            reasoning: 'Click login'
-          }
-        ]
+            reasoning: 'Click login',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Successfully clicked the login button.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Click the login button');
 
-      expect(mockActFn).toHaveBeenCalledWith(
-        expect.stringContaining('Click on: login button')
-      );
+      expect(mockActFn).toHaveBeenCalledWith(expect.stringContaining('Click on: login button'));
       expect(response).toBeTruthy();
     });
   });
@@ -234,19 +232,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'FIND_AND_TYPE',
             parameters: { description: 'username field', text: 'testuser' },
-            reasoning: 'Type username'
-          }
-        ]
+            reasoning: 'Type username',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Successfully entered the username.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Enter username testuser');
@@ -266,19 +264,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'PRESS_KEY',
             parameters: { key: 'Enter' },
-            reasoning: 'Submit form'
-          }
-        ]
+            reasoning: 'Submit form',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Pressed the Enter key.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Press Enter');
@@ -296,19 +294,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: { seconds: 3 },
-            reasoning: 'Wait for page to load'
-          }
-        ]
+            reasoning: 'Wait for page to load',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Waited 3 seconds.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Wait 3 seconds');
@@ -324,19 +322,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: {},
-            reasoning: 'Wait briefly'
-          }
-        ]
+            reasoning: 'Wait briefly',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Waited for a moment.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       await agent.execute('Wait a moment');
@@ -353,26 +351,26 @@ describe('ConversationalAgent', () => {
           {
             action: 'EXTRACT_INFO',
             parameters: { info_type: 'page title' },
-            reasoning: 'Extract title'
-          }
-        ]
+            reasoning: 'Extract title',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       // Mock extraction response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Google Search',
-        totalTokens: 20
+        totalTokens: 20,
       });
 
       // Mock synthesis response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'The page title is "Google Search".',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('What is the page title?');
@@ -389,26 +387,26 @@ describe('ConversationalAgent', () => {
           {
             action: 'VERIFY',
             parameters: { condition: 'user is logged in' },
-            reasoning: 'Verify login status'
-          }
-        ]
+            reasoning: 'Verify login status',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       // Mock verification response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'yes',
-        totalTokens: 5
+        totalTokens: 5,
       });
 
       // Mock synthesis response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Yes, the user is logged in.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Am I logged in?');
@@ -423,26 +421,26 @@ describe('ConversationalAgent', () => {
           {
             action: 'VERIFY',
             parameters: { condition: 'error message is displayed' },
-            reasoning: 'Check for errors'
-          }
-        ]
+            reasoning: 'Check for errors',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       // Mock verification response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'no',
-        totalTokens: 5
+        totalTokens: 5,
       });
 
       // Mock synthesis response
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'No error message is displayed.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Is there an error?');
@@ -459,29 +457,29 @@ describe('ConversationalAgent', () => {
           {
             action: 'NAVIGATE',
             parameters: { url: 'https://google.com' },
-            reasoning: 'Go to Google'
+            reasoning: 'Go to Google',
           },
           {
             action: 'FIND_AND_TYPE',
             parameters: { description: 'search box', text: 'TypeScript' },
-            reasoning: 'Enter search term'
+            reasoning: 'Enter search term',
           },
           {
             action: 'PRESS_KEY',
             parameters: { key: 'Enter' },
-            reasoning: 'Submit search'
-          }
-        ]
+            reasoning: 'Submit search',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 100
+        totalTokens: 100,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'I searched Google for TypeScript and got the results.',
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       const response = await agent.execute('Search Google for TypeScript');
@@ -499,14 +497,14 @@ describe('ConversationalAgent', () => {
           {
             action: 'FIND_AND_CLICK',
             parameters: { description: 'nonexistent button' },
-            reasoning: 'Try to click'
-          }
-        ]
+            reasoning: 'Try to click',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       // Override the mockActFn for this specific test to simulate failure
@@ -514,7 +512,7 @@ describe('ConversationalAgent', () => {
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Could not find the button to click.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const response = await agent.execute('Click the button');
@@ -531,19 +529,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: { seconds: 1 },
-            reasoning: 'Wait'
-          }
-        ]
+            reasoning: 'Wait',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Completed the task.',
-        totalTokens: 20
+        totalTokens: 20,
       });
 
       await agent.execute('Do something');
@@ -561,19 +559,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: { seconds: 1 },
-            reasoning: 'Wait'
-          }
-        ]
+            reasoning: 'Wait',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Done.',
-        totalTokens: 10
+        totalTokens: 10,
       });
 
       await agent.execute('Do something');
@@ -594,19 +592,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: { seconds: 1 },
-            reasoning: 'Process'
-          }
-        ]
+            reasoning: 'Process',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Hello! How can I help?',
-        totalTokens: 20
+        totalTokens: 20,
       });
 
       const response = await agent.chat('Hello');
@@ -625,19 +623,19 @@ describe('ConversationalAgent', () => {
           {
             action: 'WAIT',
             parameters: { seconds: 1 },
-            reasoning: 'Wait'
-          }
-        ]
+            reasoning: 'Wait',
+          },
+        ],
       };
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: JSON.stringify(mockPlan),
-        totalTokens: 50
+        totalTokens: 50,
       });
 
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'Task completed.',
-        totalTokens: 20
+        totalTokens: 20,
       });
 
       await agent.execute('Do a task');
@@ -645,7 +643,7 @@ describe('ConversationalAgent', () => {
       // Now get summary
       mockLLMProvider.generate.mockResolvedValueOnce({
         content: 'The session completed one task successfully.',
-        totalTokens: 30
+        totalTokens: 30,
       });
 
       const summary = await agent.getSummary();
@@ -654,8 +652,8 @@ describe('ConversationalAgent', () => {
       const summaryLower = summary.toLowerCase();
       expect(
         summaryLower.includes('session') ||
-        summaryLower.includes('completed') ||
-        summaryLower.includes('task')
+          summaryLower.includes('completed') ||
+          summaryLower.includes('task')
       ).toBe(true);
     });
 

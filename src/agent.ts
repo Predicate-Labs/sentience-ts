@@ -5,13 +5,10 @@
 
 import { SentienceBrowser } from './browser';
 import { snapshot, SnapshotOptions } from './snapshot';
-import { Snapshot, Element, ActionResult } from './types';
+import { Snapshot } from './types';
 import { LLMProvider, LLMResponse } from './llm-provider';
 import { Tracer } from './tracing/tracer';
-import { TraceEventData, TraceElement } from './tracing/types';
 import { randomUUID } from 'crypto';
-import { SnapshotDiff } from './snapshot-diff';
-import { ElementFilter } from './utils/element-filter';
 import { TraceEventBuilder } from './utils/trace-event-builder';
 import { LLMInteractionHandler } from './utils/llm-interaction-handler';
 import { ActionExecutor } from './utils/action-executor';
@@ -129,19 +126,21 @@ export class SentienceAgent {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalTokens: 0,
-      byAction: []
+      byAction: [],
     };
-    
+
     // Initialize handlers
     this.llmHandler = new LLMInteractionHandler(this.llm, this.verbose);
     this.actionExecutor = new ActionExecutor(this.browser, this.verbose);
   }
 
-
   /**
    * Get bounding box for an element from snapshot
    */
-  private getElementBbox(elementId: number | undefined, snap: Snapshot): { x: number; y: number; width: number; height: number } | undefined {
+  private getElementBbox(
+    elementId: number | undefined,
+    snap: Snapshot
+  ): { x: number; y: number; width: number; height: number } | undefined {
     if (elementId === undefined) return undefined;
     const el = snap.elements.find(e => e.id === elementId);
     if (!el) return undefined;
@@ -205,7 +204,8 @@ export class SentienceAgent {
 
     // Emit step_start event
     if (this.tracer) {
-      const currentUrl = this.browser.getPage().url();
+      const page = this.browser.getPage();
+      const currentUrl = page ? page.url() : 'unknown';
       this.tracer.emitStepStart(stepId, this.stepCount, goal, 0, currentUrl);
     }
 
@@ -262,12 +262,16 @@ export class SentienceAgent {
 
         // Emit LLM response event
         if (this.tracer) {
-          this.tracer.emit('llm_response', {
-            model: llmResponse.modelName,
-            prompt_tokens: llmResponse.promptTokens,
-            completion_tokens: llmResponse.completionTokens,
-            response_text: llmResponse.content.substring(0, 500),
-          }, stepId);
+          this.tracer.emit(
+            'llm_response',
+            {
+              model: llmResponse.modelName,
+              prompt_tokens: llmResponse.promptTokens,
+              completion_tokens: llmResponse.completionTokens,
+              response_text: llmResponse.content.substring(0, 500),
+            },
+            stepId
+          );
         }
 
         // Track token usage
@@ -286,13 +290,17 @@ export class SentienceAgent {
 
         // Emit action event
         if (this.tracer) {
-          this.tracer.emit('action', {
-            action_type: result.action,
-            element_id: result.elementId,
-            text: result.text,
-            key: result.key,
-            success: result.success,
-          }, stepId);
+          this.tracer.emit(
+            'action',
+            {
+              action_type: result.action,
+              element_id: result.elementId,
+              text: result.text,
+              key: result.key,
+              success: result.success,
+            },
+            stepId
+          );
         }
 
         // 5. RECORD: Track history
@@ -302,7 +310,7 @@ export class SentienceAgent {
           result,
           success: result.success,
           attempt,
-          durationMs
+          durationMs,
         });
 
         if (this.verbose) {
@@ -314,7 +322,7 @@ export class SentienceAgent {
         if (this.tracer) {
           const preUrl = snap.url;
           const postUrl = this.browser.getPage()?.url() || null;
-          
+
           // Build step_end event using TraceEventBuilder
           const stepEndData = TraceEventBuilder.buildStepEndData({
             stepId,
@@ -327,12 +335,11 @@ export class SentienceAgent {
             llmResponse,
             result,
           });
-          
+
           this.tracer.emit('step_end', stepEndData, stepId);
         }
 
         return result;
-
       } catch (error: any) {
         // Emit error event
         if (this.tracer) {
@@ -351,7 +358,7 @@ export class SentienceAgent {
             goal,
             error: error.message,
             attempt,
-            durationMs: 0
+            durationMs: 0,
           };
           this.history.push(errorResult as any);
           throw new Error(`Failed after ${maxRetries} retries: ${error.message}`);
@@ -361,8 +368,6 @@ export class SentienceAgent {
 
     throw new Error('Unexpected: loop should have returned or thrown');
   }
-
-
 
   /**
    * Track token usage for analytics
@@ -383,7 +388,7 @@ export class SentienceAgent {
       promptTokens: llmResponse.promptTokens,
       completionTokens: llmResponse.completionTokens,
       totalTokens: llmResponse.totalTokens,
-      model: llmResponse.modelName
+      model: llmResponse.modelName,
     });
   }
 
@@ -413,7 +418,7 @@ export class SentienceAgent {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalTokens: 0,
-      byAction: []
+      byAction: [],
     };
   }
 

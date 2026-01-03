@@ -2,10 +2,9 @@
  * CLI commands for Sentience SDK
  */
 
-import * as fs from 'fs';
 import { SentienceBrowser } from './browser';
 import { inspect } from './inspector';
-import { record, Recorder, Trace } from './recorder';
+import { record, Recorder } from './recorder';
 import { ScriptGenerator } from './generator';
 
 async function cmdInspect(args: string[]) {
@@ -27,11 +26,13 @@ async function cmdInspect(args: string[]) {
     await inspector.start();
 
     // Keep running until interrupted
-    process.on('SIGINT', async () => {
-      console.log('\n👋 Inspector stopped.');
-      await inspector.stop();
-      await browser.close();
-      process.exit(0);
+    process.on('SIGINT', () => {
+      void (async () => {
+        console.log('\n👋 Inspector stopped.');
+        await inspector.stop();
+        await browser.close();
+        process.exit(0);
+      })();
     });
 
     // Wait indefinitely
@@ -71,8 +72,12 @@ async function cmdRecord(args: string[]) {
 
     // Navigate to start URL if provided
     if (url) {
-      await browser.getPage().goto(url);
-      await browser.getPage().waitForLoadState('networkidle');
+      const page = browser.getPage();
+      if (!page) {
+        throw new Error('Browser not started. Call start() first.');
+      }
+      await page.goto(url);
+      await page.waitForLoadState('networkidle');
     }
 
     console.log('✅ Recording started. Perform actions in the browser.');
@@ -87,12 +92,14 @@ async function cmdRecord(args: string[]) {
     }
 
     // Keep running until interrupted
-    process.on('SIGINT', async () => {
-      console.log('\n💾 Saving trace...');
-      await rec.save(output);
-      console.log(`✅ Trace saved to ${output}`);
-      await browser.close();
-      process.exit(0);
+    process.on('SIGINT', () => {
+      void (async () => {
+        console.log('\n💾 Saving trace...');
+        await rec.save(output);
+        console.log(`✅ Trace saved to ${output}`);
+        await browser.close();
+        process.exit(0);
+      })();
     });
 
     // Wait indefinitely
@@ -166,13 +173,17 @@ async function main() {
     console.log('  gen <trace.json>           Generate script from trace');
     console.log('');
     console.log('Options:');
-    console.log('  --proxy <url>              Proxy connection string (e.g., http://user:pass@host:port)');
+    console.log(
+      '  --proxy <url>              Proxy connection string (e.g., http://user:pass@host:port)'
+    );
     console.log('');
     console.log('Examples:');
     console.log('  sentience inspect');
     console.log('  sentience inspect --proxy http://user:pass@proxy.com:8000');
     console.log('  sentience record --url https://example.com --output trace.json');
-    console.log('  sentience record --proxy http://user:pass@proxy.com:8000 --url https://example.com');
+    console.log(
+      '  sentience record --proxy http://user:pass@proxy.com:8000 --url https://example.com'
+    );
     console.log('  sentience gen trace.json --lang py --output script.py');
     process.exit(1);
   }
@@ -181,4 +192,3 @@ async function main() {
 if (require.main === module) {
   main().catch(console.error);
 }
-

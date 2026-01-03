@@ -1,6 +1,6 @@
 /**
  * LLMResponseBuilder - Helper for consistent LLM response building
- * 
+ *
  * Provides standardized response building and error handling across LLM providers
  */
 
@@ -12,13 +12,13 @@ import { LLMResponse } from '../llm-provider';
 export class LLMResponseBuilder {
   /**
    * Build a standardized LLMResponse from provider-specific response data
-   * 
+   *
    * @param content - Response content text
    * @param modelName - Model name/identifier
    * @param usage - Token usage data (provider-specific format)
    * @param providerType - Provider type for usage extraction
    * @returns Standardized LLMResponse
-   * 
+   *
    * @example
    * ```typescript
    * // OpenAI format
@@ -28,7 +28,7 @@ export class LLMResponseBuilder {
    *   { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
    *   'openai'
    * );
-   * 
+   *
    * // Anthropic format
    * const response = LLMResponseBuilder.build(
    *   'CLICK(1)',
@@ -73,9 +73,12 @@ export class LLMResponseBuilder {
       default:
         // Try common field names
         promptTokens = usage?.prompt_tokens || usage?.input_tokens || usage?.promptTokenCount;
-        completionTokens = usage?.completion_tokens || usage?.output_tokens || usage?.candidatesTokenCount;
-        totalTokens = usage?.total_tokens || usage?.totalTokenCount || 
-                     ((promptTokens || 0) + (completionTokens || 0));
+        completionTokens =
+          usage?.completion_tokens || usage?.output_tokens || usage?.candidatesTokenCount;
+        totalTokens =
+          usage?.total_tokens ||
+          usage?.totalTokenCount ||
+          (promptTokens || 0) + (completionTokens || 0);
         break;
     }
 
@@ -84,13 +87,13 @@ export class LLMResponseBuilder {
       promptTokens,
       completionTokens,
       totalTokens,
-      modelName
+      modelName,
     };
   }
 
   /**
    * Validate that an LLMResponse has required fields
-   * 
+   *
    * @param response - LLMResponse to validate
    * @returns True if valid, false otherwise
    */
@@ -116,7 +119,7 @@ export class LLMResponseBuilder {
 
   /**
    * Create an error response
-   * 
+   *
    * @param error - Error message or Error object
    * @param modelName - Optional model name
    * @returns LLMResponse with error content
@@ -128,8 +131,7 @@ export class LLMResponseBuilder {
       modelName: modelName || 'unknown',
       promptTokens: 0,
       completionTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
     };
   }
 }
-

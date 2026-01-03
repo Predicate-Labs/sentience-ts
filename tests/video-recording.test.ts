@@ -92,7 +92,12 @@ describe('video recording', () => {
     const customPath = path.join(videoDir, 'my_recording.webm');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
@@ -118,7 +123,12 @@ describe('video recording', () => {
     const nestedPath = path.join(videoDir, 'project', 'tutorials', 'video1.webm');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
@@ -164,7 +174,12 @@ describe('video recording', () => {
     const videoDir = path.join(tempDir, 'new_recordings', 'subdir');
 
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       videoDir
     );
 
@@ -193,7 +208,12 @@ describe('video recording', () => {
     // Create 3 video recordings
     for (let i = 0; i < 3; i++) {
       const browser = new SentienceBrowser(
-        undefined, undefined, true, undefined, undefined, undefined,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
         videoDir
       );
 
@@ -222,7 +242,12 @@ describe('video recording', () => {
 
   it('should use default resolution of 1280x800', () => {
     const browser = new SentienceBrowser(
-      undefined, undefined, true, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
       path.join(tempDir, 'recordings')
     );
 
@@ -232,16 +257,21 @@ describe('video recording', () => {
 
   it('should handle video recording with various resolutions', async () => {
     const resolutions = [
-      { width: 1280, height: 720 },   // 720p
-      { width: 1920, height: 1080 },  // 1080p
-      { width: 2560, height: 1440 },  // 1440p
+      { width: 1280, height: 720 }, // 720p
+      { width: 1920, height: 1080 }, // 1080p
+      { width: 2560, height: 1440 }, // 1440p
     ];
 
     for (const resolution of resolutions) {
       const videoDir = path.join(tempDir, `recordings_${resolution.width}x${resolution.height}`);
 
       const browser = new SentienceBrowser(
-        undefined, undefined, true, undefined, undefined, undefined,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
         videoDir,
         resolution
       );

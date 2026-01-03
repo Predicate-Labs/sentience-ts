@@ -7,7 +7,7 @@ export class TraceFileInfo {
     public path: string,
     public size_bytes: number,
     public sha256: string,
-    public line_count: number | null = null  // Number of lines in the trace file
+    public line_count: number | null = null // Number of lines in the trace file
   ) {}
 
   toJSON() {
@@ -29,9 +29,13 @@ export class TraceSummary {
     public error_count: number,
     public final_url: string | null,
     public status: 'success' | 'failure' | 'partial' | 'unknown' | null = null,
-    public agent_name: string | null = null,  // Agent name from run_start event
-    public duration_ms: number | null = null,  // Calculated duration in milliseconds
-    public counters: { snapshot_count: number; action_count: number; error_count: number } | null = null  // Aggregated counters
+    public agent_name: string | null = null, // Agent name from run_start event
+    public duration_ms: number | null = null, // Calculated duration in milliseconds
+    public counters: {
+      snapshot_count: number;
+      action_count: number;
+      error_count: number;
+    } | null = null // Aggregated counters
   ) {}
 
   toJSON() {
@@ -114,7 +118,7 @@ export class StepIndex {
     public ts_end: string,
     public offset_start: number,
     public offset_end: number,
-    public line_number: number | null = null,  // Line number for byte-range fetching
+    public line_number: number | null = null, // Line number for byte-range fetching
     public url_before: string | null,
     public url_after: string | null,
     public snapshot_before: SnapshotInfo,
@@ -161,13 +165,13 @@ export class TraceIndex {
       created_at: this.created_at,
       trace_file: this.trace_file.toJSON(),
       summary: this.summary.toJSON(),
-      steps: this.steps.map((s) => s.toJSON()),
+      steps: this.steps.map(s => s.toJSON()),
     };
   }
 
   /**
    * Convert to SS format.
-   * 
+   *
    * Maps SDK field names to frontend expectations:
    * - created_at -> generated_at
    * - first_ts -> start_time
@@ -200,36 +204,38 @@ export class TraceIndex {
     return {
       version: this.version,
       run_id: this.run_id,
-      generated_at: this.created_at,  // Renamed from created_at
+      generated_at: this.created_at, // Renamed from created_at
       trace_file: {
         path: this.trace_file.path,
         size_bytes: this.trace_file.size_bytes,
-        line_count: this.trace_file.line_count,  // Added
+        line_count: this.trace_file.line_count, // Added
       },
       summary: {
-        agent_name: this.summary.agent_name,  // Added
-        total_steps: this.summary.step_count,  // Renamed from step_count
-        status: this.summary.status !== 'unknown' ? this.summary.status : null,  // Filter out unknown
-        start_time: this.summary.first_ts,  // Renamed from first_ts
-        end_time: this.summary.last_ts,  // Renamed from last_ts
-        duration_ms: durationMs,  // Added
-        counters: counters,  // Added
+        agent_name: this.summary.agent_name, // Added
+        total_steps: this.summary.step_count, // Renamed from step_count
+        status: this.summary.status !== 'unknown' ? this.summary.status : null, // Filter out unknown
+        start_time: this.summary.first_ts, // Renamed from first_ts
+        end_time: this.summary.last_ts, // Renamed from last_ts
+        duration_ms: durationMs, // Added
+        counters: counters, // Added
       },
-      steps: this.steps.map((s) => ({
-        step: s.step_index,  // Already 1-based ✅
+      steps: this.steps.map(s => ({
+        step: s.step_index, // Already 1-based ✅
         byte_offset: s.offset_start,
-        line_number: s.line_number,  // Added
-        timestamp: s.ts_start,  // Use start time
+        line_number: s.line_number, // Added
+        timestamp: s.ts_start, // Use start time
         action: {
           type: s.action.type || '',
-          goal: s.goal,  // Move goal into action
+          goal: s.goal, // Move goal into action
           digest: s.action.args_digest,
         },
-        snapshot: s.snapshot_after.url ? {
-          url: s.snapshot_after.url,
-          digest: s.snapshot_after.digest,
-        } : undefined,
-        status: s.status !== 'unknown' ? s.status : undefined,  // Filter out unknown
+        snapshot: s.snapshot_after.url
+          ? {
+              url: s.snapshot_after.url,
+              digest: s.snapshot_after.digest,
+            }
+          : undefined,
+        status: s.status !== 'unknown' ? s.status : undefined, // Filter out unknown
       })),
     };
   }

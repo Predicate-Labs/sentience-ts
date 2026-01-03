@@ -138,7 +138,7 @@ describe('query', () => {
     const snap = createTestSnapshot();
     const results = query(snap, "text^='Sign'");
     expect(results.length).toBe(2);
-    expect(results.map((el) => el.text)).toEqual(['Sign In', 'Sign Out']);
+    expect(results.map(el => el.text)).toEqual(['Sign In', 'Sign Out']);
   });
 
   it('should filter by text suffix', () => {
@@ -247,6 +247,3 @@ describe('find', () => {
     expect(result).toBeNull();
   });
 });
-
-
-

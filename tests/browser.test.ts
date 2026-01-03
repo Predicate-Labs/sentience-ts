@@ -8,9 +8,14 @@ import { chromium, BrowserContext, Page } from 'playwright';
 describe('Browser Proxy Support', () => {
   describe('Proxy Parsing', () => {
     it('should parse HTTP proxy with credentials', () => {
-      const browser = new SentienceBrowser(undefined, undefined, false, 'http://user:pass@proxy.com:8000');
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        false,
+        'http://user:pass@proxy.com:8000'
+      );
       const config = (browser as any).parseProxy('http://user:pass@proxy.com:8000');
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('http://proxy.com:8000');
       expect(config?.username).toBe('user');
@@ -18,9 +23,14 @@ describe('Browser Proxy Support', () => {
     });
 
     it('should parse HTTPS proxy with credentials', () => {
-      const browser = new SentienceBrowser(undefined, undefined, false, 'https://user:pass@proxy.com:8443');
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        false,
+        'https://user:pass@proxy.com:8443'
+      );
       const config = (browser as any).parseProxy('https://user:pass@proxy.com:8443');
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('https://proxy.com:8443');
       expect(config?.username).toBe('user');
@@ -28,9 +38,14 @@ describe('Browser Proxy Support', () => {
     });
 
     it('should parse SOCKS5 proxy with credentials', () => {
-      const browser = new SentienceBrowser(undefined, undefined, false, 'socks5://user:pass@proxy.com:1080');
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        false,
+        'socks5://user:pass@proxy.com:1080'
+      );
       const config = (browser as any).parseProxy('socks5://user:pass@proxy.com:1080');
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('socks5://proxy.com:1080');
       expect(config?.username).toBe('user');
@@ -40,7 +55,7 @@ describe('Browser Proxy Support', () => {
     it('should parse HTTP proxy without credentials', () => {
       const browser = new SentienceBrowser(undefined, undefined, false, 'http://proxy.com:8000');
       const config = (browser as any).parseProxy('http://proxy.com:8000');
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('http://proxy.com:8000');
       expect(config?.username).toBeUndefined();
@@ -50,50 +65,50 @@ describe('Browser Proxy Support', () => {
     it('should handle invalid proxy gracefully', () => {
       const browser = new SentienceBrowser(undefined, undefined, false, 'invalid');
       const config = (browser as any).parseProxy('invalid');
-      
+
       expect(config).toBeUndefined();
     });
 
     it('should handle missing port gracefully', () => {
       const browser = new SentienceBrowser(undefined, undefined, false, 'http://proxy.com');
       const config = (browser as any).parseProxy('http://proxy.com');
-      
+
       expect(config).toBeUndefined();
     });
 
     it('should handle unsupported scheme gracefully', () => {
       const browser = new SentienceBrowser(undefined, undefined, false, 'ftp://proxy.com:8000');
       const config = (browser as any).parseProxy('ftp://proxy.com:8000');
-      
+
       expect(config).toBeUndefined();
     });
 
     it('should return undefined for empty string', () => {
       const browser = new SentienceBrowser(undefined, undefined, false);
       const config = (browser as any).parseProxy('');
-      
+
       expect(config).toBeUndefined();
     });
 
     it('should return undefined for undefined', () => {
       const browser = new SentienceBrowser(undefined, undefined, false);
       const config = (browser as any).parseProxy(undefined);
-      
+
       expect(config).toBeUndefined();
     });
 
     it('should support proxy from environment variable', () => {
       const originalEnv = process.env.SENTIENCE_PROXY;
       process.env.SENTIENCE_PROXY = 'http://env:pass@proxy.com:8000';
-      
+
       const browser = new SentienceBrowser(undefined, undefined, false);
       const config = (browser as any).parseProxy((browser as any)._proxy);
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('http://proxy.com:8000');
       expect(config?.username).toBe('env');
       expect(config?.password).toBe('pass');
-      
+
       // Restore
       if (originalEnv) {
         process.env.SENTIENCE_PROXY = originalEnv;
@@ -105,14 +120,19 @@ describe('Browser Proxy Support', () => {
     it('should prioritize parameter over environment variable', () => {
       const originalEnv = process.env.SENTIENCE_PROXY;
       process.env.SENTIENCE_PROXY = 'http://env:pass@proxy.com:8000';
-      
-      const browser = new SentienceBrowser(undefined, undefined, false, 'http://param:pass@proxy.com:9000');
+
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        false,
+        'http://param:pass@proxy.com:9000'
+      );
       const config = (browser as any).parseProxy((browser as any)._proxy);
-      
+
       expect(config).toBeDefined();
       expect(config?.server).toBe('http://proxy.com:9000');
       expect(config?.username).toBe('param');
-      
+
       // Restore
       if (originalEnv) {
         process.env.SENTIENCE_PROXY = originalEnv;
@@ -128,7 +148,12 @@ describe('Browser Proxy Support', () => {
     // Integration tests would verify actual proxy functionality
 
     it('should include WebRTC flags when proxy is configured', () => {
-      const browser = new SentienceBrowser(undefined, undefined, false, 'http://user:pass@proxy.com:8000');
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        false,
+        'http://user:pass@proxy.com:8000'
+      );
       // We can't easily test the actual launch args without mocking Playwright
       // But we can verify the proxy is stored
       expect((browser as any)._proxy).toBe('http://user:pass@proxy.com:8000');
@@ -148,13 +173,33 @@ describe('Browser Proxy Support', () => {
 
     it('should accept custom viewport', () => {
       const customViewport = { width: 1920, height: 1080 };
-      const browser = new SentienceBrowser(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, customViewport);
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        customViewport
+      );
       expect((browser as any)._viewport).toEqual(customViewport);
     });
 
     it('should accept mobile viewport', () => {
       const mobileViewport = { width: 375, height: 667 };
-      const browser = new SentienceBrowser(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, mobileViewport);
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mobileViewport
+      );
       expect((browser as any)._viewport).toEqual(mobileViewport);
     });
   });
@@ -199,7 +244,11 @@ describe('Browser Proxy Support', () => {
       });
 
       try {
-        const browser = await SentienceBrowser.fromExisting(context, 'test_key', 'https://test.api.com');
+        const browser = await SentienceBrowser.fromExisting(
+          context,
+          'test_key',
+          'https://test.api.com'
+        );
 
         expect(browser.getApiKey()).toBe('test_key');
         expect(browser.getApiUrl()).toBe('https://test.api.com');
@@ -252,7 +301,11 @@ describe('Browser Proxy Support', () => {
       const page = await context.newPage();
 
       try {
-        const sentienceBrowser = SentienceBrowser.fromPage(page, 'test_key', 'https://test.api.com');
+        const sentienceBrowser = SentienceBrowser.fromPage(
+          page,
+          'test_key',
+          'https://test.api.com'
+        );
 
         expect(sentienceBrowser.getApiKey()).toBe('test_key');
         expect(sentienceBrowser.getApiUrl()).toBe('https://test.api.com');
@@ -264,4 +317,3 @@ describe('Browser Proxy Support', () => {
     }, 30000);
   });
 });
-

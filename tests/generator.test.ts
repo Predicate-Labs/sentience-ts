@@ -116,4 +116,3 @@ describe('ScriptGenerator', () => {
     }
   }, 60000); // 60 seconds - browser startup can be slow
 });
-
