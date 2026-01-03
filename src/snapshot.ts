@@ -6,6 +6,7 @@ import { SentienceBrowser } from './browser';
 import { Snapshot } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import { BrowserEvaluator } from './utils/browser-evaluator';
 
 // Maximum payload size for API requests (10MB server limit)
 const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024;
@@ -77,21 +78,15 @@ async function snapshotViaExtension(
   // The new architecture loads injected_api.js asynchronously, so window.sentience
   // may not be immediately available after page load
   try {
-    await page.waitForFunction(
+    await BrowserEvaluator.waitForCondition(
+      page,
       () => typeof (window as any).sentience !== 'undefined',
-      { timeout: 5000 }
+      5000
     );
   } catch (e) {
-    // Gather diagnostics if wait fails
-    const diag = await page.evaluate(() => ({
-      sentience_defined: typeof (window as any).sentience !== 'undefined',
-      extension_id: document.documentElement.dataset.sentienceExtensionId || 'not set',
-      url: window.location.href
-    })).catch(() => ({ error: 'Could not gather diagnostics' }));
-
     throw new Error(
       `Sentience extension failed to inject window.sentience API. ` +
-      `Is the extension loaded? Diagnostics: ${JSON.stringify(diag)}`
+      `Is the extension loaded? ${e instanceof Error ? e.message : String(e)}`
     );
   }
 
@@ -108,9 +103,11 @@ async function snapshotViaExtension(
   }
 
   // Call extension API
-  const result = await page.evaluate((opts) => {
-    return (window as any).sentience.snapshot(opts);
-  }, opts);
+  const result = await BrowserEvaluator.evaluate(
+    page,
+    (opts) => (window as any).sentience.snapshot(opts),
+    opts
+  );
 
   // Extract screenshot format from data URL if not provided by extension
   if (result.screenshot && !result.screenshot_format) {
@@ -133,11 +130,15 @@ async function snapshotViaExtension(
 
   // Show visual overlay if requested
   if (options.show_overlay && result.raw_elements) {
-    await page.evaluate((elements: any[]) => {
-      if ((window as any).sentience && (window as any).sentience.showOverlay) {
-        (window as any).sentience.showOverlay(elements, null);
-      }
-    }, result.raw_elements);
+    await BrowserEvaluator.evaluate(
+      page,
+      (elements: any[]) => {
+        if ((window as any).sentience && (window as any).sentience.showOverlay) {
+          (window as any).sentience.showOverlay(elements, null);
+        }
+      },
+      result.raw_elements
+    );
   }
 
   // Basic validation
@@ -159,9 +160,10 @@ async function snapshotViaApi(
   // CRITICAL: Wait for extension injection to complete (CSP-resistant architecture)
   // Even for API mode, we need the extension to collect raw data locally
   try {
-    await page.waitForFunction(
+    await BrowserEvaluator.waitForCondition(
+      page,
       () => typeof (window as any).sentience !== 'undefined',
-      { timeout: 5000 }
+      5000
     );
   } catch (e) {
     throw new Error(
@@ -175,9 +177,11 @@ async function snapshotViaApi(
     rawOpts.screenshot = options.screenshot;
   }
 
-  const rawResult = await page.evaluate((opts) => {
-    return (window as any).sentience.snapshot(opts);
-  }, rawOpts);
+  const rawResult = await BrowserEvaluator.evaluate(
+    page,
+    (opts) => (window as any).sentience.snapshot(opts),
+    rawOpts
+  );
 
   // Save trace if requested (save raw data before API processing)
   if (options.save_trace && rawResult.raw_elements) {
@@ -258,11 +262,15 @@ async function snapshotViaApi(
 
     // Show visual overlay if requested (use API-ranked elements)
     if (options.show_overlay && apiResult.elements) {
-      await page.evaluate((elements: any[]) => {
-        if ((window as any).sentience && (window as any).sentience.showOverlay) {
-          (window as any).sentience.showOverlay(elements, null);
-        }
-      }, apiResult.elements);
+      await BrowserEvaluator.evaluate(
+        page,
+        (elements: any[]) => {
+          if ((window as any).sentience && (window as any).sentience.showOverlay) {
+            (window as any).sentience.showOverlay(elements, null);
+          }
+        },
+        apiResult.elements
+      );
     }
 
     return snapshotData;

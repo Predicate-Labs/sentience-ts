@@ -5,6 +5,7 @@
 import { SentienceBrowser } from './browser';
 import { ActionResult, Snapshot, BBox } from './types';
 import { snapshot } from './snapshot';
+import { BrowserEvaluator } from './utils/browser-evaluator';
 
 export interface ClickRect {
   x: number;
@@ -38,7 +39,8 @@ async function highlightRect(
     durationSec,
   };
 
-  await page.evaluate(
+  await BrowserEvaluator.evaluate(
+    page,
     (args: { rect: { x: number; y: number; w: number; h: number }; highlightId: string; durationSec: number }) => {
       const { rect, highlightId, durationSec } = args;
       // Create overlay div
@@ -73,6 +75,29 @@ async function highlightRect(
   );
 }
 
+/**
+ * Click an element by its ID
+ * 
+ * Uses a hybrid approach: gets element bounding box from snapshot and calculates center,
+ * then uses Playwright's native mouse.click() for realistic event simulation.
+ * Falls back to JavaScript click if element not found in snapshot.
+ * 
+ * @param browser - SentienceBrowser instance
+ * @param elementId - Element ID from snapshot
+ * @param useMouse - Use mouse simulation (default: true). If false, uses JavaScript click.
+ * @param takeSnapshot - Take snapshot after action (default: false)
+ * @returns ActionResult with success status, outcome, duration, and optional snapshot
+ * 
+ * @example
+ * ```typescript
+ * const snap = await snapshot(browser);
+ * const button = find(snap, 'role=button');
+ * if (button) {
+ *   const result = await click(browser, button.id);
+ *   console.log(`Click ${result.success ? 'succeeded' : 'failed'}`);
+ * }
+ * ```
+ */
 export async function click(
   browser: SentienceBrowser,
   elementId: number,
@@ -100,36 +125,30 @@ export async function click(
         success = true;
       } else {
         // Fallback to JS click if element not found in snapshot
-        try {
-          success = await page.evaluate((id) => {
-            return (window as any).sentience.click(id);
-          }, elementId);
-        } catch (error) {
-          // Navigation might have destroyed context, assume success if URL changed
-          success = true;
-        }
+        success = await BrowserEvaluator.evaluateWithNavigationFallback(
+          page,
+          (id) => (window as any).sentience.click(id),
+          elementId,
+          true // Assume success if navigation destroyed context
+        );
       }
     } catch (error) {
       // Fallback to JS click on error
-      try {
-        success = await page.evaluate((id) => {
-          return (window as any).sentience.click(id);
-        }, elementId);
-      } catch (evalError) {
-        // Navigation might have destroyed context, assume success
-        success = true;
-      }
+      success = await BrowserEvaluator.evaluateWithNavigationFallback(
+        page,
+        (id) => (window as any).sentience.click(id),
+        elementId,
+        true // Assume success if navigation destroyed context
+      );
     }
   } else {
     // Legacy JS-based click
-    try {
-      success = await page.evaluate((id) => {
-        return (window as any).sentience.click(id);
-      }, elementId);
-    } catch (error) {
-      // Navigation might have destroyed context, assume success
-      success = true;
-    }
+    success = await BrowserEvaluator.evaluateWithNavigationFallback(
+      page,
+      (id) => (window as any).sentience.click(id),
+      elementId,
+      true // Assume success if navigation destroyed context
+    );
   }
 
   // Wait a bit for navigation/DOM updates
@@ -185,6 +204,26 @@ export async function click(
   };
 }
 
+/**
+ * Type text into an input element
+ * 
+ * Focuses the element first, then types the text using Playwright's keyboard simulation.
+ * 
+ * @param browser - SentienceBrowser instance
+ * @param elementId - Element ID from snapshot (must be a text input element)
+ * @param text - Text to type
+ * @param takeSnapshot - Take snapshot after action (default: false)
+ * @returns ActionResult with success status, outcome, duration, and optional snapshot
+ * 
+ * @example
+ * ```typescript
+ * const snap = await snapshot(browser);
+ * const searchBox = find(snap, 'role=searchbox');
+ * if (searchBox) {
+ *   await typeText(browser, searchBox.id, 'Hello World');
+ * }
+ * ```
+ */
 export async function typeText(
   browser: SentienceBrowser,
   elementId: number,
@@ -196,14 +235,18 @@ export async function typeText(
   const urlBefore = page.url();
 
   // Focus element first
-  const focused = await page.evaluate((id) => {
-    const el = (window as any).sentience_registry[id];
-    if (el) {
-      el.focus();
-      return true;
-    }
-    return false;
-  }, elementId);
+  const focused = await BrowserEvaluator.evaluate(
+    page,
+    (id) => {
+      const el = (window as any).sentience_registry[id];
+      if (el) {
+        el.focus();
+        return true;
+      }
+      return false;
+    },
+    elementId
+  );
 
   if (!focused) {
     return {
@@ -237,6 +280,24 @@ export async function typeText(
   };
 }
 
+/**
+ * Press a keyboard key
+ * 
+ * Simulates pressing a key using Playwright's keyboard API.
+ * Common keys: 'Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', etc.
+ * 
+ * @param browser - SentienceBrowser instance
+ * @param key - Key to press (e.g., 'Enter', 'Escape', 'Tab')
+ * @param takeSnapshot - Take snapshot after action (default: false)
+ * @returns ActionResult with success status, outcome, duration, and optional snapshot
+ * 
+ * @example
+ * ```typescript
+ * // Press Enter after typing
+ * await typeText(browser, elementId, 'search query');
+ * await press(browser, 'Enter');
+ * ```
+ */
 export async function press(
   browser: SentienceBrowser,
   key: string,

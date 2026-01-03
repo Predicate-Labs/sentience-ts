@@ -4,6 +4,21 @@
 
 import { Snapshot, Element, QuerySelector, QuerySelectorObject } from './types';
 
+/**
+ * Parse a selector string into a QuerySelectorObject
+ * 
+ * Supports operators: =, !=, ~, ^=, $=, >, >=, <, <=
+ * Supports dot notation: attr.id, css.color, bbox.x
+ * 
+ * @param selector - Selector string (e.g., "role=button", "text~search", "importance>0.5")
+ * @returns Parsed query object
+ * 
+ * @example
+ * ```typescript
+ * const query = parseSelector('role=button clickable=true importance>0.5');
+ * // Returns: { role: 'button', clickable: true, importance_min: 0.5 }
+ * ```
+ */
 export function parseSelector(selector: string): QuerySelectorObject {
   const query: QuerySelectorObject & {
     role_exclude?: string;
@@ -347,6 +362,28 @@ function matchElement(
   return true;
 }
 
+/**
+ * Query elements from a snapshot using a selector
+ * 
+ * @param snapshot - Snapshot containing elements to query
+ * @param selector - Query selector (string DSL or object)
+ * @returns Array of matching elements, sorted by importance (descending)
+ * 
+ * @example
+ * ```typescript
+ * const snap = await snapshot(browser);
+ * 
+ * // String selector
+ * const buttons = query(snap, 'role=button');
+ * const clickable = query(snap, 'clickable=true');
+ * 
+ * // Object selector
+ * const results = query(snap, {
+ *   role: 'button',
+ *   importance_min: 0.5
+ * });
+ * ```
+ */
 export function query(snapshot: Snapshot, selector: QuerySelector): Element[] {
   // Parse selector if string
   const queryObj = typeof selector === 'string' ? parseSelector(selector) : (selector as any);
@@ -360,6 +397,27 @@ export function query(snapshot: Snapshot, selector: QuerySelector): Element[] {
   return matches;
 }
 
+/**
+ * Find the first element matching a selector
+ * 
+ * @param snapshot - Snapshot containing elements to search
+ * @param selector - Query selector (string DSL or object)
+ * @returns First matching element, or null if none found
+ * 
+ * @example
+ * ```typescript
+ * const snap = await snapshot(browser);
+ * 
+ * // Find first button
+ * const button = find(snap, 'role=button');
+ * if (button) {
+ *   await click(browser, button.id);
+ * }
+ * 
+ * // Find element by text
+ * const searchBox = find(snap, 'text~search');
+ * ```
+ */
 export function find(snapshot: Snapshot, selector: QuerySelector): Element | null {
   const results = query(snapshot, selector);
   return results[0] || null;

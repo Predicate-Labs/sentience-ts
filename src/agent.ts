@@ -12,6 +12,8 @@ import { Tracer } from './tracing/tracer';
 import { TraceEventData, TraceElement } from './tracing/types';
 import { randomUUID, createHash } from 'crypto';
 import { SnapshotDiff } from './snapshot-diff';
+import { ElementFilter } from './utils/element-filter';
+import { TraceEventBuilder } from './utils/trace-event-builder';
 
 /**
  * Execution result from agent.act()
@@ -127,12 +129,6 @@ export class SentienceAgent {
     
   }
 
-  /**
-   * Compute SHA256 hash of text
-   */
-  private computeHash(text: string): string {
-    return createHash('sha256').update(text, 'utf8').digest('hex');
-  }
 
   /**
    * Get bounding box for an element from snapshot
@@ -217,8 +213,8 @@ export class SentienceAgent {
         // Update previous snapshot for next comparison
         this.previousSnapshot = snap;
 
-        // Apply element filtering based on goal
-        const filteredElements = this.filterElements(snapWithDiff, goal);
+        // Apply element filtering based on goal using ElementFilter
+        const filteredElements = ElementFilter.filterByGoal(snapWithDiff, goal, this.snapshotLimit);
 
         // Create filtered snapshot
         const filteredSnap: Snapshot = {
@@ -297,7 +293,14 @@ export class SentienceAgent {
           this.tracer.emit('snapshot', snapshotData, stepId);
         }
 
-        // 2. GROUND: Format elements for LLM context
+        // 2. GROUND: Filter elements using ElementFilter
+        const filteredElements = ElementFilter.filterByGoal(snap, goal, this.snapshotLimit);
+        const filteredSnap: Snapshot = {
+          ...snap,
+          elements: filteredElements
+        };
+        
+        // Format elements for LLM context
         const context = this.buildContext(filteredSnap, goal);
 
         // 3. THINK: Query LLM for next action
@@ -362,93 +365,18 @@ export class SentienceAgent {
           const preUrl = snap.url;
           const postUrl = this.browser.getPage()?.url() || null;
           
-          // Compute snapshot digest (simplified - use URL + timestamp)
-          const snapshotDigest = `sha256:${this.computeHash(`${preUrl}${snap.timestamp}`)}`;
-          
-          // Build LLM data
-          const llmResponseText = llmResponse.content;
-          const llmResponseHash = `sha256:${this.computeHash(llmResponseText)}`;
-          const llmData: TraceEventData['llm'] = {
-            model: llmResponse.modelName,
-            response_text: llmResponseText,
-            response_hash: llmResponseHash,
-            usage: {
-              prompt_tokens: llmResponse.promptTokens || 0,
-              completion_tokens: llmResponse.completionTokens || 0,
-              total_tokens: llmResponse.totalTokens || 0,
-            },
-          };
-          
-          // Build exec data
-          const execData: TraceEventData['exec'] = {
-            success: result.success,
-            action: result.action || 'unknown',
-            outcome: result.outcome || (result.success ? `Action ${result.action || 'unknown'} executed successfully` : `Action ${result.action || 'unknown'} failed`),
-            duration_ms: durationMs,
-          };
-          
-          // Add optional exec fields
-          if (result.elementId !== undefined) {
-            execData.element_id = result.elementId;
-            // Add bounding box if element found
-            const bbox = this.getElementBbox(result.elementId, snap);
-            if (bbox) {
-              execData.bounding_box = bbox;
-            }
-          }
-          if (result.text !== undefined) {
-            execData.text = result.text;
-          }
-          if (result.key !== undefined) {
-            execData.key = result.key;
-          }
-          if (result.error !== undefined) {
-            execData.error = result.error;
-          }
-          
-          // Build verify data (simplified - based on success and url_changed)
-          const verifyPassed = result.success && (result.urlChanged || result.action !== 'click');
-          const verifySignals: TraceEventData['verify'] = {
-            passed: verifyPassed,
-            signals: {
-              url_changed: result.urlChanged || false,
-            },
-          };
-          if (result.error) {
-            verifySignals.signals.error = result.error;
-          }
-          
-          // Add elements_found array if element was targeted
-          if (result.elementId !== undefined) {
-            const bbox = this.getElementBbox(result.elementId, snap);
-            if (bbox) {
-              verifySignals.signals.elements_found = [
-                {
-                  label: `Element ${result.elementId}`,
-                  bounding_box: bbox,
-                },
-              ];
-            }
-          }
-          
-          // Build complete step_end event
-          const stepEndData: TraceEventData = {
-            v: 1,
-            step_id: stepId,
-            step_index: this.stepCount,
-            goal: goal,
-            attempt: attempt,
-            pre: {
-              url: preUrl,
-              snapshot_digest: snapshotDigest,
-            },
-            llm: llmData,
-            exec: execData,
-            post: {
-              url: postUrl || undefined,
-            },
-            verify: verifySignals,
-          };
+          // Build step_end event using TraceEventBuilder
+          const stepEndData = TraceEventBuilder.buildStepEndData({
+            stepId,
+            stepIndex: this.stepCount,
+            goal,
+            attempt,
+            preUrl,
+            postUrl,
+            snapshot: snap,
+            llmResponse,
+            result,
+          });
           
           this.tracer.emit('step_end', stepEndData, stepId);
         }
@@ -484,68 +412,6 @@ export class SentienceAgent {
     throw new Error('Unexpected: loop should have returned or thrown');
   }
 
-  /**
-   * Filter elements from snapshot based on goal context.
-   * Applies goal-based keyword matching to boost relevant elements and filters out irrelevant ones.
-   */
-  private filterElements(snap: Snapshot, goal: string): Element[] {
-    let elements = snap.elements;
-
-    // If no goal provided, return all elements (up to limit)
-    if (!goal) {
-      return elements.slice(0, this.snapshotLimit);
-    }
-
-    const goalLower = goal.toLowerCase();
-
-    // Extract keywords from goal
-    const keywords = this.extractKeywords(goalLower);
-
-    // Boost elements matching goal keywords
-    const scoredElements: Array<[number, Element]> = [];
-    for (const el of elements) {
-      let score = el.importance;
-
-      // Boost if element text matches goal
-      if (el.text && keywords.some(kw => el.text!.toLowerCase().includes(kw))) {
-        score += 0.3;
-      }
-
-      // Boost if role matches goal intent
-      if (goalLower.includes('click') && el.visual_cues.is_clickable) {
-        score += 0.2;
-      }
-      if (goalLower.includes('type') && (el.role === 'textbox' || el.role === 'searchbox')) {
-        score += 0.2;
-      }
-      if (goalLower.includes('search')) {
-        // Filter out non-interactive elements for search tasks
-        if ((el.role === 'link' || el.role === 'img') && !el.visual_cues.is_primary) {
-          score -= 0.5;
-        }
-      }
-
-      scoredElements.push([score, el]);
-    }
-
-    // Re-sort by boosted score
-    scoredElements.sort((a, b) => b[0] - a[0]);
-    elements = scoredElements.map(([, el]) => el);
-
-    return elements.slice(0, this.snapshotLimit);
-  }
-
-  /**
-   * Extract meaningful keywords from goal text
-   */
-  private extractKeywords(text: string): string[] {
-    const stopwords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-      'of', 'with', 'by', 'from', 'as', 'is', 'was'
-    ]);
-    const words = text.split(/\s+/);
-    return words.filter(w => !stopwords.has(w) && w.length > 2);
-  }
 
   /**
    * Convert snapshot elements to token-efficient prompt string

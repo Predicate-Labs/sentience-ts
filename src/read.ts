@@ -4,6 +4,7 @@
 
 import { SentienceBrowser } from './browser';
 import TurndownService from 'turndown';
+import { BrowserEvaluator } from './utils/browser-evaluator';
 
 export interface ReadOptions {
   format?: 'raw' | 'text' | 'markdown';
@@ -51,10 +52,9 @@ export async function read(
 
   if (format === 'markdown' && enhanceMarkdown) {
     // Get raw HTML from the extension first
-    const rawHtmlResult = (await page.evaluate(
-      (opts) => {
-        return (window as any).sentience.read(opts);
-      },
+    const rawHtmlResult = (await BrowserEvaluator.evaluate(
+      page,
+      (opts) => (window as any).sentience.read(opts),
       { format: 'raw' }
     )) as ReadResult;
 
@@ -99,10 +99,9 @@ export async function read(
   }
 
   // If not enhanced markdown, or fallback, call extension with requested format
-  const result = (await page.evaluate(
-    (opts) => {
-      return (window as any).sentience.read(opts);
-    },
+  const result = (await BrowserEvaluator.evaluate(
+    page,
+    (opts) => (window as any).sentience.read(opts),
     { format }
   )) as ReadResult;
 
