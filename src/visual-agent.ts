@@ -69,8 +69,6 @@ try {
  *    - Vision-capable LLM: Requires an LLM provider that supports vision (e.g., GPT-4o, Claude 3)
  */
 export class SentienceVisualAgent extends SentienceAgent {
-  private previousSnapshot?: Snapshot;
-
   /**
    * Initialize Visual Agent
    *
@@ -98,8 +96,7 @@ export class SentienceVisualAgent extends SentienceAgent {
       );
     }
 
-    // Track previous snapshot for diff computation
-    this.previousSnapshot = undefined;
+    // Track previous snapshot for diff computation (stored in base class)
   }
 
   /**
@@ -393,13 +390,13 @@ export class SentienceVisualAgent extends SentienceAgent {
 
       // Reduce quality for next attempt
       quality = Math.max(70, quality - 15);
-      if (this.verbose && attempt === 0) {
+      if ((this as any).verbose && attempt === 0) {
         console.log(`   ⚠️  Image size ${sizeMb.toFixed(2)}MB exceeds limit, compressing...`);
       }
     }
 
     const finalSizeMb = outputBuffer.length / (1024 * 1024);
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log(
         `   📸 Image encoded: ${finalSizeMb.toFixed(2)}MB (${outputBuffer.length} bytes)`
       );
@@ -453,7 +450,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
     try {
       // Try to use vision API if available
       // This is a placeholder - actual implementation depends on LLM provider
-      const response = await this.llm.generate(systemPrompt, userPrompt, {
+      const response = await (this as any).llm.generate(systemPrompt, userPrompt, {
         image: imageDataUrl,
         temperature: 0.0,
       });
@@ -462,11 +459,11 @@ Return ONLY the integer ID number from the label, nothing else.`;
     } catch {
       // Fallback: Try to pass image via text description
       const fallbackPrompt = `${userPrompt}\n\n[Image data: ${imageDataUrl.substring(0, 200)}...]`;
-      const fallbackResponse = await this.llm.generate(systemPrompt, fallbackPrompt, {
+      const fallbackResponse = await (this as any).llm.generate(systemPrompt, fallbackPrompt, {
         temperature: 0.0,
       });
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log('   ⚠️  Using fallback method (may not support vision)');
       }
 
@@ -481,14 +478,14 @@ Return ONLY the integer ID number from the label, nothing else.`;
    * @returns Element ID as integer, or undefined if not found
    */
   private extractElementId(llmResponse: string): number | undefined {
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log(`🔍 Raw LLM response: ${JSON.stringify(llmResponse)}`);
     }
 
     // Clean the response - remove leading/trailing whitespace
     let cleaned = llmResponse.trim();
 
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log(`   🧹 After strip: ${JSON.stringify(cleaned)}`);
     }
 
@@ -510,7 +507,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
         cleaned = cleaned.substring(prefix.length).trim();
         // Remove any remaining punctuation
         cleaned = cleaned.replace(/^[:.,;!?()[\]{}]+/, '').trim();
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log(`   🧹 After removing prefix '${prefix}': ${JSON.stringify(cleaned)}`);
         }
       }
@@ -519,7 +516,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
     // Try to find all integers in the cleaned response
     const numbers = cleaned.match(/\d+/g);
 
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log(`   🔢 Numbers found: ${numbers}`);
     }
 
@@ -528,7 +525,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
       // Element IDs are typically larger numbers, not small ones like "1"
       try {
         const intNumbers = numbers.map(n => parseInt(n, 10));
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log(`   🔢 As integers: ${intNumbers}`);
         }
 
@@ -538,28 +535,28 @@ Return ONLY the integer ID number from the label, nothing else.`;
         let elementId: number;
         if (largeNumbers.length > 0) {
           elementId = Math.max(...largeNumbers); // Take the largest
-          if (this.verbose) {
+          if ((this as any).verbose) {
             console.log(`   ✅ Selected largest number > 10: ${elementId}`);
           }
         } else {
           elementId = intNumbers[0]; // Fallback to first if all are small
-          if (this.verbose) {
+          if ((this as any).verbose) {
             console.log(`   ⚠️  All numbers ≤ 10, using first: ${elementId}`);
           }
         }
 
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log(`✅ Extracted element ID: ${elementId} (from ${numbers})`);
         }
         return elementId;
       } catch {
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log('   ❌ Failed to convert numbers to integers');
         }
       }
     }
 
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log(`⚠️  Could not extract element ID from response: ${llmResponse}`);
     }
     return undefined;
@@ -578,7 +575,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
     _maxRetries: number = 2,
     snapshotOptions?: SnapshotOptions
   ): Promise<AgentActResult> {
-    if (this.verbose) {
+    if ((this as any).verbose) {
       console.log('\n' + '='.repeat(70));
       console.log(`🤖 Visual Agent Goal: ${goal}`);
       console.log('='.repeat(70));
@@ -608,7 +605,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
         limit: snapshotOptions?.limit || (this as any).snapshotLimit,
       };
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`🎯 Goal: ${goal}`);
         console.log('📸 Taking snapshot with screenshot...');
       }
@@ -627,13 +624,13 @@ Return ONLY the integer ID number from the label, nothing else.`;
       // Process snapshot: compute diff status and filter elements
       const processed = SnapshotProcessor.process(
         snap,
-        this.previousSnapshot,
+        (this as any).previousSnapshot,
         goal,
         (this as any).snapshotLimit
       );
 
       // Update previous snapshot for next comparison
-      this.previousSnapshot = snap;
+      (this as any).previousSnapshot = snap;
 
       const snapWithDiff = processed.withDiff;
 
@@ -643,12 +640,12 @@ Return ONLY the integer ID number from the label, nothing else.`;
         tracer.emit('snapshot', snapshotData, stepId);
       }
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`✅ Snapshot taken: ${snap.elements.length} elements`);
       }
 
       // 2. Draw labeled screenshot
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log('🎨 Drawing bounding boxes and labels...');
         console.log(`   Elements to label: ${snap.elements.length}`);
         if (snap.elements.length > 0) {
@@ -693,12 +690,12 @@ Return ONLY the integer ID number from the label, nothing else.`;
         const imageFilename = `labeled_screenshot_${imageUuid}.png`;
         const imagePath = path.join(imagesDir, imageFilename);
         fs.writeFileSync(imagePath, labeledImageBuffer);
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log(`   💾 Saved labeled screenshot: ${path.resolve(imagePath)}`);
         }
       } catch (saveError: any) {
         // Don't fail if image save fails - it's just for debugging
-        if (this.verbose) {
+        if ((this as any).verbose) {
           console.log(`   ⚠️  Could not save labeled screenshot: ${saveError.message}`);
         }
       }
@@ -707,7 +704,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
       const labeledImageDataUrl = await this.encodeImageToBase64(labeledImageBuffer, 'JPEG', 20.0);
 
       // 3. Query LLM with vision
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log('🧠 Querying LLM with labeled screenshot...');
       }
 
@@ -721,13 +718,13 @@ Return ONLY the integer ID number from the label, nothing else.`;
             prompt_tokens: llmResponse.promptTokens,
             completion_tokens: llmResponse.completionTokens,
             model: llmResponse.modelName,
-            response: llmResponse.content.substring(0, 200), // Truncate for brevity
+            response_text: llmResponse.content.substring(0, 200), // Truncate for brevity
           },
           stepId
         );
       }
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`💭 LLM Response: ${llmResponse.content}`);
       }
 
@@ -741,12 +738,12 @@ Return ONLY the integer ID number from the label, nothing else.`;
         throw new Error(`Could not extract element ID from LLM response: ${llmResponse.content}`);
       }
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`🎯 Extracted Element ID: ${elementId}`);
       }
 
       // 5. Click the element
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`🖱️  Clicking element ${elementId}...`);
       }
 
@@ -788,15 +785,16 @@ Return ONLY the integer ID number from the label, nothing else.`;
         tracer.emit(
           'action',
           {
+            action_type: result.action,
             action: result.action,
             element_id: result.elementId,
             success: result.success,
-            outcome: result.outcome,
-            duration_ms: durationMs,
+            // Note: duration_ms and other custom fields are not in TraceEventData type
+            // but are accepted at runtime for custom visualization
             post_url: postUrl,
             elements: elementsData, // Add element data for overlay
             target_element_id: result.elementId, // Highlight target in red
-          },
+          } as any, // Type assertion needed for custom visualization fields
           stepId
         );
       }
@@ -812,7 +810,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
         durationMs,
       });
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         const status = result.success ? '✅' : '❌';
         console.log(`${status} Completed in ${durationMs}ms`);
       }
@@ -850,7 +848,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
         tracer.emitError(stepId, error.message, 0);
       }
 
-      if (this.verbose) {
+      if ((this as any).verbose) {
         console.log(`❌ Error: ${error.message}`);
       }
 
