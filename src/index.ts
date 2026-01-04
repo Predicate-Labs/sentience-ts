@@ -27,6 +27,7 @@ export {
   GLMProvider,
 } from './llm-provider';
 export { SentienceAgent, AgentActResult, HistoryEntry, TokenStats } from './agent';
+export { SentienceVisualAgent } from './visual-agent';
 
 // Conversational Agent Layer (v0.3.0+)
 export {
