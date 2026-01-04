@@ -27,7 +27,24 @@ export class SentienceBrowser implements IBrowser {
   private _recordVideoDir?: string;
   private _recordVideoSize?: { width: number; height: number };
   private _viewport?: { width: number; height: number };
+  private _deviceScaleFactor?: number;
 
+  /**
+   * Create a new SentienceBrowser instance
+   *
+   * @param apiKey - Optional API key for server-side processing (Pro/Enterprise tiers)
+   * @param apiUrl - Optional API URL (defaults to https://api.sentienceapi.com if apiKey provided)
+   * @param headless - Whether to run in headless mode (defaults to true in CI, false locally)
+   * @param proxy - Optional proxy server URL (e.g., 'http://user:pass@proxy.example.com:8080')
+   * @param userDataDir - Optional path to user data directory for persistent sessions
+   * @param storageState - Optional storage state to inject (cookies + localStorage)
+   * @param recordVideoDir - Optional directory path to save video recordings
+   * @param recordVideoSize - Optional video resolution as object with 'width' and 'height' keys
+   * @param viewport - Optional viewport size as object with 'width' and 'height' keys
+   * @param deviceScaleFactor - Optional device scale factor to emulate high-DPI (Retina) screens.
+   *                          Examples: 1.0 (default, standard DPI), 2.0 (Retina/high-DPI, like MacBook Pro), 3.0 (very high DPI)
+   *                          If undefined, defaults to 1.0 (standard DPI).
+   */
   constructor(
     apiKey?: string,
     apiUrl?: string,
@@ -37,7 +54,8 @@ export class SentienceBrowser implements IBrowser {
     storageState?: string | StorageState | object,
     recordVideoDir?: string,
     recordVideoSize?: { width: number; height: number },
-    viewport?: { width: number; height: number }
+    viewport?: { width: number; height: number },
+    deviceScaleFactor?: number
   ) {
     this._apiKey = apiKey;
 
@@ -72,6 +90,9 @@ export class SentienceBrowser implements IBrowser {
 
     // Viewport configuration
     this._viewport = viewport || { width: 1280, height: 800 };
+
+    // Device scale factor for high-DPI emulation
+    this._deviceScaleFactor = deviceScaleFactor;
   }
 
   async start(): Promise<void> {
@@ -170,6 +191,11 @@ export class SentienceBrowser implements IBrowser {
       // CRITICAL: Ignore HTTPS errors when using proxy (proxies often use self-signed certs)
       ignoreHTTPSErrors: proxyConfig !== undefined,
     };
+
+    // Add device scale factor if configured
+    if (this._deviceScaleFactor !== undefined) {
+      launchOptions.deviceScaleFactor = this._deviceScaleFactor;
+    }
 
     // Add video recording if configured
     if (this._recordVideoDir) {
