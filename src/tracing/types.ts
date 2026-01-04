@@ -52,6 +52,7 @@ export interface TraceElement {
 export interface SnapshotInfo {
   url?: string;
   snapshot_digest?: string;
+  elements?: TraceElement[]; // Include elements with diff_status for diff overlay support
 }
 
 /**

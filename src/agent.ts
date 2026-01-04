@@ -324,6 +324,7 @@ export class SentienceAgent {
           const postUrl = this.browser.getPage()?.url() || null;
 
           // Build step_end event using TraceEventBuilder
+          // Use snapWithDiff to include elements with diff_status in pre field
           const stepEndData = TraceEventBuilder.buildStepEndData({
             stepId,
             stepIndex: this.stepCount,
@@ -331,7 +332,7 @@ export class SentienceAgent {
             attempt,
             preUrl,
             postUrl,
-            snapshot: snap,
+            snapshot: snapWithDiff,
             llmResponse,
             result,
           });

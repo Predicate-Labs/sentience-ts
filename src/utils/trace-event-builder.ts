@@ -177,6 +177,41 @@ export class TraceEventBuilder {
     const execData = this.buildExecutionData(result, snapshot);
     const verifyData = this.buildVerifyData(result, snapshot);
 
+    // Build elements data for pre field (include diff_status from snapshot)
+    // Normalize importance values to importance_score (0-1 range) per snapshot
+    const importanceValues = snapshot.elements.map(el => el.importance);
+    const minImportance = importanceValues.length > 0 ? Math.min(...importanceValues) : 0;
+    const maxImportance = importanceValues.length > 0 ? Math.max(...importanceValues) : 0;
+    const importanceRange = maxImportance - minImportance;
+
+    const preElements: TraceElement[] = snapshot.elements.map(el => {
+      // Compute normalized importance_score
+      let importanceScore: number;
+      if (importanceRange > 0) {
+        importanceScore = (el.importance - minImportance) / importanceRange;
+      } else {
+        importanceScore = 0.5;
+      }
+
+      return {
+        id: el.id,
+        role: el.role,
+        text: el.text,
+        bbox: el.bbox,
+        importance: el.importance,
+        importance_score: importanceScore,
+        visual_cues: el.visual_cues,
+        in_viewport: el.in_viewport,
+        is_occluded: el.is_occluded,
+        z_index: el.z_index,
+        rerank_index: el.rerank_index,
+        heuristic_index: el.heuristic_index,
+        ml_probability: el.ml_probability,
+        ml_score: el.ml_score,
+        diff_status: el.diff_status,
+      };
+    });
+
     return {
       v: 1,
       step_id: stepId,
@@ -186,6 +221,7 @@ export class TraceEventBuilder {
       pre: {
         url: preUrl,
         snapshot_digest: snapshotDigest,
+        elements: preElements, // Add elements array with diff_status
       },
       llm: llmData,
       exec: execData,
