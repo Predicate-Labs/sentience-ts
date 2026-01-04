@@ -71,8 +71,8 @@ export class Tracer {
 
     // Apply screenshot processor if configured and screenshot is present
     if (this.screenshotProcessor && data.screenshot_base64) {
-      data = { ...data }; // Don't modify the original object
-      data.screenshot_base64 = this.screenshotProcessor(data.screenshot_base64);
+      const processedScreenshot = this.screenshotProcessor(data.screenshot_base64);
+      data = { ...data, screenshot_base64: processedScreenshot }; // Don't modify the original object
     }
 
     // Generate timestamps
