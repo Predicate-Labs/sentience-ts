@@ -197,6 +197,7 @@ function httpPost(
  * @param options.agentType - Type of agent running (e.g., "SentienceAgent", "CustomAgent")
  * @param options.llmModel - LLM model used (e.g., "gpt-4-turbo", "claude-3-5-sonnet")
  * @param options.startUrl - Starting URL of the agent run (e.g., "https://amazon.com")
+ * @param options.screenshotProcessor - Optional function to process screenshots before upload. Takes base64 string, returns processed base64 string. Useful for PII redaction or custom image processing.
  * @returns Tracer configured with appropriate sink
  *
  * @example
@@ -212,6 +213,17 @@ function httpPost(
  *   uploadTrace: true
  * });
  * // Returns: Tracer with CloudTraceSink
+ *
+ * // With screenshot processor for PII redaction
+ * const redactPII = (screenshot: string): string => {
+ *   // Your custom redaction logic
+ *   return redactedScreenshot;
+ * };
+ * const tracer = await createTracer({
+ *   apiKey: "sk_pro_xyz",
+ *   screenshotProcessor: redactPII
+ * });
+ * // Screenshots will be processed before upload
  *
  * // Pro tier user with local-only tracing
  * const tracer = await createTracer({ apiKey: "sk_pro_xyz", runId: "demo", uploadTrace: false });
@@ -237,6 +249,7 @@ export async function createTracer(options: {
   agentType?: string;
   llmModel?: string;
   startUrl?: string;
+  screenshotProcessor?: (screenshot: string) => string;
 }): Promise<Tracer> {
   const runId = options.runId || randomUUID();
   const apiUrl = options.apiUrl || SENTIENCE_API_URL;
@@ -292,7 +305,8 @@ export async function createTracer(options: {
         // PRODUCTION FIX: Pass runId for persistent cache naming
         return new Tracer(
           runId,
-          new CloudTraceSink(uploadUrl, runId, options.apiKey, apiUrl, options.logger)
+          new CloudTraceSink(uploadUrl, runId, options.apiKey, apiUrl, options.logger),
+          options.screenshotProcessor
         );
       } else if (response.status === 403) {
         console.log('⚠️  [Sentience] Cloud tracing requires Pro tier');
@@ -324,7 +338,7 @@ export async function createTracer(options: {
   const localPath = path.join(tracesDir, `${runId}.jsonl`);
   console.log(`💾 [Sentience] Local tracing: ${localPath}`);
 
-  return new Tracer(runId, new JsonlTraceSink(localPath));
+  return new Tracer(runId, new JsonlTraceSink(localPath), options.screenshotProcessor);
 }
 
 /**

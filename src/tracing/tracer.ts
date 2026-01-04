@@ -14,6 +14,7 @@ export class Tracer {
   private runId: string;
   private sink: TraceSink;
   private seq: number;
+  private screenshotProcessor?: (screenshot: string) => string;
 
   // Stats tracking
   private totalSteps: number = 0;
@@ -30,11 +31,32 @@ export class Tracer {
    * Create a new Tracer
    * @param runId - Unique run identifier (UUID)
    * @param sink - TraceSink implementation (e.g., JsonlTraceSink)
+   * @param screenshotProcessor - Optional function to process screenshots before emission.
+   *                             Takes base64 string, returns processed base64 string.
+   *                             Useful for PII redaction or custom image processing.
+   *
+   * @example
+   * // Basic usage
+   * const sink = new JsonlTraceSink('trace.jsonl');
+   * const tracer = new Tracer('run-123', sink);
+   *
+   * @example
+   * // With screenshot processor for PII redaction
+   * const redactPII = (screenshot: string): string => {
+   *   // Your custom redaction logic
+   *   return redactedScreenshot;
+   * };
+   * const tracer = new Tracer('run-123', sink, redactPII);
    */
-  constructor(runId: string, sink: TraceSink) {
+  constructor(
+    runId: string,
+    sink: TraceSink,
+    screenshotProcessor?: (screenshot: string) => string
+  ) {
     this.runId = runId;
     this.sink = sink;
     this.seq = 0;
+    this.screenshotProcessor = screenshotProcessor;
   }
 
   /**
@@ -46,6 +68,12 @@ export class Tracer {
   emit(eventType: string, data: TraceEventData, stepId?: string): void {
     this.seq += 1;
     this.totalEvents += 1;
+
+    // Apply screenshot processor if configured and screenshot is present
+    if (this.screenshotProcessor && data.screenshot_base64) {
+      const processedScreenshot = this.screenshotProcessor(data.screenshot_base64);
+      data = { ...data, screenshot_base64: processedScreenshot }; // Don't modify the original object
+    }
 
     // Generate timestamps
     const tsMs = Date.now();
