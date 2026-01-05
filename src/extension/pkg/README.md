@@ -10,18 +10,19 @@ Perfect for AI agents, automation scripts, visual grounding, and accessibility t
 
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
-3. [Installation](#installation)
-4. [User API](#user-api)
-5. [Usage Examples](#usage-examples)
-6. [Screenshot Feature](#screenshot-feature)
-7. [Bounding Box Visualization](#bounding-box-visualization)
-8. [Filtering & Ranking](#filtering--ranking)
-9. [Architecture](#architecture)
-10. [Implementation Details](#implementation-details)
-11. [API Reference](#api-reference)
-12. [Performance](#performance)
-13. [Troubleshooting](#troubleshooting)
-14. Transferred to SentienceAPI Org
+3. [Developer Quick Reference](#developer-quick-reference)
+4. [Installation](#installation)
+5. [User API](#user-api)
+6. [Usage Examples](#usage-examples)
+7. [Screenshot Feature](#screenshot-feature)
+8. [Bounding Box Visualization](#bounding-box-visualization)
+9. [Filtering & Ranking](#filtering--ranking)
+10. [Architecture](#architecture)
+11. [Implementation Details](#implementation-details)
+12. [API Reference](#api-reference)
+13. [Performance](#performance)
+14. [Troubleshooting](#troubleshooting)
+15. [Contributing](#contributing)
 
 ---
 
@@ -59,14 +60,16 @@ Extracts a **geometry map** of any webpage:
 ### 5-Second Test
 
 ```bash
-# Build WASM
-cd Claude
-wasm-pack build --target web
+# 1. Install dependencies
+npm install
 
-# Load extension in Chrome
-# chrome://extensions → Load unpacked → Select Claude/ directory
+# 2. Build extension (WASM + JavaScript)
+npm run build
 
-# Open any webpage, then in DevTools Console:
+# 3. Load extension in Chrome
+# chrome://extensions → Enable Developer mode → Load unpacked → Select this directory
+
+# 4. Open any webpage, then in DevTools Console:
 ```
 
 ```javascript
@@ -75,6 +78,67 @@ console.log(result.elements);
 ```
 
 **That's it!** You now have the top 5 most important elements with positions, roles, and scores.
+
+---
+
+## Developer Quick Reference
+
+### 📦 **Build Commands**
+
+| Command | What it does |
+|---------|-------------|
+| `npm install` | Install dependencies (first time only) |
+| `npm run build` | **Full build** (WASM + JavaScript bundles) |
+| `npm run build:wasm` | Build only WASM (Rust → pkg/) |
+| `npm run build:bundle` | Build only JavaScript (src/ → dist/) |
+
+### ✅ **Code Quality**
+
+| Command | What it does |
+|---------|-------------|
+| `npm run lint` | Check code quality with ESLint |
+| `npm run lint:fix` | Auto-fix linting issues |
+| `npm run format` | Format code with Prettier |
+| `npm run format:check` | Check code formatting |
+
+### 🧪 **Testing**
+
+| Command | What it does |
+|---------|-------------|
+| `npm test` | Run all tests with coverage |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Generate coverage report |
+
+### 📁 **Project Structure**
+
+```
+sentience-chrome/
+├── src/                    # Modular source code
+│   ├── background/         # Service worker with WASM
+│   ├── content/            # Message bridge
+│   └── injected/           # Main API (7 modules)
+├── tests/                  # Unit tests (76 tests)
+├── dist/                   # Bundled output (gitignored)
+├── pkg/                    # WASM artifacts (gitignored)
+└── docs/                   # Documentation
+```
+
+### 🔄 **Development Workflow**
+
+```bash
+# 1. Make changes to src/injected/utils.js (for example)
+# 2. Rebuild JavaScript (fast)
+npm run build:bundle
+
+# 3. Reload extension in Chrome
+# Click refresh icon in chrome://extensions/
+```
+
+### 📚 **Documentation**
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Developer guide
+- **[docs/RESTRUCTURING_PROGRESS.md](docs/RESTRUCTURING_PROGRESS.md)** - Architecture overview
+- **[docs/RESTRUCTURING_ASSESSMENT.md](docs/RESTRUCTURING_ASSESSMENT.md)** - Planning document
 
 ---
 
@@ -1221,3 +1285,56 @@ if __name__ == "__main__":
 1. **Zero Network Latency:** The Python script talks to the Extension instantly via the Chrome DevTools Protocol. No HTTP requests to your server.
 2. **Shared State:** The Python script can see the `window.sentience` object just like a developer typing in the console.
 3. **Hybrid Control:** You can mix your `sentience.snapshot()` (for vision) with standard Playwright commands (like `.type()` or `.waitForNavigation()`) for a robust agent.
+---
+
+## Contributing
+
+We welcome contributions! This extension has been fully restructured with modern tooling and modular architecture.
+
+### 🚀 **Quick Start for Contributors**
+
+1. **Clone and install:**
+   ```bash
+   git clone https://github.com/YOUR_ORG/sentience-chrome.git
+   cd sentience-chrome
+   npm install
+   ```
+
+2. **Make changes** to the modular source in `src/`
+
+3. **Test your changes:**
+   ```bash
+   npm run lint        # Check code quality
+   npm test            # Run tests
+   npm run build       # Build extension
+   ```
+
+4. **Submit a PR** - CI will automatically check linting, tests, and builds
+
+### 📚 **Developer Resources**
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Complete developer guide
+- **[docs/RESTRUCTURING_PROGRESS.md](docs/RESTRUCTURING_PROGRESS.md)** - Architecture details
+- **Modular codebase** - 7 focused modules instead of monolith
+- **76 tests** with 80% pass rate
+- **Automated CI/CD** - GitHub Actions for quality checks
+
+### 🎯 **Key Features for Contributors**
+
+- ✅ **ESLint + Prettier** - Automated code quality
+- ✅ **Jest testing** - Unit tests with coverage reports
+- ✅ **Rollup bundling** - Optimized builds
+- ✅ **CI/CD pipelines** - Automated checks on every PR
+- ✅ **Zero breaking changes** - SDK compatibility preserved
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## License
+
+See [LICENSE](LICENSE) file.
+
+---
+
+**Built with ❤️ for AI agents and web automation**
