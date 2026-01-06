@@ -4,12 +4,10 @@
   'use strict';
 
   // content.js - ISOLATED WORLD (Bridge between Main World and Background)
-  console.log('[Sentience Bridge] Loaded.');
 
   // Detect if we're in a child frame (for iframe support)
   const isChildFrame = window !== window.top;
   if (isChildFrame) {
-    console.log('[Sentience Bridge] Running in child frame:', window.location.href);
   }
 
   // 1. Pass Extension ID to Main World (So API knows where to find resources)
@@ -118,7 +116,6 @@
           }
 
           if (response?.success) {
-            console.log(`[Sentience Bridge] ✓ WASM processing complete in ${duration.toFixed(1)}ms`);
             window.postMessage(
               {
                 type: 'SENTIENCE_SNAPSHOT_RESULT',
@@ -292,12 +289,10 @@
       shadow.appendChild(box);
     });
 
-    console.log(`[Sentience Bridge] Overlay shown for ${elements.length} elements`);
 
     // Auto-remove after 5 seconds
     overlayTimeout = setTimeout(() => {
       removeOverlay();
-      console.log('[Sentience Bridge] Overlay auto-cleared after 5 seconds');
     }, 5000);
   }
 
@@ -306,7 +301,6 @@
    */
   function handleClearOverlay() {
     removeOverlay();
-    console.log('[Sentience Bridge] Overlay cleared manually');
   }
 
   /**
@@ -324,6 +318,5 @@
     }
   }
 
-  // console.log('[Sentience Bridge] Ready - Extension ID:', chrome.runtime.id);
 
 })();

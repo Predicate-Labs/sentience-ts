@@ -6,7 +6,6 @@ import init, { analyze_page_with_options, analyze_page, prune_for_api } from '..
 // This runs in an isolated environment, completely immune to page CSP policies
 
 
-console.log('[Sentience Background] Initializing...');
 
 // Global WASM initialization state
 let wasmReady = false;
@@ -22,7 +21,6 @@ async function initWASM() {
 
   wasmInitPromise = (async () => {
     try {
-      console.log('[Sentience Background] Loading WASM module...');
 
       // Define the js_click_element function that WASM expects
       // In Service Workers, use 'globalThis' instead of 'window'
@@ -36,8 +34,6 @@ async function initWASM() {
       await init();
 
       wasmReady = true;
-      console.log('[Sentience Background] ✓ WASM ready!');
-      console.log(
         '[Sentience Background] Available functions: analyze_page, analyze_page_with_options, prune_for_api'
       );
     } catch (error) {
@@ -124,7 +120,6 @@ async function handleScreenshotCapture(_tabId, options = {}) {
       quality,
     });
 
-    console.log(
       `[Sentience Background] Screenshot captured: ${format}, size: ${dataUrl.length} bytes`
     );
     return dataUrl;
@@ -166,7 +161,6 @@ async function handleSnapshotProcessing(rawData, options = {}) {
       throw new Error('WASM module not initialized');
     }
 
-    console.log(
       `[Sentience Background] Processing ${rawData.length} elements with options:`,
       options
     );
@@ -213,7 +207,6 @@ async function handleSnapshotProcessing(rawData, options = {}) {
     }
 
     const duration = performance.now() - startTime;
-    console.log(
       `[Sentience Background] ✓ Processed: ${analyzedElements.length} analyzed, ${prunedRawData.length} pruned (${duration.toFixed(1)}ms)`
     );
 
@@ -228,7 +221,6 @@ async function handleSnapshotProcessing(rawData, options = {}) {
   }
 }
 
-console.log('[Sentience Background] Service worker ready');
 
 // Global error handlers to prevent extension crashes
 self.addEventListener('error', (event) => {

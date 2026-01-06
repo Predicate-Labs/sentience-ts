@@ -34,12 +34,539 @@
     return elements;
   }
 
+  // ============================================================================
+  // LABEL INFERENCE SYSTEM
+  // ============================================================================
+
+  // Default inference configuration (conservative - Stage 1 equivalent)
+  const DEFAULT_INFERENCE_CONFIG = {
+    // Allowed tag names that can be inference sources
+    allowedTags: ['label', 'span', 'div'],
+
+    // Allowed ARIA roles that can be inference sources
+    allowedRoles: [],
+
+    // Class name patterns (substring match, case-insensitive)
+    allowedClassPatterns: [],
+
+    // DOM tree traversal limits
+    maxParentDepth: 2, // Max 2 levels up DOM tree
+    maxSiblingDistance: 1, // Only immediate previous/next sibling
+
+    // Container requirements (no distance-based checks)
+    requireSameContainer: true, // Must share common parent
+    containerTags: ['form', 'fieldset', 'div'],
+
+    // Enable/disable specific inference methods
+    methods: {
+      explicitLabel: true, // el.labels API
+      ariaLabelledby: true, // aria-labelledby attribute
+      parentTraversal: true, // Check parent/grandparent
+      siblingProximity: true, // Check preceding sibling (same container only)
+    },
+  };
+
+  // Merge user config with defaults
+  function mergeInferenceConfig(userConfig = {}) {
+    return {
+      ...DEFAULT_INFERENCE_CONFIG,
+      ...userConfig,
+      methods: {
+        ...DEFAULT_INFERENCE_CONFIG.methods,
+        ...(userConfig.methods || {}),
+      },
+    };
+  }
+
+  // Check if element matches inference source criteria
+  function isInferenceSource(el, config) {
+    if (!el || !el.tagName) return false;
+
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute ? el.getAttribute('role') : '';
+    const className = ((el.className || '') + '').toLowerCase();
+
+    // Check tag name
+    if (config.allowedTags.includes(tag)) {
+      return true;
+    }
+
+    // Check role
+    if (config.allowedRoles.length > 0 && role && config.allowedRoles.includes(role)) {
+      return true;
+    }
+
+    // Check class patterns
+    if (config.allowedClassPatterns.length > 0) {
+      for (const pattern of config.allowedClassPatterns) {
+        if (className.includes(pattern.toLowerCase())) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // Helper: Find common parent element
+  function findCommonParent(el1, el2) {
+    if (!el1 || !el2) return null;
+
+    // Get document reference safely for stopping conditions
+    // eslint-disable-next-line no-undef
+    const doc =
+      (typeof global !== 'undefined' && global.document) ||
+      (typeof window !== 'undefined' && window.document) ||
+      (typeof document !== 'undefined' && document) ||
+      null;
+
+    const parents1 = [];
+    let current = el1;
+    // Collect all parents (including el1 itself)
+    while (current) {
+      parents1.push(current);
+      // Stop if no parent
+      if (!current.parentElement) {
+        break;
+      }
+      // Stop at body or documentElement if they exist
+      if (doc && (current === doc.body || current === doc.documentElement)) {
+        break;
+      }
+      current = current.parentElement;
+    }
+
+    // Check if el2 or any of its parents are in parents1
+    current = el2;
+    while (current) {
+      // Use indexOf for more reliable comparison (handles object identity)
+      if (parents1.indexOf(current) !== -1) {
+        return current;
+      }
+      // Stop if no parent
+      if (!current.parentElement) {
+        break;
+      }
+      // Stop at body or documentElement if they exist
+      if (doc && (current === doc.body || current === doc.documentElement)) {
+        break;
+      }
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
+  // Helper: Check if element is a valid container
+  function isValidContainer(el, validTags) {
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toLowerCase();
+    // Handle both string and object className
+    let className = '';
+    try {
+      className = (el.className || '') + '';
+    } catch (e) {
+      className = '';
+    }
+    return (
+      validTags.includes(tag) ||
+      className.toLowerCase().includes('form') ||
+      className.toLowerCase().includes('field')
+    );
+  }
+
+  // Helper: Check container requirements (no distance-based checks)
+  function isInSameValidContainer(element, candidate, limits) {
+    if (!element || !candidate) return false;
+
+    // Check same container requirement
+    if (limits.requireSameContainer) {
+      const commonParent = findCommonParent(element, candidate);
+      if (!commonParent) {
+        return false;
+      }
+      // Check if common parent is a valid container
+      if (!isValidContainer(commonParent, limits.containerTags)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Main inference function
+  function getInferredLabel(el, options = {}) {
+    if (!el) return null;
+
+    const {
+      enableInference = true,
+      inferenceConfig = {}, // User-provided config, merged with defaults
+    } = options;
+
+    if (!enableInference) return null;
+
+    // OPTIMIZATION: If element already has text or aria-label, skip inference entirely
+    // Check this BEFORE checking labels, so we don't infer if element already has text
+    // Note: For INPUT elements, we check value/placeholder, not innerText
+    // For IMG elements, we check alt, not innerText
+    // For other elements, innerText is considered explicit text
+    const ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
+    const hasAriaLabel = ariaLabel && ariaLabel.trim();
+    const hasInputValue = el.tagName === 'INPUT' && (el.value || el.placeholder);
+    const hasImgAlt = el.tagName === 'IMG' && el.alt;
+    // For non-input/img elements, check innerText - but only if it's not empty
+    // Access innerText safely - it might be a getter or property
+    let innerTextValue = '';
+    try {
+      innerTextValue = el.innerText || '';
+    } catch (e) {
+      // If innerText access fails, treat as empty
+      innerTextValue = '';
+    }
+    const hasInnerText =
+      el.tagName !== 'INPUT' && el.tagName !== 'IMG' && innerTextValue && innerTextValue.trim();
+
+    if (hasAriaLabel || hasInputValue || hasImgAlt || hasInnerText) {
+      return null;
+    }
+
+    // Merge config with defaults
+    const config = mergeInferenceConfig(inferenceConfig);
+
+    // Method 1: Explicit label association (el.labels API)
+    if (config.methods.explicitLabel && el.labels && el.labels.length > 0) {
+      const label = el.labels[0];
+      if (isInferenceSource(label, config)) {
+        const text = (label.innerText || '').trim();
+        if (text) {
+          return {
+            text,
+            source: 'explicit_label',
+          };
+        }
+      }
+    }
+
+    // Method 2: aria-labelledby (supports space-separated list of IDs)
+    // NOTE: aria-labelledby is an EXPLICIT reference, so it should work with ANY element
+    // regardless of inference source criteria. The config only controls whether this method runs.
+    if (config.methods.ariaLabelledby && el.hasAttribute && el.hasAttribute('aria-labelledby')) {
+      const labelIdsAttr = el.getAttribute('aria-labelledby');
+      if (labelIdsAttr) {
+        // Split by whitespace to support multiple IDs (space-separated list)
+        const labelIds = labelIdsAttr.split(/\s+/).filter((id) => id.trim());
+        const labelTexts = [];
+
+        // Helper function to get document.getElementById from available contexts
+        const getDocument = () => {
+          // eslint-disable-next-line no-undef
+          if (typeof global !== 'undefined' && global.document) {
+            // eslint-disable-next-line no-undef
+            return global.document;
+          }
+          if (typeof window !== 'undefined' && window.document) {
+            return window.document;
+          }
+          if (typeof document !== 'undefined') {
+            return document;
+          }
+          return null;
+        };
+
+        const doc = getDocument();
+        if (!doc || !doc.getElementById) ; else {
+          // Process each ID in the space-separated list
+          for (const labelId of labelIds) {
+            if (!labelId.trim()) continue;
+
+            let labelEl = null;
+            try {
+              labelEl = doc.getElementById(labelId);
+            } catch (e) {
+              // If getElementById fails, skip this ID
+              continue;
+            }
+
+            // aria-labelledby is an explicit reference - use ANY element, not just those matching inference criteria
+            // This follows ARIA spec: aria-labelledby can reference any element in the document
+            if (labelEl) {
+              // Extract text from the referenced element
+              let text = '';
+              try {
+                // Try innerText first (preferred for visible text)
+                text = (labelEl.innerText || '').trim();
+                // Fallback to textContent if innerText is empty
+                if (!text && labelEl.textContent) {
+                  text = labelEl.textContent.trim();
+                }
+                // Fallback to aria-label if available
+                if (!text && labelEl.getAttribute) {
+                  const ariaLabel = labelEl.getAttribute('aria-label');
+                  if (ariaLabel) {
+                    text = ariaLabel.trim();
+                  }
+                }
+              } catch (e) {
+                // If text extraction fails, skip this element
+                continue;
+              }
+
+              if (text) {
+                labelTexts.push(text);
+              }
+            }
+          }
+        }
+
+        // Combine multiple label texts (space-separated)
+        if (labelTexts.length > 0) {
+          return {
+            text: labelTexts.join(' '),
+            source: 'aria_labelledby',
+          };
+        }
+      }
+    }
+
+    // Method 3: Parent/grandparent traversal
+    if (config.methods.parentTraversal) {
+      let parent = el.parentElement;
+      let depth = 0;
+      while (parent && depth < config.maxParentDepth) {
+        if (isInferenceSource(parent, config)) {
+          const text = (parent.innerText || '').trim();
+          if (text) {
+            return {
+              text,
+              source: 'parent_label',
+            };
+          }
+        }
+        parent = parent.parentElement;
+        depth++;
+      }
+    }
+
+    // Method 4: Preceding sibling (no distance-based checks, only DOM structure)
+    if (config.methods.siblingProximity) {
+      const prev = el.previousElementSibling;
+      if (prev && isInferenceSource(prev, config)) {
+        // Only check if they're in the same valid container (no pixel distance)
+        if (
+          isInSameValidContainer(el, prev, {
+            requireSameContainer: config.requireSameContainer,
+            containerTags: config.containerTags,
+          })
+        ) {
+          const text = (prev.innerText || '').trim();
+          if (text) {
+            return {
+              text,
+              source: 'sibling_label',
+            };
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Helper: Check if element is interactable (should have role inferred)
+  function isInteractableElement(el) {
+    if (!el || !el.tagName) return false;
+
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute ? el.getAttribute('role') : null;
+    const hasTabIndex = el.hasAttribute ? el.hasAttribute('tabindex') : false;
+    const hasHref = el.tagName === 'A' && (el.hasAttribute ? el.hasAttribute('href') : false);
+
+    // Native interactive elements
+    const interactiveTags = [
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'option',
+      'details',
+      'summary',
+      'a',
+    ];
+    if (interactiveTags.includes(tag)) {
+      // For <a>, only if it has href
+      if (tag === 'a' && !hasHref) return false;
+      return true;
+    }
+
+    // Elements with explicit interactive roles
+    const interactiveRoles = [
+      'button',
+      'link',
+      'tab',
+      'menuitem',
+      'checkbox',
+      'radio',
+      'switch',
+      'slider',
+      'combobox',
+      'textbox',
+      'searchbox',
+      'spinbutton',
+    ];
+    if (role && interactiveRoles.includes(role.toLowerCase())) {
+      return true;
+    }
+
+    // Focusable elements (tabindex makes them interactive)
+    if (hasTabIndex) {
+      return true;
+    }
+
+    // Elements with event handlers (custom interactive elements)
+    if (el.onclick || el.onkeydown || el.onkeypress || el.onkeyup) {
+      return true;
+    }
+
+    // Check for inline event handlers via attributes
+    if (el.getAttribute) {
+      const hasInlineHandler =
+        el.getAttribute('onclick') ||
+        el.getAttribute('onkeydown') ||
+        el.getAttribute('onkeypress') ||
+        el.getAttribute('onkeyup');
+      if (hasInlineHandler) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Helper: Infer ARIA role for interactable elements
+  function getInferredRole(el, options = {}) {
+    const {
+      enableInference = true,
+      // inferenceConfig reserved for future extensibility
+    } = options;
+
+    if (!enableInference) return null;
+
+    // Only infer roles for interactable elements
+    if (!isInteractableElement(el)) {
+      return null;
+    }
+
+    // CRITICAL: Only infer if element has NO aria-label AND NO explicit role
+    const hasAriaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
+    const hasExplicitRole = el.getAttribute ? el.getAttribute('role') : null;
+
+    if (hasAriaLabel || hasExplicitRole) {
+      return null; // Skip inference if element already has aria-label or role
+    }
+
+    // If element is native semantic HTML, it already has a role
+    const tag = el.tagName.toLowerCase();
+    const semanticTags = ['button', 'a', 'input', 'textarea', 'select', 'option'];
+    if (semanticTags.includes(tag)) {
+      return null; // Native HTML already has role
+    }
+
+    // Infer role based on element behavior or context
+    // Check for click handlers first (most common)
+    if (el.onclick || (el.getAttribute && el.getAttribute('onclick'))) {
+      return 'button';
+    }
+
+    // Check for keyboard handlers
+    if (
+      el.onkeydown ||
+      el.onkeypress ||
+      el.onkeyup ||
+      (el.getAttribute &&
+        (el.getAttribute('onkeydown') || el.getAttribute('onkeypress') || el.getAttribute('onkeyup')))
+    ) {
+      return 'button'; // Default to button for keyboard-interactive elements
+    }
+
+    // Focusable div/span likely needs a role
+    if (el.hasAttribute && el.hasAttribute('tabindex') && (tag === 'div' || tag === 'span')) {
+      return 'button'; // Default assumption for focusable elements
+    }
+
+    return null;
+  }
+
   // --- HELPER: Smart Text Extractor ---
   function getText(el) {
     if (el.getAttribute('aria-label')) return el.getAttribute('aria-label');
     if (el.tagName === 'INPUT') return el.value || el.placeholder || '';
     if (el.tagName === 'IMG') return el.alt || '';
     return (el.innerText || '').replace(/\s+/g, ' ').trim().substring(0, 100);
+  }
+
+  // Enhanced semantic text extractor with inference support
+  function getSemanticText(el, options = {}) {
+    if (!el) {
+      return {
+        text: '',
+        source: null,
+      };
+    }
+
+    // First check explicit aria-label (highest priority)
+    const explicitAriaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
+    if (explicitAriaLabel && explicitAriaLabel.trim()) {
+      return {
+        text: explicitAriaLabel.trim(),
+        source: 'explicit_aria_label',
+      };
+    }
+
+    // Check for existing text (visible text, input value, etc.)
+    // This matches the existing getText() logic
+    if (el.tagName === 'INPUT') {
+      const value = (el.value || el.placeholder || '').trim();
+      if (value) {
+        return {
+          text: value,
+          source: 'input_value',
+        };
+      }
+    }
+
+    if (el.tagName === 'IMG') {
+      const alt = (el.alt || '').trim();
+      if (alt) {
+        return {
+          text: alt,
+          source: 'img_alt',
+        };
+      }
+    }
+
+    const innerText = (el.innerText || '').trim();
+    if (innerText) {
+      return {
+        text: innerText.substring(0, 100), // Match existing getText() limit
+        source: 'inner_text',
+      };
+    }
+
+    // Only try inference if we have NO explicit text/label
+    // Pass inferenceConfig from options to getInferredLabel
+    const inferred = getInferredLabel(el, {
+      enableInference: options.enableInference !== false,
+      inferenceConfig: options.inferenceConfig, // Pass config through
+    });
+    if (inferred) {
+      return inferred;
+    }
+
+    // Fallback: return empty with no source
+    return {
+      text: '',
+      source: null,
+    };
   }
 
   // --- HELPER: Safe Class Name Extractor (Handles SVGAnimatedString) ---
@@ -745,7 +1272,6 @@
       return iframeData;
     }
 
-    console.log(`[SentienceAPI] Found ${iframes.length} iframe(s), requesting snapshots...`);
     // Request snapshot from each iframe
     const iframePromises = iframes.map((iframe, idx) => {
       // OPTIMIZATION: Skip common ad domains to save time
@@ -755,7 +1281,6 @@
         src.includes('googleadservices') ||
         src.includes('ads system')
       ) {
-        console.log(`[SentienceAPI] Skipping ad iframe: ${src.substring(0, 30)}...`);
         return Promise.resolve(null);
       }
 
@@ -789,7 +1314,6 @@
               resolve(null);
             } else {
               const elementCount = event.data.snapshot?.raw_elements?.length || 0;
-              console.log(
                 `[SentienceAPI] ✓ Received ${elementCount} elements from Iframe ${idx} (id: ${requestId})`
               );
               resolve({
@@ -806,7 +1330,6 @@
         // 3. SEND REQUEST with error handling
         try {
           if (iframe.contentWindow) {
-            // console.log(`[SentienceAPI] Sending request to Iframe ${idx} (id: ${requestId})`);
             iframe.contentWindow.postMessage(
               {
                 type: 'SENTIENCE_IFRAME_SNAPSHOT_REQUEST',
@@ -842,7 +1365,6 @@
     results.forEach((result, idx) => {
       if (result && result.data && !result.error) {
         iframeData.set(iframes[idx], result.data);
-        console.log(`[SentienceAPI] ✓ Collected snapshot from iframe ${idx}`);
       } else if (result && result.error) {
         console.warn(`[SentienceAPI] Iframe ${idx} snapshot error:`, result.error);
       } else if (!result) {
@@ -928,7 +1450,18 @@
 
         window.sentience_registry[idx] = el;
 
-        const textVal = getText(el);
+        // Use getSemanticText for inference support (falls back to getText if no inference)
+        const semanticText = getSemanticText(el, {
+          enableInference: options.enableInference !== false, // Default: true
+          inferenceConfig: options.inferenceConfig, // Pass configurable inference settings
+        });
+        const textVal = semanticText.text || getText(el); // Fallback to getText for backward compat
+
+        // Infer role for interactable elements (only if no aria-label and no explicit role)
+        const inferredRole = getInferredRole(el, {
+          enableInference: options.enableInference !== false,
+          inferenceConfig: options.inferenceConfig,
+        });
         const inView = isInViewport(rect);
 
         // Get computed style once (needed for both occlusion check and data collection)
@@ -960,7 +1493,19 @@
           attributes: {
             role: toSafeString(el.getAttribute('role')),
             type_: toSafeString(el.getAttribute('type')),
-            aria_label: toSafeString(el.getAttribute('aria-label')),
+            aria_label:
+              semanticText?.source === 'explicit_aria_label'
+                ? semanticText.text
+                : toSafeString(el.getAttribute('aria-label')), // Keep original for backward compat
+            inferred_label:
+              semanticText?.source &&
+              !['explicit_aria_label', 'input_value', 'img_alt', 'inner_text'].includes(
+                semanticText.source
+              )
+                ? toSafeString(semanticText.text)
+                : null,
+            label_source: semanticText?.source || null, // Track source for gateway
+            inferred_role: inferredRole ? toSafeString(inferredRole) : null, // Inferred role for interactable elements
             href: toSafeString(el.href || el.getAttribute('href') || null),
             class: toSafeString(getClassName(el)),
             // Capture dynamic input state (not just initial attributes)
@@ -976,7 +1521,6 @@
         });
       });
 
-      console.log(`[SentienceAPI] Collected ${rawData.length} elements from main frame`);
 
       // Step 1.5: Collect iframe snapshots and FLATTEN immediately
       // "Flatten Early" architecture: Merge iframe elements into main array before WASM
@@ -986,9 +1530,7 @@
 
       if (options.collectIframes !== false) {
         try {
-          console.log(`[SentienceAPI] Starting iframe collection...`);
           const iframeSnapshots = await collectIframeSnapshots(options);
-          console.log(
             `[SentienceAPI] Iframe collection complete. Received ${iframeSnapshots.size} snapshot(s)`
           );
 
@@ -996,11 +1538,9 @@
             // FLATTEN IMMEDIATELY: Don't nest them. Just append them with coordinate translation.
             iframeSnapshots.forEach((iframeSnapshot, iframeEl) => {
               // Debug: Log structure to verify data is correct
-              // console.log(`[SentienceAPI] Processing iframe snapshot:`, iframeSnapshot);
 
               if (iframeSnapshot && iframeSnapshot.raw_elements) {
                 const rawElementsCount = iframeSnapshot.raw_elements.length;
-                console.log(
                   `[SentienceAPI] Processing ${rawElementsCount} elements from iframe (src: ${iframeEl.src || 'unknown'})`
                 );
                 // Get iframe's bounding rect (offset for coordinate translation)
@@ -1045,7 +1585,6 @@
               }
             });
 
-            // console.log(`[SentienceAPI] Merged ${iframeSnapshots.size} iframe(s). Total elements: ${allRawElements.length} (${rawData.length} main + ${totalIframeElements} iframe)`);
           }
         } catch (error) {
           console.warn('[SentienceAPI] Iframe collection failed:', error);
@@ -1055,7 +1594,6 @@
       // Step 2: Send EVERYTHING to WASM (One giant flat list)
       // Now WASM prunes iframe elements and main elements in one pass!
       // No recursion needed - everything is already flat
-      console.log(
         `[SentienceAPI] Sending ${allRawElements.length} total elements to WASM (${rawData.length} main + ${totalIframeElements} iframe)`
       );
       const processed = await processSnapshotInBackground(allRawElements, options);
@@ -1083,7 +1621,6 @@
       const totalRaw = cleanedRawElements.length;
       const iframeCount = totalIframeElements || 0;
 
-      console.log(
         `[SentienceAPI] ✓ Complete: ${totalCount} Smart Elements, ${totalRaw} Raw Elements (includes ${iframeCount} from iframes) (WASM took ${processed.duration?.toFixed(1)}ms)`
       );
 
@@ -1304,10 +1841,8 @@
       keyboardShortcut = 'Ctrl+Shift+I',
     } = options;
 
-    console.log(
       '🔴 [Sentience] Recording Mode STARTED. Click an element to copy its Ground Truth JSON.'
     );
-    console.log(`   Press ${keyboardShortcut} or call stopRecording() to stop.`);
 
     // Validate registry is populated
     if (!window.sentience_registry || window.sentience_registry.length === 0) {
@@ -1415,7 +1950,6 @@
       navigator.clipboard
         .writeText(jsonString)
         .then(() => {
-          console.log('✅ Copied Ground Truth to clipboard:', snippet);
 
           // Flash green to indicate success
           highlightBox.style.border = `2px solid ${successColor}`;
@@ -1463,7 +1997,6 @@
         delete window.sentience_stopRecording;
       }
 
-      console.log('⚪ [Sentience] Recording Mode STOPPED.');
     };
 
     // Keyboard shortcut handler (defined after stopRecording)
@@ -1483,7 +2016,6 @@
     // Set up auto-disable timeout
     if (autoDisableTimeout > 0) {
       timeoutId = setTimeout(() => {
-        console.log('⏰ [Sentience] Recording Mode auto-disabled after timeout.');
         stopRecording();
       }, autoDisableTimeout);
     }
@@ -1517,7 +2049,6 @@
       '*'
     );
 
-    console.log(`[Sentience] Overlay requested for ${elements.length} elements`);
   }
 
   /**
@@ -1530,7 +2061,6 @@
       },
       '*'
     );
-    console.log('[Sentience] Overlay cleared');
   }
 
   // index.js - Main Entry Point for Injected API
@@ -1538,7 +2068,6 @@
 
 
   (async () => {
-    // console.log('[SentienceAPI] Initializing (CSP-Resistant Mode)...');
 
     // Wait for Extension ID from content.js
     const getExtensionId = () => document.documentElement.dataset.sentienceExtensionId;
@@ -1562,7 +2091,6 @@
       return;
     }
 
-    // console.log('[SentienceAPI] Extension ID:', extId);
 
     // Registry for click actions (still needed for click() function)
     window.sentience_registry = [];
@@ -1584,7 +2112,6 @@
       window.sentience_iframe_handler_setup = true;
     }
 
-    console.log('[SentienceAPI] ✓ Ready! (CSP-Resistant - WASM runs in background)');
   })();
 
 })();
