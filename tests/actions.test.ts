@@ -2,7 +2,17 @@
  * Tests for actions (click, type, press, clickRect)
  */
 
-import { SentienceBrowser, click, typeText, press, scrollTo, clickRect, snapshot, find, BBox } from '../src';
+import {
+  SentienceBrowser,
+  click,
+  typeText,
+  press,
+  scrollTo,
+  clickRect,
+  snapshot,
+  find,
+  BBox,
+} from '../src';
 import { createTestBrowser, getPageOrThrow } from './test-utils';
 
 describe('Actions', () => {
