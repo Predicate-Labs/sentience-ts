@@ -39,6 +39,13 @@ export interface Element {
 
   // Diff status for frontend Diff Overlay feature
   diff_status?: 'ADDED' | 'REMOVED' | 'MODIFIED' | 'MOVED';
+
+  // Phase 1: Ordinal support fields for position-based selection
+  center_x?: number; // X coordinate of element center (viewport coords)
+  center_y?: number; // Y coordinate of element center (viewport coords)
+  doc_y?: number; // Y coordinate in document (center_y + scroll_y)
+  group_key?: string; // Geometric bucket key for ordinal grouping
+  group_index?: number; // Position within group (0-indexed, sorted by doc_y)
 }
 
 export interface Snapshot {
