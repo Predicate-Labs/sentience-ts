@@ -58,3 +58,12 @@ export {
   custom,
 } from './verification';
 export { AgentRuntime, AssertionRecord } from './agent-runtime';
+
+// Ordinal Support (Phase 3)
+export {
+  OrdinalIntent,
+  OrdinalKind,
+  detectOrdinalIntent,
+  selectByOrdinal,
+  boostOrdinalElements,
+} from './ordinal';

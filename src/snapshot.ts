@@ -263,6 +263,8 @@ async function snapshotViaApi(
       screenshot: rawResult.screenshot, // Keep local screenshot
       screenshot_format: screenshotFormat,
       error: apiResult.error,
+      // Phase 2: Ordinal support - dominant group key from Gateway
+      dominant_group_key: apiResult.dominant_group_key,
     };
 
     // Show visual overlay if requested (use API-ranked elements)
