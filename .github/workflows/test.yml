@@ -67,18 +67,23 @@ jobs:
             
             echo "Copying extension files to sdk-ts/src/extension..."
             cd ../sdk-ts
+            mkdir -p src/extension/dist
             mkdir -p src/extension/pkg
             
-            # Copy required files
+            # Copy manifest.json to root (as required)
             cp ../sentience-chrome/dist/manifest.json src/extension/
-            cp ../sentience-chrome/dist/*.js src/extension/ 2>/dev/null || true
+            # Copy JS files to dist/ subdirectory (manifest.json references dist/background.js, etc.)
+            cp ../sentience-chrome/dist/*.js src/extension/dist/ 2>/dev/null || true
+            # Copy WASM files to pkg/
             cp -r ../sentience-chrome/pkg/* src/extension/pkg/ 2>/dev/null || true
             
             # Verify extension files are present
             echo "Verifying extension files..."
             REQUIRED_FILES=(
               "src/extension/manifest.json"
-              "src/extension/injected_api.js"
+              "src/extension/dist/background.js"
+              "src/extension/dist/content.js"
+              "src/extension/dist/injected_api.js"
               "src/extension/pkg/sentience_core.js"
               "src/extension/pkg/sentience_core_bg.wasm"
             )
