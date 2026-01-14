@@ -21,7 +21,7 @@ async function main() {
     if (!page) {
       throw new Error('Failed to get page after browser.start()');
     }
-    await page.goto('https://example.com', {
+    await page.goto('https://google.com', {
       waitUntil: 'domcontentloaded',
     });
     await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait for page to fully load
@@ -30,7 +30,8 @@ async function main() {
     console.log('Example 1: Show all detected grids');
     console.log('='.repeat(60));
     // Show all grids (all in purple)
-    const snap = await snapshot(browser, { show_grid: true });
+    // Use local extension mode (use_api: false) to ensure layout data is computed
+    const snap = await snapshot(browser, { show_grid: true, use_api: false });
     console.log(`✅ Found ${snap.elements.length} elements`);
     console.log('   Purple borders appear around all detected grids for 5 seconds');
     await new Promise((resolve) => setTimeout(resolve, 6000)); // Wait to see the overlay
@@ -57,6 +58,7 @@ async function main() {
         await snapshot(browser, {
           show_grid: true,
           grid_id: targetGridId, // This grid will be highlighted in red
+          use_api: false, // Use local extension mode
         });
         await new Promise((resolve) => setTimeout(resolve, 6000)); // Wait to see the overlay
       }
@@ -80,6 +82,7 @@ async function main() {
       await snapshot(browser, {
         show_grid: true,
         grid_id: dominantGrid.grid_id, // Highlight dominant grid in red
+        use_api: false, // Use local extension mode
       });
       await new Promise((resolve) => setTimeout(resolve, 6000)); // Wait to see the overlay
     } else {
@@ -93,6 +96,7 @@ async function main() {
     await snapshot(browser, {
       show_overlay: true, // Show element borders (green/blue/red)
       show_grid: true, // Show grid borders (purple/orange/red)
+      use_api: false, // Use local extension mode
     });
     console.log('✅ Both overlays are now visible:');
     console.log('   - Element borders: Green (regular), Blue (primary), Red (target)');
