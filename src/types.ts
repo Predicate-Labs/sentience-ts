@@ -107,6 +107,8 @@ export interface GridInfo {
   confidence: number;
   /** Optional inferred label (e.g., "product_grid", "search_results", "navigation") - best-effort heuristic, may be null */
   label?: string | null;
+  /** Whether this grid is the dominant group (main content area) */
+  is_dominant?: boolean;
 }
 
 export interface Snapshot {

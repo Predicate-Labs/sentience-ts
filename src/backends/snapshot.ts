@@ -98,6 +98,10 @@ export interface SnapshotOptions {
   filter?: SnapshotFilter;
   /** Show visual overlay on page */
   showOverlay?: boolean;
+  /** Show visual overlay highlighting detected grids */
+  showGrid?: boolean;
+  /** Optional grid ID to show specific grid (only used if showGrid=true) */
+  gridId?: number | null;
   /** Use server-side API (Pro/Enterprise tier) */
   useApi?: boolean;
   /** API key for server-side processing */
@@ -362,6 +366,26 @@ async function snapshotViaExtension(
         (() => {
           if (window.sentience && window.sentience.showOverlay) {
             window.sentience.showOverlay(${JSON.stringify(rawElements)}, null);
+          }
+        })()
+      `);
+    }
+  }
+
+  // Show grid overlay if requested
+  if (options.showGrid) {
+    const { getGridBounds } = await import('../utils/grid-utils');
+    // Get all grids (don't filter by gridId here - we want to show all but highlight the target)
+    const grids = getGridBounds(result, undefined);
+    if (grids.length > 0) {
+      // Pass gridId as targetGridId to highlight it in red
+      const targetGridId = options.gridId ?? null;
+      await backend.eval(`
+        (() => {
+          if (window.sentience && window.sentience.showGrid) {
+            window.sentience.showGrid(${JSON.stringify(grids)}, ${targetGridId !== null ? targetGridId : 'null'});
+          } else {
+            console.warn('[SDK] showGrid not available in extension');
           }
         })()
       `);
