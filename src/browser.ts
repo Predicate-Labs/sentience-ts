@@ -496,14 +496,25 @@ export class SentienceBrowser implements IBrowser {
           extensionFilesInfo = `Extension directory exists. Files: ${files.join(', ')}`;
 
           // Check for critical files
-          const criticalFiles = [
-            'manifest.json',
-            'dist/background.js',
-            'dist/content.js',
-            'dist/injected_api.js',
-            'pkg/sentience_core.js',
-            'pkg/sentience_core_bg.wasm',
-          ];
+          // Support both flat structure (release manifest) and dist/ structure (dev manifest)
+          const hasFlatStructure = fs.existsSync(path.join(this.extensionPath, 'background.js'));
+          const criticalFiles = hasFlatStructure
+            ? [
+                'manifest.json',
+                'background.js',
+                'content.js',
+                'injected_api.js',
+                'pkg/sentience_core.js',
+                'pkg/sentience_core_bg.wasm',
+              ]
+            : [
+                'manifest.json',
+                'dist/background.js',
+                'dist/content.js',
+                'dist/injected_api.js',
+                'pkg/sentience_core.js',
+                'pkg/sentience_core_bg.wasm',
+              ];
           const missingFiles = criticalFiles.filter(f => {
             const fullPath = path.join(this.extensionPath!, f);
             return !fs.existsSync(fullPath);
