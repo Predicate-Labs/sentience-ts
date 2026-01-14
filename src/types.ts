@@ -54,6 +54,61 @@ export interface Element {
   // This field is computed by the gateway so downstream consumers don't need to
   // implement fuzzy matching logic themselves.
   in_dominant_group?: boolean;
+
+  // Layout-derived metadata (internal-only in v0, not exposed in API responses)
+  // Per ChatGPT feedback: explicitly optional to prevent users assuming layout is always present
+  // Note: This field is marked with skip_serializing_if in Rust, so it won't appear in API responses
+  layout?: LayoutHints;
+}
+
+export interface GridPosition {
+  /** 0-based row index */
+  row_index: number;
+  /** 0-based column index */
+  col_index: number;
+  /** ID of the row cluster (for distinguishing separate grids) */
+  cluster_id: number;
+}
+
+export interface LayoutHints {
+  /** Grid ID (maps to GridInfo.grid_id) - distinguishes multiple grids on same page */
+  /** Per feedback: Add grid_id to distinguish main feed + sidebar lists + nav links */
+  grid_id?: number | null;
+  /** Grid position within the grid (row_index, col_index) */
+  grid_pos?: GridPosition | null;
+  /** Inferred parent index in the original elements slice */
+  parent_index?: number | null;
+  /** Indices of children elements (optional to avoid payload bloat - container elements can have hundreds) */
+  /** Per feedback: Make optional/capped to prevent serializing large arrays */
+  children_indices?: number[] | null;
+  /** Confidence score for grid position assignment (0.0-1.0) */
+  grid_confidence: number;
+  /** Confidence score for parent-child containment (0.0-1.0) */
+  parent_confidence: number;
+  /** Optional: Page region (header/nav/main/aside/footer) - killer signal for ordinality + dominant group */
+  /** Per feedback: Optional but very useful for region detection */
+  region?: 'header' | 'nav' | 'main' | 'aside' | 'footer' | null;
+  /** Confidence score for region assignment (0.0-1.0) */
+  region_confidence: number;
+}
+
+export interface GridInfo {
+  /** The grid ID (matches grid_id in LayoutHints) */
+  grid_id: number;
+  /** Bounding box: x, y, width, height (document coordinates) */
+  bbox: BBox;
+  /** Number of rows in the grid */
+  row_count: number;
+  /** Number of columns in the grid */
+  col_count: number;
+  /** Total number of items in the grid */
+  item_count: number;
+  /** Confidence score (currently 1.0) */
+  confidence: number;
+  /** Optional inferred label (e.g., "product_grid", "search_results", "navigation") - best-effort heuristic, may be null */
+  label?: string | null;
+  /** Whether this grid is the dominant group (main content area) */
+  is_dominant?: boolean;
 }
 
 export interface Snapshot {

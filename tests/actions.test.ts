@@ -12,6 +12,7 @@ import {
   snapshot,
   find,
   BBox,
+  Element,
 } from '../src';
 import { createTestBrowser, getPageOrThrow } from './test-utils';
 
@@ -26,6 +27,7 @@ describe('Actions', () => {
         await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
+
         const link = find(snap, 'role=link');
 
         if (link) {
@@ -140,7 +142,7 @@ describe('Actions', () => {
 
         const snap = await snapshot(browser);
         // Find an element to scroll to
-        const elements = snap.elements.filter(el => el.role === 'link');
+        const elements = snap.elements.filter((el: Element) => el.role === 'link');
 
         if (elements.length > 0) {
           // Get the last element which might be out of viewport
@@ -164,7 +166,7 @@ describe('Actions', () => {
         await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
-        const elements = snap.elements.filter(el => el.role === 'link');
+        const elements = snap.elements.filter((el: Element) => el.role === 'link');
 
         if (elements.length > 0) {
           const element = elements[0];
@@ -186,7 +188,7 @@ describe('Actions', () => {
         await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const snap = await snapshot(browser);
-        const elements = snap.elements.filter(el => el.role === 'link');
+        const elements = snap.elements.filter((el: Element) => el.role === 'link');
 
         if (elements.length > 0) {
           const element = elements[0];
@@ -338,6 +340,9 @@ describe('Actions', () => {
         const page = getPageOrThrow(browser);
         await page.goto('https://example.com');
         await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        // Check if extension is available by trying to take a snapshot
+        const snap = await snapshot(browser);
 
         const result = await clickRect(browser, { x: 100, y: 100, w: 50, h: 30 }, true, 2.0, true);
         expect(result.success).toBe(true);

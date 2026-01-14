@@ -17,6 +17,7 @@ export { showOverlay, clearOverlay } from './overlay';
 export { findTextRect } from './textSearch';
 export * from './types';
 export { saveStorageState } from './utils';
+export { getGridBounds } from './utils/grid-utils';
 
 // Agent Layer (v0.2.0+)
 export {

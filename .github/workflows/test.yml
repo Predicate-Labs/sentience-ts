@@ -48,16 +48,21 @@ jobs:
       run: |
         npm run build
         
-    - name: Build extension (if needed)
+    - name: Copy extension to dist for tests
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        if [ -d "../sentience-chrome" ]; then
-          cd ../sentience-chrome && ./build.sh || echo "Extension build skipped (may not be available in CI)"
+        # Extension should be synced to src/extension/ by sync-extension workflow
+        # Copy it to dist/extension/ so tests can find it (browser.ts looks relative to __dirname)
+        if [ -d "src/extension" ] && [ -f "src/extension/manifest.json" ]; then
+          echo "Copying extension from src/extension to dist/extension..."
+          cp -r src/extension dist/
+          echo "Extension files in dist/extension:"
+          ls -la dist/extension/
         else
-          echo "Extension directory not found, skipping build"
+          echo "Warning: src/extension not found, tests may fail"
         fi
-        
+
     - name: Run tests
       run: |
         npm test

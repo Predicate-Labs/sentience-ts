@@ -25,6 +25,8 @@ export interface SnapshotOptions {
   trace_path?: string; // Path to save trace file (default: "trace_{timestamp}.json")
   goal?: string; // Optional goal/task description for the snapshot
   show_overlay?: boolean; // Show visual overlay highlighting elements in browser
+  show_grid?: boolean; // Show visual overlay highlighting detected grids
+  grid_id?: number | null; // Optional grid ID to show specific grid (only used if show_grid=true)
 }
 
 /**
@@ -130,6 +132,13 @@ async function snapshotViaExtension(
     _saveTraceToFile(result.raw_elements, options.trace_path);
   }
 
+  // Basic validation
+  if (result.status !== 'success' && result.status !== 'error') {
+    throw new Error(`Invalid snapshot status: ${result.status}`);
+  }
+
+  const snapshot = result as Snapshot;
+
   // Show visual overlay if requested
   if (options.show_overlay && result.raw_elements) {
     await BrowserEvaluator.evaluate(
@@ -143,12 +152,45 @@ async function snapshotViaExtension(
     );
   }
 
-  // Basic validation
-  if (result.status !== 'success' && result.status !== 'error') {
-    throw new Error(`Invalid snapshot status: ${result.status}`);
+  // Show grid overlay if requested
+  if (options.show_grid) {
+    const { getGridBounds } = await import('./utils/grid-utils');
+    // Get all grids (don't filter by grid_id here - we want to show all but highlight the target)
+    const grids = getGridBounds(snapshot, undefined);
+
+    // Debug: Check if elements have layout data
+    const elementsWithLayout = snapshot.elements.filter(e => e.layout?.grid_id != null).length;
+    if (grids.length === 0 && elementsWithLayout === 0) {
+      console.warn(
+        '[SDK] No grids detected. Elements may not have layout data. ' +
+          'Ensure you are using use_api: false or that the API returns layout data.'
+      );
+    }
+
+    if (grids.length > 0) {
+      // Pass grid_id as targetGridId to highlight it in red
+      const targetGridId = options.grid_id ?? null;
+      await BrowserEvaluator.evaluate(
+        page,
+        (args: any) => {
+          if ((window as any).sentience && (window as any).sentience.showGrid) {
+            (window as any).sentience.showGrid(args.grids, args.targetGridId);
+          } else {
+            console.warn(
+              '[SDK] showGrid not available in extension. Make sure the extension is loaded.'
+            );
+          }
+        },
+        { grids, targetGridId }
+      );
+    } else {
+      console.warn(
+        `[SDK] No grids to display. Found ${elementsWithLayout} elements with layout data out of ${snapshot.elements.length} total elements.`
+      );
+    }
   }
 
-  return result as Snapshot;
+  return snapshot;
 }
 
 async function snapshotViaApi(
@@ -278,6 +320,28 @@ async function snapshotViaApi(
         },
         apiResult.elements
       );
+    }
+
+    // Show grid overlay if requested
+    if (options.show_grid) {
+      const { getGridBounds } = await import('./utils/grid-utils');
+      // Get all grids (don't filter by grid_id here - we want to show all but highlight the target)
+      const grids = getGridBounds(snapshotData, undefined);
+      if (grids.length > 0 && page) {
+        // Pass grid_id as targetGridId to highlight it in red
+        const targetGridId = options.grid_id ?? null;
+        await BrowserEvaluator.evaluate(
+          page,
+          (args: any) => {
+            if ((window as any).sentience && (window as any).sentience.showGrid) {
+              (window as any).sentience.showGrid(args.grids, args.targetGridId);
+            } else {
+              console.warn('[SDK] showGrid not available in extension');
+            }
+          },
+          { grids, targetGridId }
+        );
+      }
     }
 
     return snapshotData;
