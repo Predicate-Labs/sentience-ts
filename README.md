@@ -1,6 +1,6 @@
 # Sentience TypeScript SDK
 
-**Semantic geometry grounding for deterministic, debuggable AI web agents with time-travel traces.**
+**Semantic snapshots and Jest-style assertions for reliable AI web agents with time-travel traces**
 
 ## 📦 Installation
 
@@ -18,6 +18,49 @@ npx playwright install chromium
 npm install
 npm run build
 ```
+
+## Jest for AI Web Agent
+
+### Semantic snapshots and assertions that let agents act, verify, and know when they're done.
+
+Use `AgentRuntime` to add Jest-style assertions to your agent loops. Verify browser state, check task completion, and get clear feedback on what's working:
+
+```typescript
+import { SentienceBrowser, AgentRuntime, urlContains, exists, allOf } from 'sentienceapi';
+import { createTracer } from 'sentienceapi';
+import { Page } from 'playwright';
+
+// Create browser and tracer
+const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+const tracer = await createTracer({ runId: 'my-run', uploadTrace: false });
+
+// Create browser adapter for AgentRuntime
+const browserAdapter = {
+  snapshot: async (_page: Page, options?: Record<string, any>) => {
+    return await browser.snapshot(options);
+  },
+};
+const runtime = new AgentRuntime(browserAdapter, browser.getPage(), tracer);
+
+// Navigate and take snapshot
+await browser.getPage().goto('https://example.com');
+runtime.beginStep('Verify page loaded');
+await runtime.snapshot();
+
+// Run assertions (Jest-style)
+runtime.assert(urlContains('example.com'), 'on_correct_domain');
+runtime.assert(exists('role=heading'), 'has_heading');
+runtime.assert(allOf([exists('role=button'), exists('role=link')]), 'has_interactive_elements');
+
+// Check task completion
+if (runtime.assertDone(exists("text~'Example'"), 'task_complete')) {
+  console.log('✅ Task completed!');
+}
+
+console.log(`Task done: ${runtime.isTaskDone}`);
+```
+
+**See example:** [examples/agent-runtime-verification.ts](examples/agent-runtime-verification.ts)
 
 ## 🚀 Quick Start: Choose Your Abstraction Level
 
@@ -141,8 +184,6 @@ await browser.close();
 </details>
 
 ---
-
-## 🆕 What's New (2026-01-06)
 
 ### Human-like Typing
 
