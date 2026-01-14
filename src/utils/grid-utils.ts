@@ -60,15 +60,24 @@ export function getGridBounds(snapshot: Snapshot, gridId?: number): GridInfo[] {
   }
 
   const gridInfos: GridInfo[] = [];
+  const gridDominantCounts = new Map<number, { dominant: number; total: number }>();
 
   // Sort by grid_id for consistent output
   const sortedGridIds = Array.from(gridElements.keys()).sort((a, b) => a - b);
 
+  // First pass: compute all grid infos and count dominant group elements
   for (const gid of sortedGridIds) {
     const elementsInGrid = gridElements.get(gid)!;
     if (elementsInGrid.length === 0) {
       continue;
     }
+
+    // Count dominant group elements in this grid
+    const dominantCount = elementsInGrid.filter(e => e.in_dominant_group === true).length;
+    gridDominantCounts.set(gid, {
+      dominant: dominantCount,
+      total: elementsInGrid.length,
+    });
 
     // Compute bounding box
     let minX = Infinity;
@@ -109,7 +118,48 @@ export function getGridBounds(snapshot: Snapshot, gridId?: number): GridInfo[] {
       item_count: elementsInGrid.length,
       confidence: 1.0,
       label: label,
+      is_dominant: false, // Will be set below
     });
+  }
+
+  // Second pass: identify dominant grid
+  // The grid with the highest count (or highest percentage >= 50%) of dominant group elements
+  if (gridDominantCounts.size > 0) {
+    // Find grid with highest absolute count
+    let maxDominantCount = 0;
+    for (const { dominant } of gridDominantCounts.values()) {
+      maxDominantCount = Math.max(maxDominantCount, dominant);
+    }
+
+    if (maxDominantCount > 0) {
+      // Find grid(s) with highest count
+      const dominantGrids: number[] = [];
+      for (const [gid, counts] of gridDominantCounts.entries()) {
+        if (counts.dominant === maxDominantCount) {
+          dominantGrids.push(gid);
+        }
+      }
+
+      // If multiple grids tie, prefer the one with highest percentage
+      dominantGrids.sort((a, b) => {
+        const aCounts = gridDominantCounts.get(a)!;
+        const bCounts = gridDominantCounts.get(b)!;
+        const aPct = aCounts.total > 0 ? aCounts.dominant / aCounts.total : 0;
+        const bPct = bCounts.total > 0 ? bCounts.dominant / bCounts.total : 0;
+        return bPct - aPct;
+      });
+
+      // Mark the dominant grid
+      const dominantGid = dominantGrids[0];
+      const counts = gridDominantCounts.get(dominantGid)!;
+      // Only mark as dominant if it has >= 50% dominant group elements or >= 3 elements
+      if (counts.dominant >= 3 || (counts.total > 0 && counts.dominant / counts.total >= 0.5)) {
+        const gridInfo = gridInfos.find(g => g.grid_id === dominantGid);
+        if (gridInfo) {
+          gridInfo.is_dominant = true;
+        }
+      }
+    }
   }
 
   return gridInfos;
