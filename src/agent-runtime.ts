@@ -43,6 +43,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Snapshot } from './types';
 import { AssertContext, Predicate } from './verification';
 import { Tracer } from './tracing/tracer';
+import { LLMProvider } from './llm-provider';
 
 // Define a minimal browser interface to avoid circular dependencies
 interface BrowserLike {
@@ -68,6 +69,12 @@ export interface EventuallyOptions {
   minConfidence?: number;
   /** Max number of snapshot attempts to get above minConfidence before declaring exhaustion. */
   maxSnapshotAttempts?: number;
+  /** Optional: vision fallback provider used after snapshot exhaustion (last resort). */
+  visionProvider?: LLMProvider;
+  /** Optional: override vision system prompt (YES/NO only). */
+  visionSystemPrompt?: string;
+  /** Optional: override vision user prompt (YES/NO only). */
+  visionUserPrompt?: string;
 }
 
 export class AssertionHandle {
@@ -93,6 +100,9 @@ export class AssertionHandle {
     const snapshotOptions = options.snapshotOptions;
     const minConfidence = options.minConfidence;
     const maxSnapshotAttempts = options.maxSnapshotAttempts ?? 3;
+    const visionProvider = options.visionProvider;
+    const visionSystemPrompt = options.visionSystemPrompt;
+    const visionUserPrompt = options.visionUserPrompt;
 
     const deadline = Date.now() + timeoutMs;
     let attempt = 0;
@@ -133,6 +143,54 @@ export class AssertionHandle {
         );
 
         if (snapshotAttempt >= maxSnapshotAttempts) {
+          // Optional: vision fallback after snapshot exhaustion (last resort).
+          // Keeps the assertion surface invariant; only perception changes.
+          if (visionProvider && visionProvider.supportsVision?.()) {
+            try {
+              const buf = (await (this.runtime.page as any).screenshot({ type: 'png' })) as Buffer;
+              const imageBase64 = Buffer.from(buf).toString('base64');
+              const sys =
+                visionSystemPrompt ?? 'You are a strict visual verifier. Answer only YES or NO.';
+              const user =
+                visionUserPrompt ??
+                `Given the screenshot, is the following condition satisfied?\n\n${this.label}\n\nAnswer YES or NO.`;
+
+              const resp = await visionProvider.generateWithImage(sys, user, imageBase64, {
+                temperature: 0.0,
+              });
+              const text = (resp.content || '').trim().toLowerCase();
+              const passed = text.startsWith('yes');
+
+              const finalOutcome = {
+                passed,
+                reason: passed ? 'vision_fallback_yes' : 'vision_fallback_no',
+                details: {
+                  reason_code: passed ? 'vision_fallback_pass' : 'vision_fallback_fail',
+                  vision_response: resp.content,
+                  min_confidence: minConfidence,
+                  snapshot_attempts: snapshotAttempt,
+                },
+              };
+
+              (this.runtime as any)._recordOutcome(
+                finalOutcome,
+                this.label,
+                this.required,
+                {
+                  eventually: true,
+                  attempt,
+                  snapshot_attempt: snapshotAttempt,
+                  final: true,
+                  vision_fallback: true,
+                },
+                true
+              );
+              return passed;
+            } catch {
+              // fall through to snapshot_exhausted
+            }
+          }
+
           const finalOutcome = {
             passed: false,
             reason: `Snapshot exhausted after ${snapshotAttempt} attempt(s) below minConfidence ${minConfidence.toFixed(3)}`,

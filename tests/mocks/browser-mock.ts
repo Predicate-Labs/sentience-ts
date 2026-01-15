@@ -21,6 +21,7 @@ export class MockPage implements IPage {
   public mouseClickCalls: Array<{ x: number; y: number }> = [];
   public keyboardTypeCalls: string[] = [];
   public keyboardPressCalls: string[] = [];
+  public screenshotCalls: Array<{ options?: any }> = [];
 
   constructor(url?: string) {
     if (url) {
@@ -88,6 +89,12 @@ export class MockPage implements IPage {
       this.keyboardPressCalls.push(key);
     },
   };
+
+  // Playwright Page API (subset): used by vision fallback in AgentRuntime eventually()
+  async screenshot(options?: any): Promise<Buffer> {
+    this.screenshotCalls.push({ options });
+    return Buffer.from('mock-png');
+  }
 }
 
 /**
