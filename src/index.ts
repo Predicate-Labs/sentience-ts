@@ -66,7 +66,7 @@ export {
   isExpanded,
   isCollapsed,
 } from './verification';
-export { AgentRuntime, AssertionRecord } from './agent-runtime';
+export { AgentRuntime, AssertionHandle, AssertionRecord, EventuallyOptions } from './agent-runtime';
 
 // Ordinal Support (Phase 3)
 export {

@@ -60,6 +60,82 @@ export interface AssertionRecord {
   details: Record<string, any>;
 }
 
+export interface EventuallyOptions {
+  timeoutMs?: number;
+  pollMs?: number;
+  snapshotOptions?: Record<string, any>;
+}
+
+export class AssertionHandle {
+  private runtime: AgentRuntime;
+  private predicate: Predicate;
+  private label: string;
+  private required: boolean;
+
+  constructor(runtime: AgentRuntime, predicate: Predicate, label: string, required: boolean) {
+    this.runtime = runtime;
+    this.predicate = predicate;
+    this.label = label;
+    this.required = required;
+  }
+
+  once(): boolean {
+    return this.runtime.assert(this.predicate, this.label, this.required);
+  }
+
+  async eventually(options: EventuallyOptions = {}): Promise<boolean> {
+    const timeoutMs = options.timeoutMs ?? 10_000;
+    const pollMs = options.pollMs ?? 250;
+    const snapshotOptions = options.snapshotOptions;
+
+    const deadline = Date.now() + timeoutMs;
+    let attempt = 0;
+    let lastOutcome: ReturnType<Predicate> | null = null;
+
+    while (true) {
+      attempt += 1;
+      await this.runtime.snapshot(snapshotOptions);
+
+      lastOutcome = this.predicate((this.runtime as any).ctx());
+
+      // Emit attempt event (not recorded in step_end)
+      (this.runtime as any)._recordOutcome(
+        lastOutcome,
+        this.label,
+        this.required,
+        { eventually: true, attempt, final: false },
+        false
+      );
+
+      if (lastOutcome.passed) {
+        // Record final success once
+        (this.runtime as any)._recordOutcome(
+          lastOutcome,
+          this.label,
+          this.required,
+          { eventually: true, attempt, final: true },
+          true
+        );
+        return true;
+      }
+
+      if (Date.now() >= deadline) {
+        // Record final failure once
+        (this.runtime as any)._recordOutcome(
+          lastOutcome,
+          this.label,
+          this.required,
+          { eventually: true, attempt, final: true, timeout: true },
+          true
+        );
+        return false;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+  }
+}
+
 /**
  * Runtime wrapper for agent verification loops.
  *
@@ -91,6 +167,82 @@ export class AgentRuntime {
   /** Task completion tracking */
   private taskDone: boolean = false;
   private taskDoneLabel: string | null = null;
+
+  private static similarity(a: string, b: string): number {
+    const s1 = a.toLowerCase();
+    const s2 = b.toLowerCase();
+    if (!s1 || !s2) return 0;
+    if (s1 === s2) return 1;
+
+    // Bigram overlap (cheap, robust enough for suggestions)
+    const bigrams = (s: string): string[] => {
+      const out: string[] = [];
+      for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+      return out;
+    };
+    const a2 = bigrams(s1);
+    const b2 = bigrams(s2);
+    const setB = new Set(b2);
+    let common = 0;
+    for (const g of a2) if (setB.has(g)) common += 1;
+    return (2 * common) / (a2.length + b2.length + 1e-9);
+  }
+
+  _recordOutcome(
+    outcome: ReturnType<Predicate>,
+    label: string,
+    required: boolean,
+    extra: Record<string, any> | null,
+    recordInStep: boolean
+  ): void {
+    const details = { ...(outcome.details || {}) } as Record<string, any>;
+
+    // Failure intelligence: nearest matches for selector-driven assertions
+    if (!outcome.passed && this.lastSnapshot && typeof details.selector === 'string') {
+      const selector = details.selector;
+      const scored: Array<{ score: number; el: any }> = [];
+      for (const el of this.lastSnapshot.elements) {
+        const hay = el.name ?? el.text ?? '';
+        if (!hay) continue;
+        const score = AgentRuntime.similarity(selector, hay);
+        scored.push({ score, el });
+      }
+      scored.sort((x, y) => y.score - x.score);
+      details.nearest_matches = scored.slice(0, 3).map(({ score, el }) => ({
+        id: el.id,
+        role: el.role,
+        text: (el.text ?? '').toString().slice(0, 80),
+        name: (el.name ?? '').toString().slice(0, 80),
+        score: Math.round(score * 10_000) / 10_000,
+      }));
+    }
+
+    const record: AssertionRecord & Record<string, any> = {
+      label,
+      passed: outcome.passed,
+      required,
+      reason: outcome.reason,
+      details,
+      ...(extra || {}),
+    };
+
+    if (recordInStep) {
+      this.assertionsThisStep.push(record);
+    }
+
+    this.tracer.emit(
+      'verification',
+      {
+        kind: 'assert',
+        ...record,
+      },
+      this.stepId || undefined
+    );
+  }
+
+  check(predicate: Predicate, label: string, required: boolean = false): AssertionHandle {
+    return new AssertionHandle(this, predicate, label, required);
+  }
 
   /**
    * Create a new AgentRuntime.
@@ -179,31 +331,7 @@ export class AgentRuntime {
    */
   assert(predicate: Predicate, label: string, required: boolean = false): boolean {
     const outcome = predicate(this.ctx());
-
-    const record: AssertionRecord = {
-      label,
-      passed: outcome.passed,
-      required,
-      reason: outcome.reason,
-      details: outcome.details,
-    };
-    this.assertionsThisStep.push(record);
-
-    // Emit dedicated verification event (Option B from design doc)
-    // This makes assertions visible in Studio timeline
-    this.tracer.emit(
-      'verification',
-      {
-        kind: 'assert',
-        passed: outcome.passed,
-        label,
-        required,
-        reason: outcome.reason,
-        details: outcome.details,
-      },
-      this.stepId || undefined
-    );
-
+    this._recordOutcome(outcome, label, required, null, true);
     return outcome.passed;
   }
 

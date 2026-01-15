@@ -6,7 +6,7 @@
  */
 
 import { IBrowser, IPage } from '../../src/protocols/browser-protocol';
-import { Snapshot, SnapshotOptions } from '../../src/types';
+import { Snapshot } from '../../src/types';
 import { Page } from 'playwright';
 
 /**
@@ -108,7 +108,7 @@ export class MockBrowser implements IBrowser {
     await this.mockPage.goto(url);
   }
 
-  async snapshot(options?: SnapshotOptions): Promise<Snapshot> {
+  async snapshot(options?: any): Promise<Snapshot> {
     // Mock snapshot - return empty snapshot
     return {
       status: 'success',

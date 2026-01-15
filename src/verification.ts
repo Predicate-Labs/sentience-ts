@@ -144,7 +144,7 @@ export function exists(selector: QuerySelector): Predicate {
       return {
         passed: false,
         reason: 'no snapshot available',
-        details: { selector: selectorStr },
+        details: { selector: selectorStr, reason_code: 'no_snapshot' },
       };
     }
 
@@ -153,7 +153,11 @@ export function exists(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `no elements matched selector: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'no_match',
+      },
     };
   };
 }
@@ -180,7 +184,7 @@ export function notExists(selector: QuerySelector): Predicate {
       return {
         passed: false,
         reason: 'no snapshot available',
-        details: { selector: selectorStr },
+        details: { selector: selectorStr, reason_code: 'no_snapshot' },
       };
     }
 
@@ -189,7 +193,11 @@ export function notExists(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `found ${matches.length} elements matching: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'unexpected_match',
+      },
     };
   };
 }
@@ -380,7 +388,7 @@ export function isEnabled(selector: QuerySelector): Predicate {
       return {
         passed: false,
         reason: `no elements matched selector: ${selectorStr}`,
-        details: { selector: selectorStr, matched: 0 },
+        details: { selector: selectorStr, matched: 0, reason_code: 'no_match' },
       };
     }
 
@@ -388,7 +396,11 @@ export function isEnabled(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `all matched elements are disabled: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -405,7 +417,11 @@ export function isDisabled(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `no matched elements are disabled: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -422,7 +438,11 @@ export function isChecked(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `no matched elements are checked: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -439,7 +459,11 @@ export function isUnchecked(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `all matched elements are checked: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -456,7 +480,12 @@ export function valueEquals(selector: QuerySelector, expected: string): Predicat
     return {
       passed: ok,
       reason: ok ? '' : `no matched elements had value == '${expected}'`,
-      details: { selector: selectorStr, expected, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        expected,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -473,7 +502,12 @@ export function valueContains(selector: QuerySelector, substring: string): Predi
     return {
       passed: ok,
       reason: ok ? '' : `no matched elements had value containing '${substring}'`,
-      details: { selector: selectorStr, substring, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        substring,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -490,7 +524,11 @@ export function isExpanded(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `no matched elements are expanded: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
@@ -507,7 +545,11 @@ export function isCollapsed(selector: QuerySelector): Predicate {
     return {
       passed: ok,
       reason: ok ? '' : `all matched elements are expanded: ${selectorStr}`,
-      details: { selector: selectorStr, matched: matches.length },
+      details: {
+        selector: selectorStr,
+        matched: matches.length,
+        reason_code: ok ? 'ok' : 'state_mismatch',
+      },
     };
   };
 }
