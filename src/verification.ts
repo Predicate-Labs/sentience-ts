@@ -362,3 +362,152 @@ export function custom(
     }
   };
 }
+
+// ============================================================================
+// v1 state-aware predicates (deterministic, schema-driven)
+// ============================================================================
+
+export function isEnabled(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+
+    const matches = query(snap, selector);
+    if (matches.length === 0) {
+      return {
+        passed: false,
+        reason: `no elements matched selector: ${selectorStr}`,
+        details: { selector: selectorStr, matched: 0 },
+      };
+    }
+
+    const ok = matches.some(m => m.disabled !== true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `all matched elements are disabled: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}
+
+export function isDisabled(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => m.disabled === true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `no matched elements are disabled: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}
+
+export function isChecked(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => m.checked === true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `no matched elements are checked: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}
+
+export function isUnchecked(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => m.checked !== true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `all matched elements are checked: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}
+
+export function valueEquals(selector: QuerySelector, expected: string): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => (m.value ?? '') === expected);
+    return {
+      passed: ok,
+      reason: ok ? '' : `no matched elements had value == '${expected}'`,
+      details: { selector: selectorStr, expected, matched: matches.length },
+    };
+  };
+}
+
+export function valueContains(selector: QuerySelector, substring: string): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => (m.value ?? '').toLowerCase().includes(substring.toLowerCase()));
+    return {
+      passed: ok,
+      reason: ok ? '' : `no matched elements had value containing '${substring}'`,
+      details: { selector: selectorStr, substring, matched: matches.length },
+    };
+  };
+}
+
+export function isExpanded(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => m.expanded === true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `no matched elements are expanded: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}
+
+export function isCollapsed(selector: QuerySelector): Predicate {
+  const selectorStr = selectorToString(selector);
+  return (ctx: AssertContext): AssertOutcome => {
+    const snap = ctx.snapshot;
+    if (!snap) {
+      return { passed: false, reason: 'no snapshot available', details: { selector: selectorStr } };
+    }
+    const matches = query(snap, selector);
+    const ok = matches.some(m => m.expanded !== true);
+    return {
+      passed: ok,
+      reason: ok ? '' : `all matched elements are expanded: ${selectorStr}`,
+      details: { selector: selectorStr, matched: matches.length },
+    };
+  };
+}

@@ -57,6 +57,14 @@ export {
   allOf,
   anyOf,
   custom,
+  isEnabled,
+  isDisabled,
+  isChecked,
+  isUnchecked,
+  valueEquals,
+  valueContains,
+  isExpanded,
+  isCollapsed,
 } from './verification';
 export { AgentRuntime, AssertionRecord } from './agent-runtime';
 

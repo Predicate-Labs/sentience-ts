@@ -50,6 +50,24 @@ export interface Element {
   // Hyperlink URL (for link elements)
   href?: string;
 
+  // ===== v1 state-aware assertion fields (optional) =====
+  /** Best-effort accessible name/label for controls (distinct from visible text) */
+  name?: string | null;
+  /** Current value for inputs/textarea/select (PII-aware: may be omitted/redacted) */
+  value?: string | null;
+  /** Input type (e.g., "text", "email", "password") */
+  input_type?: string | null;
+  /** Whether value was redacted for privacy */
+  value_redacted?: boolean | null;
+  /** Normalized boolean states (best-effort) */
+  checked?: boolean | null;
+  disabled?: boolean | null;
+  expanded?: boolean | null;
+  /** Raw ARIA state strings (tri-state / debugging) */
+  aria_checked?: string | null;
+  aria_disabled?: string | null;
+  aria_expanded?: string | null;
+
   // Phase 3.2: Pre-computed dominant group membership (uses fuzzy matching)
   // This field is computed by the gateway so downstream consumers don't need to
   // implement fuzzy matching logic themselves.
@@ -161,6 +179,10 @@ export interface QuerySelectorObject {
   role?: string;
   text?: string;
   name?: string;
+  value?: string;
+  checked?: boolean;
+  disabled?: boolean;
+  expanded?: boolean;
   clickable?: boolean;
   isPrimary?: boolean;
   importance?: number | { min?: number; max?: number };

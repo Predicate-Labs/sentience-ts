@@ -73,6 +73,19 @@ describe('parseSelector', () => {
     const q = parseSelector('tag=button');
     expect((q as any).tag).toBe('button');
   });
+
+  it('should parse name/value/state selectors', () => {
+    const q1 = parseSelector("name~'Email'");
+    expect((q1 as any).name_contains).toBe('Email');
+
+    const q2 = parseSelector("value~'@example.com'");
+    expect((q2 as any).value_contains).toBe('@example.com');
+
+    const q3 = parseSelector('disabled=true checked=false expanded=true');
+    expect((q3 as any).disabled).toBe(true);
+    expect((q3 as any).checked).toBe(false);
+    expect((q3 as any).expanded).toBe(true);
+  });
 });
 
 describe('query', () => {
@@ -82,6 +95,7 @@ describe('query', () => {
         id: 1,
         role: 'button',
         text: 'Sign In',
+        name: 'Sign In',
         importance: 1000,
         bbox: { x: 10, y: 20, width: 100, height: 40 },
         visual_cues: { is_primary: true, background_color_name: null, is_clickable: true },
@@ -111,6 +125,20 @@ describe('query', () => {
         is_occluded: false,
         z_index: 1,
       },
+      {
+        id: 4,
+        role: 'textbox',
+        text: null,
+        name: 'Email',
+        value: 'user@example.com',
+        disabled: false,
+        importance: 100,
+        bbox: { x: 10, y: 120, width: 300, height: 40 },
+        visual_cues: { is_primary: false, background_color_name: null, is_clickable: true },
+        in_viewport: true,
+        is_occluded: false,
+        z_index: 1,
+      },
     ];
 
     return {
@@ -130,8 +158,8 @@ describe('query', () => {
   it('should filter by importance less than', () => {
     const snap = createTestSnapshot();
     const results = query(snap, 'importance<300');
-    expect(results.length).toBe(1);
-    expect(results[0].id).toBe(3);
+    expect(results.length).toBe(2);
+    expect(results.map(el => el.id)).toEqual([3, 4]);
   });
 
   it('should filter by text prefix', () => {
@@ -165,7 +193,7 @@ describe('query', () => {
   it('should filter by visible', () => {
     const snap = createTestSnapshot();
     const results = query(snap, 'visible=true');
-    expect(results.length).toBe(3); // All are visible
+    expect(results.length).toBe(4); // All are visible
   });
 
   it('should filter by z-index', () => {
@@ -178,13 +206,20 @@ describe('query', () => {
   it('should filter by in_viewport', () => {
     const snap = createTestSnapshot();
     const results = query(snap, 'in_viewport=true');
-    expect(results.length).toBe(3);
+    expect(results.length).toBe(4);
   });
 
   it('should filter by is_occluded', () => {
     const snap = createTestSnapshot();
     const results = query(snap, 'is_occluded=false');
-    expect(results.length).toBe(3);
+    expect(results.length).toBe(4);
+  });
+
+  it('should filter by name/value/state', () => {
+    const snap = createTestSnapshot();
+    expect(query(snap, "name~'Email'").map(e => e.id)).toEqual([4]);
+    expect(query(snap, "value~'@example.com'").map(e => e.id)).toEqual([4]);
+    expect(query(snap, 'disabled=false').map(e => e.id)).toContain(4);
   });
 });
 

@@ -25,6 +25,12 @@ export function parseSelector(selector: string): QuerySelectorObject {
     text_contains?: string;
     text_prefix?: string;
     text_suffix?: string;
+    name_contains?: string;
+    name_prefix?: string;
+    name_suffix?: string;
+    value_contains?: string;
+    value_prefix?: string;
+    value_suffix?: string;
     visible?: boolean;
     tag?: string;
     importance?: number;
@@ -71,18 +77,30 @@ export function parseSelector(selector: string): QuerySelectorObject {
       }
     } else if (op === '~') {
       // Substring match (case-insensitive)
-      if (key === 'text' || key === 'name') {
+      if (key === 'text') {
         query.text_contains = value;
+      } else if (key === 'name') {
+        query.name_contains = value;
+      } else if (key === 'value') {
+        query.value_contains = value;
       }
     } else if (op === '^=') {
       // Prefix match
-      if (key === 'text' || key === 'name') {
+      if (key === 'text') {
         query.text_prefix = value;
+      } else if (key === 'name') {
+        query.name_prefix = value;
+      } else if (key === 'value') {
+        query.value_prefix = value;
       }
     } else if (op === '$=') {
       // Suffix match
-      if (key === 'text' || key === 'name') {
+      if (key === 'text') {
         query.text_suffix = value;
+      } else if (key === 'name') {
+        query.name_suffix = value;
+      } else if (key === 'value') {
+        query.value_suffix = value;
       }
     } else if (op === '>') {
       // Greater than
@@ -146,8 +164,14 @@ export function parseSelector(selector: string): QuerySelectorObject {
         query.visible = value.toLowerCase() === 'true';
       } else if (key === 'tag') {
         query.tag = value;
-      } else if (key === 'name' || key === 'text') {
+      } else if (key === 'text') {
         query.text = value;
+      } else if (key === 'name') {
+        query.name = value;
+      } else if (key === 'value') {
+        query.value = value;
+      } else if (key === 'checked' || key === 'disabled' || key === 'expanded') {
+        (query as any)[key] = value.toLowerCase() === 'true';
       } else if (key === 'importance' && isNumeric) {
         query.importance = numericValue;
       } else if (key.startsWith('attr.')) {
@@ -178,6 +202,12 @@ function matchElement(
     text_contains?: string;
     text_prefix?: string;
     text_suffix?: string;
+    name_contains?: string;
+    name_prefix?: string;
+    name_suffix?: string;
+    value_contains?: string;
+    value_prefix?: string;
+    value_suffix?: string;
     visible?: boolean;
     tag?: string;
     importance?: number;
@@ -258,6 +288,69 @@ function matchElement(
       return false;
     }
     if (!element.text.toLowerCase().endsWith(query.text_suffix.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Name matching (best-effort; fallback to text for backward compatibility)
+  const nameVal = element.name ?? element.text ?? '';
+  if (query.name !== undefined) {
+    if (!nameVal || nameVal !== query.name) {
+      return false;
+    }
+  }
+  if (query.name_contains !== undefined) {
+    if (!nameVal || !nameVal.toLowerCase().includes(query.name_contains.toLowerCase())) {
+      return false;
+    }
+  }
+  if (query.name_prefix !== undefined) {
+    if (!nameVal || !nameVal.toLowerCase().startsWith(query.name_prefix.toLowerCase())) {
+      return false;
+    }
+  }
+  if (query.name_suffix !== undefined) {
+    if (!nameVal || !nameVal.toLowerCase().endsWith(query.name_suffix.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Value matching (inputs/textarea/select)
+  const valueVal = element.value ?? null;
+  if ((query as any).value !== undefined) {
+    if (valueVal === null || valueVal !== (query as any).value) {
+      return false;
+    }
+  }
+  if (query.value_contains !== undefined) {
+    if (valueVal === null || !valueVal.toLowerCase().includes(query.value_contains.toLowerCase())) {
+      return false;
+    }
+  }
+  if (query.value_prefix !== undefined) {
+    if (valueVal === null || !valueVal.toLowerCase().startsWith(query.value_prefix.toLowerCase())) {
+      return false;
+    }
+  }
+  if (query.value_suffix !== undefined) {
+    if (valueVal === null || !valueVal.toLowerCase().endsWith(query.value_suffix.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // State matching (best-effort)
+  if ((query as any).checked !== undefined) {
+    if ((element.checked === true) !== (query as any).checked) {
+      return false;
+    }
+  }
+  if ((query as any).disabled !== undefined) {
+    if ((element.disabled === true) !== (query as any).disabled) {
+      return false;
+    }
+  }
+  if ((query as any).expanded !== undefined) {
+    if ((element.expanded === true) !== (query as any).expanded) {
       return false;
     }
   }

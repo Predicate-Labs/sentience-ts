@@ -14,6 +14,14 @@ import {
   allOf,
   anyOf,
   custom,
+  isEnabled,
+  isDisabled,
+  isChecked,
+  isUnchecked,
+  valueEquals,
+  valueContains,
+  isExpanded,
+  isCollapsed,
 } from '../src/verification';
 import { Snapshot, Element, BBox, Viewport, VisualCues } from '../src/types';
 
@@ -168,6 +176,47 @@ describe('exists', () => {
     const outcome = pred(ctx);
     expect(outcome.passed).toBe(false);
     expect(outcome.reason).toContain('no snapshot available');
+  });
+});
+
+describe('state-aware predicates', () => {
+  it('isEnabled/isDisabled', () => {
+    const el1 = { ...makeElement(1, 'button', 'Submit'), disabled: false } as Element;
+    const el2 = { ...makeElement(2, 'button', 'Disabled'), disabled: true } as Element;
+    const snap = makeSnapshot([el1, el2]);
+    const ctx: AssertContext = { snapshot: snap, url: snap.url, stepId: null };
+
+    expect(isEnabled('role=button')(ctx).passed).toBe(true);
+    expect(isDisabled("text~'Disabled'")(ctx).passed).toBe(true);
+  });
+
+  it('isChecked/isUnchecked', () => {
+    const el1 = { ...makeElement(1, 'checkbox', 'Opt in'), checked: true } as Element;
+    const el2 = { ...makeElement(2, 'checkbox', 'Opt out'), checked: false } as Element;
+    const snap = makeSnapshot([el1, el2]);
+    const ctx: AssertContext = { snapshot: snap, url: snap.url, stepId: null };
+
+    expect(isChecked("text~'Opt in'")(ctx).passed).toBe(true);
+    expect(isUnchecked("text~'Opt out'")(ctx).passed).toBe(true);
+  });
+
+  it('valueEquals/valueContains', () => {
+    const el = { ...makeElement(1, 'textbox', null), value: 'user@example.com' } as Element;
+    const snap = makeSnapshot([el]);
+    const ctx: AssertContext = { snapshot: snap, url: snap.url, stepId: null };
+
+    expect(valueEquals('role=textbox', 'user@example.com')(ctx).passed).toBe(true);
+    expect(valueContains('role=textbox', '@example.com')(ctx).passed).toBe(true);
+  });
+
+  it('isExpanded/isCollapsed', () => {
+    const el1 = { ...makeElement(1, 'button', 'Menu'), expanded: true } as Element;
+    const el2 = { ...makeElement(2, 'button', 'Details'), expanded: false } as Element;
+    const snap = makeSnapshot([el1, el2]);
+    const ctx: AssertContext = { snapshot: snap, url: snap.url, stepId: null };
+
+    expect(isExpanded("text~'Menu'")(ctx).passed).toBe(true);
+    expect(isCollapsed("text~'Details'")(ctx).passed).toBe(true);
   });
 });
 
