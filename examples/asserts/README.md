@@ -10,7 +10,7 @@ Run examples:
 ```bash
 cd sdk-ts
 npm run build
-node dist/examples/asserts/v1-state-assertions.js
-node dist/examples/asserts/v2-eventually-min-confidence.js
+node dist/examples/asserts/state-assertions.js
+node dist/examples/asserts/eventually-min-confidence.js
 ```
 
