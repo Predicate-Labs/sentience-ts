@@ -43,6 +43,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Snapshot } from './types';
 import { AssertContext, Predicate } from './verification';
 import { Tracer } from './tracing/tracer';
+import { LLMProvider } from './llm-provider';
 
 // Define a minimal browser interface to avoid circular dependencies
 interface BrowserLike {
@@ -58,6 +59,225 @@ export interface AssertionRecord {
   required: boolean;
   reason: string;
   details: Record<string, any>;
+}
+
+export interface EventuallyOptions {
+  timeoutMs?: number;
+  pollMs?: number;
+  snapshotOptions?: Record<string, any>;
+  /** If set, `.eventually()` will treat snapshots below this confidence as failures and resnapshot. */
+  minConfidence?: number;
+  /** Max number of snapshot attempts to get above minConfidence before declaring exhaustion. */
+  maxSnapshotAttempts?: number;
+  /** Optional: vision fallback provider used after snapshot exhaustion (last resort). */
+  visionProvider?: LLMProvider;
+  /** Optional: override vision system prompt (YES/NO only). */
+  visionSystemPrompt?: string;
+  /** Optional: override vision user prompt (YES/NO only). */
+  visionUserPrompt?: string;
+}
+
+export class AssertionHandle {
+  private runtime: AgentRuntime;
+  private predicate: Predicate;
+  private label: string;
+  private required: boolean;
+
+  constructor(runtime: AgentRuntime, predicate: Predicate, label: string, required: boolean) {
+    this.runtime = runtime;
+    this.predicate = predicate;
+    this.label = label;
+    this.required = required;
+  }
+
+  once(): boolean {
+    return this.runtime.assert(this.predicate, this.label, this.required);
+  }
+
+  async eventually(options: EventuallyOptions = {}): Promise<boolean> {
+    const timeoutMs = options.timeoutMs ?? 10_000;
+    const pollMs = options.pollMs ?? 250;
+    const snapshotOptions = options.snapshotOptions;
+    const minConfidence = options.minConfidence;
+    const maxSnapshotAttempts = options.maxSnapshotAttempts ?? 3;
+    const visionProvider = options.visionProvider;
+    const visionSystemPrompt = options.visionSystemPrompt;
+    const visionUserPrompt = options.visionUserPrompt;
+
+    const deadline = Date.now() + timeoutMs;
+    let attempt = 0;
+    let snapshotAttempt = 0;
+    let lastOutcome: ReturnType<Predicate> | null = null;
+
+    while (true) {
+      attempt += 1;
+      await this.runtime.snapshot(snapshotOptions);
+      snapshotAttempt += 1;
+
+      const diagnostics = this.runtime.lastSnapshot?.diagnostics;
+      const confidence = diagnostics?.confidence;
+      if (
+        typeof minConfidence === 'number' &&
+        typeof confidence === 'number' &&
+        Number.isFinite(confidence) &&
+        confidence < minConfidence
+      ) {
+        lastOutcome = {
+          passed: false,
+          reason: `Snapshot confidence ${confidence.toFixed(3)} < minConfidence ${minConfidence.toFixed(3)}`,
+          details: {
+            reason_code: 'snapshot_low_confidence',
+            confidence,
+            min_confidence: minConfidence,
+            snapshot_attempt: snapshotAttempt,
+            diagnostics,
+          },
+        };
+
+        (this.runtime as any)._recordOutcome(
+          lastOutcome,
+          this.label,
+          this.required,
+          { eventually: true, attempt, snapshot_attempt: snapshotAttempt, final: false },
+          false
+        );
+
+        if (snapshotAttempt >= maxSnapshotAttempts) {
+          // Optional: vision fallback after snapshot exhaustion (last resort).
+          // Keeps the assertion surface invariant; only perception changes.
+          if (visionProvider && visionProvider.supportsVision?.()) {
+            try {
+              const buf = (await (this.runtime.page as any).screenshot({ type: 'png' })) as Buffer;
+              const imageBase64 = Buffer.from(buf).toString('base64');
+              const sys =
+                visionSystemPrompt ?? 'You are a strict visual verifier. Answer only YES or NO.';
+              const user =
+                visionUserPrompt ??
+                `Given the screenshot, is the following condition satisfied?\n\n${this.label}\n\nAnswer YES or NO.`;
+
+              const resp = await visionProvider.generateWithImage(sys, user, imageBase64, {
+                temperature: 0.0,
+              });
+              const text = (resp.content || '').trim().toLowerCase();
+              const passed = text.startsWith('yes');
+
+              const finalOutcome = {
+                passed,
+                reason: passed ? 'vision_fallback_yes' : 'vision_fallback_no',
+                details: {
+                  reason_code: passed ? 'vision_fallback_pass' : 'vision_fallback_fail',
+                  vision_response: resp.content,
+                  min_confidence: minConfidence,
+                  snapshot_attempts: snapshotAttempt,
+                },
+              };
+
+              (this.runtime as any)._recordOutcome(
+                finalOutcome,
+                this.label,
+                this.required,
+                {
+                  eventually: true,
+                  attempt,
+                  snapshot_attempt: snapshotAttempt,
+                  final: true,
+                  vision_fallback: true,
+                },
+                true
+              );
+              return passed;
+            } catch {
+              // fall through to snapshot_exhausted
+            }
+          }
+
+          const finalOutcome = {
+            passed: false,
+            reason: `Snapshot exhausted after ${snapshotAttempt} attempt(s) below minConfidence ${minConfidence.toFixed(3)}`,
+            details: {
+              reason_code: 'snapshot_exhausted',
+              confidence,
+              min_confidence: minConfidence,
+              snapshot_attempts: snapshotAttempt,
+              diagnostics,
+            },
+          };
+
+          (this.runtime as any)._recordOutcome(
+            finalOutcome,
+            this.label,
+            this.required,
+            {
+              eventually: true,
+              attempt,
+              snapshot_attempt: snapshotAttempt,
+              final: true,
+              exhausted: true,
+            },
+            true
+          );
+          return false;
+        }
+
+        if (Date.now() >= deadline) {
+          (this.runtime as any)._recordOutcome(
+            lastOutcome,
+            this.label,
+            this.required,
+            {
+              eventually: true,
+              attempt,
+              snapshot_attempt: snapshotAttempt,
+              final: true,
+              timeout: true,
+            },
+            true
+          );
+          return false;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+        continue;
+      }
+
+      lastOutcome = this.predicate((this.runtime as any).ctx());
+
+      // Emit attempt event (not recorded in step_end)
+      (this.runtime as any)._recordOutcome(
+        lastOutcome,
+        this.label,
+        this.required,
+        { eventually: true, attempt, final: false },
+        false
+      );
+
+      if (lastOutcome.passed) {
+        // Record final success once
+        (this.runtime as any)._recordOutcome(
+          lastOutcome,
+          this.label,
+          this.required,
+          { eventually: true, attempt, final: true },
+          true
+        );
+        return true;
+      }
+
+      if (Date.now() >= deadline) {
+        // Record final failure once
+        (this.runtime as any)._recordOutcome(
+          lastOutcome,
+          this.label,
+          this.required,
+          { eventually: true, attempt, final: true, timeout: true },
+          true
+        );
+        return false;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+  }
 }
 
 /**
@@ -91,6 +311,82 @@ export class AgentRuntime {
   /** Task completion tracking */
   private taskDone: boolean = false;
   private taskDoneLabel: string | null = null;
+
+  private static similarity(a: string, b: string): number {
+    const s1 = a.toLowerCase();
+    const s2 = b.toLowerCase();
+    if (!s1 || !s2) return 0;
+    if (s1 === s2) return 1;
+
+    // Bigram overlap (cheap, robust enough for suggestions)
+    const bigrams = (s: string): string[] => {
+      const out: string[] = [];
+      for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+      return out;
+    };
+    const a2 = bigrams(s1);
+    const b2 = bigrams(s2);
+    const setB = new Set(b2);
+    let common = 0;
+    for (const g of a2) if (setB.has(g)) common += 1;
+    return (2 * common) / (a2.length + b2.length + 1e-9);
+  }
+
+  _recordOutcome(
+    outcome: ReturnType<Predicate>,
+    label: string,
+    required: boolean,
+    extra: Record<string, any> | null,
+    recordInStep: boolean
+  ): void {
+    const details = { ...(outcome.details || {}) } as Record<string, any>;
+
+    // Failure intelligence: nearest matches for selector-driven assertions
+    if (!outcome.passed && this.lastSnapshot && typeof details.selector === 'string') {
+      const selector = details.selector;
+      const scored: Array<{ score: number; el: any }> = [];
+      for (const el of this.lastSnapshot.elements) {
+        const hay = el.name ?? el.text ?? '';
+        if (!hay) continue;
+        const score = AgentRuntime.similarity(selector, hay);
+        scored.push({ score, el });
+      }
+      scored.sort((x, y) => y.score - x.score);
+      details.nearest_matches = scored.slice(0, 3).map(({ score, el }) => ({
+        id: el.id,
+        role: el.role,
+        text: (el.text ?? '').toString().slice(0, 80),
+        name: (el.name ?? '').toString().slice(0, 80),
+        score: Math.round(score * 10_000) / 10_000,
+      }));
+    }
+
+    const record: AssertionRecord & Record<string, any> = {
+      label,
+      passed: outcome.passed,
+      required,
+      reason: outcome.reason,
+      details,
+      ...(extra || {}),
+    };
+
+    if (recordInStep) {
+      this.assertionsThisStep.push(record);
+    }
+
+    this.tracer.emit(
+      'verification',
+      {
+        kind: 'assert',
+        ...record,
+      },
+      this.stepId || undefined
+    );
+  }
+
+  check(predicate: Predicate, label: string, required: boolean = false): AssertionHandle {
+    return new AssertionHandle(this, predicate, label, required);
+  }
 
   /**
    * Create a new AgentRuntime.
@@ -179,31 +475,7 @@ export class AgentRuntime {
    */
   assert(predicate: Predicate, label: string, required: boolean = false): boolean {
     const outcome = predicate(this.ctx());
-
-    const record: AssertionRecord = {
-      label,
-      passed: outcome.passed,
-      required,
-      reason: outcome.reason,
-      details: outcome.details,
-    };
-    this.assertionsThisStep.push(record);
-
-    // Emit dedicated verification event (Option B from design doc)
-    // This makes assertions visible in Studio timeline
-    this.tracer.emit(
-      'verification',
-      {
-        kind: 'assert',
-        passed: outcome.passed,
-        label,
-        required,
-        reason: outcome.reason,
-        details: outcome.details,
-      },
-      this.stepId || undefined
-    );
-
+    this._recordOutcome(outcome, label, required, null, true);
     return outcome.passed;
   }
 

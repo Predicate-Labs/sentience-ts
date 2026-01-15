@@ -238,6 +238,7 @@ async function snapshotViaApi(
   // Step 2: Send to server for smart ranking/filtering
   // Use raw_elements (raw data) instead of elements (processed data)
   // Server validates API key and applies proprietary ranking logic
+  const clientMetrics = rawResult?.diagnostics?.metrics;
   const payload = {
     raw_elements: rawResult.raw_elements || [], // Raw data needed for server processing
     url: rawResult.url || '',
@@ -247,6 +248,7 @@ async function snapshotViaApi(
       limit: options.limit,
       filter: options.filter,
     },
+    client_metrics: clientMetrics || undefined,
   };
 
   // Check payload size before sending (server has 10MB limit)
@@ -307,6 +309,8 @@ async function snapshotViaApi(
       error: apiResult.error,
       // Phase 2: Ordinal support - dominant group key from Gateway
       dominant_group_key: apiResult.dominant_group_key,
+      // Phase 2: Runtime stability/debug info
+      diagnostics: apiResult.diagnostics || rawResult.diagnostics,
     };
 
     // Show visual overlay if requested (use API-ranked elements)

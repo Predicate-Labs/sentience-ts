@@ -26,7 +26,16 @@ npm run build
 Use `AgentRuntime` to add Jest-style assertions to your agent loops. Verify browser state, check task completion, and get clear feedback on what's working:
 
 ```typescript
-import { SentienceBrowser, AgentRuntime, urlContains, exists, allOf } from 'sentienceapi';
+import {
+  SentienceBrowser,
+  AgentRuntime,
+  urlContains,
+  exists,
+  allOf,
+  isEnabled,
+  isChecked,
+  valueEquals,
+} from 'sentienceapi';
 import { createTracer } from 'sentienceapi';
 import { Page } from 'playwright';
 
@@ -52,6 +61,20 @@ runtime.assert(urlContains('example.com'), 'on_correct_domain');
 runtime.assert(exists('role=heading'), 'has_heading');
 runtime.assert(allOf([exists('role=button'), exists('role=link')]), 'has_interactive_elements');
 
+// v1: state-aware assertions (when Gateway refinement is enabled)
+runtime.assert(isEnabled('role=button'), 'button_enabled');
+runtime.assert(isChecked("role=checkbox name~'subscribe'"), 'subscribe_checked_if_present');
+runtime.assert(
+  valueEquals("role=textbox name~'email'", 'user@example.com'),
+  'email_value_if_present'
+);
+
+// v2: retry loop with snapshot confidence gating + exhaustion
+const ok = await runtime
+  .check(exists('role=heading'), 'heading_eventually_visible', true)
+  .eventually({ timeoutMs: 10_000, pollMs: 250, minConfidence: 0.7, maxSnapshotAttempts: 3 });
+console.log('eventually() result:', ok);
+
 // Check task completion
 if (runtime.assertDone(exists("text~'Example'"), 'task_complete')) {
   console.log('✅ Task completed!');
@@ -60,7 +83,7 @@ if (runtime.assertDone(exists("text~'Example'"), 'task_complete')) {
 console.log(`Task done: ${runtime.isTaskDone}`);
 ```
 
-**See example:** [examples/agent-runtime-verification.ts](examples/agent-runtime-verification.ts)
+**See examples:** [`examples/asserts/`](examples/asserts/)
 
 ## 🚀 Quick Start: Choose Your Abstraction Level
 
@@ -316,68 +339,40 @@ console.log(`Task done: ${runtime.isTaskDone}`);
 ---
 
 <details>
-<summary><h2>💼 Real-World Example: Amazon Shopping Bot</h2></summary>
+<summary><h2>💼 Real-World Example: Assertion-driven navigation</h2></summary>
 
-This example demonstrates navigating Amazon, finding products, and adding items to cart:
+This example shows how to use **assertions + `.eventually()`** to make an agent loop resilient:
 
 ```typescript
-import { SentienceBrowser, snapshot, find, click } from './src';
+import { SentienceBrowser, AgentRuntime, urlContains, exists } from 'sentienceapi';
+import { createTracer } from 'sentienceapi';
 
 async function main() {
-  const browser = new SentienceBrowser(undefined, undefined, false);
+  const browser = await SentienceBrowser.create({ apiKey: process.env.SENTIENCE_API_KEY });
+  const tracer = await createTracer({ runId: 'verified-run', uploadTrace: false });
 
-  try {
-    await browser.start();
+  const adapter = {
+    snapshot: async (_page: any, options?: Record<string, any>) => {
+      return await browser.snapshot(options);
+    },
+  };
+  const runtime = new AgentRuntime(adapter as any, browser.getPage() as any, tracer);
 
-    // Navigate to Amazon Best Sellers
-    await browser.goto('https://www.amazon.com/gp/bestsellers/');
-    await browser.getPage().waitForLoadState('networkidle');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+  await browser.getPage().goto('https://example.com');
+  runtime.beginStep('Verify we are on the right page');
 
-    // Take snapshot and find products
-    const snap = await snapshot(browser);
-    console.log(`Found ${snap.elements.length} elements`);
+  await runtime
+    .check(urlContains('example.com'), 'on_domain', true)
+    .eventually({ timeoutMs: 10_000, pollMs: 250, minConfidence: 0.7, maxSnapshotAttempts: 3 });
 
-    // Find first product in viewport using spatial filtering
-    const products = snap.elements.filter(
-      el =>
-        el.role === 'link' &&
-        el.visual_cues.is_clickable &&
-        el.in_viewport &&
-        !el.is_occluded &&
-        el.bbox.y < 600 // First row
-    );
+  runtime.assert(exists('role=heading'), 'heading_present');
 
-    if (products.length > 0) {
-      // Sort by position (left to right, top to bottom)
-      products.sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x);
-      const firstProduct = products[0];
-
-      console.log(`Clicking: ${firstProduct.text}`);
-      const result = await click(browser, firstProduct.id);
-
-      // Wait for product page
-      await browser.getPage().waitForLoadState('networkidle');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Find and click "Add to Cart" button
-      const productSnap = await snapshot(browser);
-      const addToCart = find(productSnap, 'role=button text~"add to cart"');
-
-      if (addToCart) {
-        const cartResult = await click(browser, addToCart.id);
-        console.log(`Added to cart: ${cartResult.success}`);
-      }
-    }
-  } finally {
-    await browser.close();
-  }
+  await tracer.close();
+  await browser.close();
 }
 
-main();
+main().catch(console.error);
 ```
-
-**📖 See the complete tutorial:** [Amazon Shopping Guide](../docs/AMAZON_SHOPPING_GUIDE.md)
 
 </details>
 

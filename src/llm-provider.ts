@@ -41,6 +41,31 @@ export abstract class LLMProvider {
    * Get the model name/identifier
    */
   abstract get modelName(): string;
+
+  /**
+   * Whether this provider supports image input for vision tasks.
+   * Override in subclasses that support vision-capable models.
+   */
+  supportsVision(): boolean {
+    return false;
+  }
+
+  /**
+   * Generate with image input (vision-capable models only).
+   * Override in subclasses that support vision.
+   */
+
+  async generateWithImage(
+    systemPrompt: string,
+    userPrompt: string,
+    imageBase64: string,
+    options: Record<string, any> = {}
+  ): Promise<LLMResponse> {
+    throw new Error(
+      `${this.constructor.name} does not support vision. ` +
+        `Use a vision-capable provider (e.g., OpenAIProvider with GPT-4o, AnthropicProvider with Claude 3).`
+    );
+  }
 }
 
 /**
@@ -93,6 +118,42 @@ export class OpenAIProvider extends LLMProvider {
 
   supportsJsonMode(): boolean {
     return true;
+  }
+
+  supportsVision(): boolean {
+    return true;
+  }
+
+  async generateWithImage(
+    systemPrompt: string,
+    userPrompt: string,
+    imageBase64: string,
+    options: Record<string, any> = {}
+  ): Promise<LLMResponse> {
+    const response = await this.client.chat.completions.create({
+      model: this._modelName,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      temperature: options.temperature ?? 0.0,
+      ...options,
+    });
+
+    const choice = response.choices[0];
+    return {
+      content: choice.message.content || '',
+      promptTokens: response.usage?.prompt_tokens,
+      completionTokens: response.usage?.completion_tokens,
+      totalTokens: response.usage?.total_tokens,
+      modelName: this._modelName,
+    };
   }
 
   get modelName(): string {
@@ -149,6 +210,50 @@ export class AnthropicProvider extends LLMProvider {
   supportsJsonMode(): boolean {
     // Claude supports structured output but not via "json_mode" flag
     return false;
+  }
+
+  supportsVision(): boolean {
+    return true;
+  }
+
+  async generateWithImage(
+    systemPrompt: string,
+    userPrompt: string,
+    imageBase64: string,
+    options: Record<string, any> = {}
+  ): Promise<LLMResponse> {
+    const response = await this.client.messages.create({
+      model: this._modelName,
+      max_tokens: options.max_tokens ?? 1024,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: options.media_type ?? 'image/png',
+                data: imageBase64,
+              },
+            },
+          ],
+        },
+      ],
+      temperature: options.temperature ?? 0.0,
+      ...options,
+    });
+
+    const content = response.content[0].text;
+    return {
+      content,
+      promptTokens: response.usage?.input_tokens,
+      completionTokens: response.usage?.output_tokens,
+      totalTokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
+      modelName: this._modelName,
+    };
   }
 
   get modelName(): string {
