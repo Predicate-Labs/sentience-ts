@@ -24,6 +24,8 @@ export { getGridBounds } from './utils/grid-utils';
 export {
   LLMProvider,
   LLMResponse,
+  LocalLLMProvider,
+  LocalVisionLLMProvider,
   OpenAIProvider,
   AnthropicProvider,
   GLMProvider,
