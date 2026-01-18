@@ -17,6 +17,7 @@ export interface Viewport {
 export interface VisualCues {
   is_primary: boolean;
   background_color_name: string | null;
+  fallback_background_color_name: string | null;
   is_clickable: boolean;
 }
 
@@ -49,6 +50,9 @@ export interface Element {
 
   // Hyperlink URL (for link elements)
   href?: string;
+
+  /** Nearby static text (best-effort, usually only for top-ranked elements) */
+  nearby_text?: string | null;
 
   // ===== v1 state-aware assertion fields (optional) =====
   /** Best-effort accessible name/label for controls (distinct from visible text) */
