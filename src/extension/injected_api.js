@@ -157,6 +157,21 @@
         }
         return null;
     }
+    function normalizeNearbyText(text) {
+        return text ? text.replace(/\s+/g, " ").trim() : "";
+    }
+    function isInteractableElement(el) {
+        if (!el || !el.tagName) return !1;
+        const tag = el.tagName.toLowerCase(), role = el.getAttribute ? el.getAttribute("role") : null, hasTabIndex = !!el.hasAttribute && el.hasAttribute("tabindex"), hasHref = "A" === el.tagName && !!el.hasAttribute && el.hasAttribute("href");
+        if ([ "button", "input", "textarea", "select", "option", "details", "summary", "a" ].includes(tag)) return !("a" === tag && !hasHref);
+        if (role && [ "button", "link", "tab", "menuitem", "checkbox", "radio", "switch", "slider", "combobox", "textbox", "searchbox", "spinbutton" ].includes(role.toLowerCase())) return !0;
+        if (hasTabIndex) return !0;
+        if (el.onclick || el.onkeydown || el.onkeypress || el.onkeyup) return !0;
+        if (el.getAttribute) {
+            if (el.getAttribute("onclick") || el.getAttribute("onkeydown") || el.getAttribute("onkeypress") || el.getAttribute("onkeyup")) return !0;
+        }
+        return !1;
+    }
     function getText(el) {
         if (el.getAttribute("aria-label")) return el.getAttribute("aria-label");
         if ("INPUT" === el.tagName) {
@@ -391,11 +406,7 @@
                 }), textVal = semanticText.text || getText(el), inferredRole = function(el, options = {}) {
                     const {enableInference: enableInference = !0} = options;
                     if (!enableInference) return null;
-                    if (!function(el) {
-                        if (!el || !el.tagName) return !1;
-                        const tag = el.tagName.toLowerCase(), role = el.getAttribute ? el.getAttribute("role") : null, hasTabIndex = !!el.hasAttribute && el.hasAttribute("tabindex"), hasHref = "A" === el.tagName && !!el.hasAttribute && el.hasAttribute("href");
-                        return [ "button", "input", "textarea", "select", "option", "details", "summary", "a" ].includes(tag) ? !("a" === tag && !hasHref) : !(!role || ![ "button", "link", "tab", "menuitem", "checkbox", "radio", "switch", "slider", "combobox", "textbox", "searchbox", "spinbutton" ].includes(role.toLowerCase())) || (!!hasTabIndex || (!!(el.onclick || el.onkeydown || el.onkeypress || el.onkeyup) || !(!el.getAttribute || !(el.getAttribute("onclick") || el.getAttribute("onkeydown") || el.getAttribute("onkeypress") || el.getAttribute("onkeyup")))));
-                    }(el)) return null;
+                    if (!isInteractableElement(el)) return null;
                     const hasAriaLabel = el.getAttribute ? el.getAttribute("aria-label") : null, hasExplicitRole = el.getAttribute ? el.getAttribute("role") : null;
                     if (hasAriaLabel || hasExplicitRole) return null;
                     const tag = el.tagName.toLowerCase();
@@ -478,7 +489,33 @@
                     }
                     const title = el.getAttribute("title");
                     return title && title.trim() ? title.trim().substring(0, 200) : "";
-                }(el) || null);
+                }(el) || null), nearbyText = isInteractableElement(el) ? function(el, options = {}) {
+                    if (!el) return null;
+                    const maxLen = "number" == typeof options.maxLen ? options.maxLen : 80, ownText = normalizeNearbyText(el.innerText || ""), candidates = [], collect = node => {
+                        if (!node) return;
+                        let text = "";
+                        try {
+                            text = normalizeNearbyText(node.innerText || node.textContent || "");
+                        } catch (e) {
+                            text = "";
+                        }
+                        text && text !== ownText && candidates.push(text);
+                    };
+                    if (collect(el.previousElementSibling), collect(el.nextElementSibling), 0 === candidates.length && el.parentElement) {
+                        let parentText = "";
+                        try {
+                            parentText = normalizeNearbyText(el.parentElement.innerText || "");
+                        } catch (e) {
+                            parentText = "";
+                        }
+                        parentText && parentText !== ownText && parentText.length <= 120 && candidates.push(parentText);
+                    }
+                    if (0 === candidates.length) return null;
+                    let text = candidates[0];
+                    return text.length > maxLen && (text = text.slice(0, maxLen).trim()), text || null;
+                }(el, {
+                    maxLen: 80
+                }) : null;
                 rawData.push({
                     id: idx,
                     tag: tagName,
@@ -509,6 +546,7 @@
                         inferred_label: semanticText?.source && ![ "explicit_aria_label", "input_value", "img_alt", "inner_text" ].includes(semanticText.source) ? toSafeString(semanticText.text) : null,
                         label_source: semanticText?.source || null,
                         inferred_role: inferredRole ? toSafeString(inferredRole) : null,
+                        nearby_text: toSafeString(nearbyText),
                         href: toSafeString(el.href || el.getAttribute("href") || el.closest && el.closest("a")?.href || null),
                         class: toSafeString(getClassName(el)),
                         value: null !== safeValue ? toSafeString(safeValue) : null,
