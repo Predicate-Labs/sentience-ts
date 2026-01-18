@@ -44,6 +44,7 @@ import { Snapshot } from './types';
 import { AssertContext, Predicate } from './verification';
 import { Tracer } from './tracing/tracer';
 import { LLMProvider } from './llm-provider';
+import { FailureArtifactBuffer, FailureArtifactsOptions } from './failure-artifacts';
 
 // Define a minimal browser interface to avoid circular dependencies
 interface BrowserLike {
@@ -185,6 +186,11 @@ export class AssertionHandle {
                 },
                 true
               );
+              if (this.required && !passed) {
+                (this.runtime as any).persistFailureArtifacts(
+                  `assert_eventually_failed:${this.label}`
+                );
+              }
               return passed;
             } catch {
               // fall through to snapshot_exhausted
@@ -216,6 +222,9 @@ export class AssertionHandle {
             },
             true
           );
+          if (this.required) {
+            (this.runtime as any).persistFailureArtifacts(`assert_eventually_failed:${this.label}`);
+          }
           return false;
         }
 
@@ -233,6 +242,11 @@ export class AssertionHandle {
             },
             true
           );
+          if (this.required) {
+            (this.runtime as any).persistFailureArtifacts(
+              `assert_eventually_timeout:${this.label}`
+            );
+          }
           return false;
         }
 
@@ -272,6 +286,9 @@ export class AssertionHandle {
           { eventually: true, attempt, final: true, timeout: true },
           true
         );
+        if (this.required) {
+          (this.runtime as any).persistFailureArtifacts(`assert_eventually_timeout:${this.label}`);
+        }
         return false;
       }
 
@@ -305,6 +322,10 @@ export class AgentRuntime {
   stepIndex: number = 0;
   /** Most recent snapshot (for assertion context) */
   lastSnapshot: Snapshot | null = null;
+
+  /** Failure artifact buffer (Phase 1) */
+  private artifactBuffer: FailureArtifactBuffer | null = null;
+  private artifactTimer: NodeJS.Timeout | null = null;
 
   /** Assertions accumulated during current step */
   private assertionsThisStep: AssertionRecord[] = [];
@@ -433,6 +454,85 @@ export class AgentRuntime {
   }
 
   /**
+   * Enable failure artifact buffer (Phase 1).
+   */
+  enableFailureArtifacts(options: FailureArtifactsOptions = {}): void {
+    this.artifactBuffer = new FailureArtifactBuffer(this.tracer.getRunId(), options);
+    const fps = this.artifactBuffer.getOptions().fps;
+    if (fps && fps > 0) {
+      const intervalMs = Math.max(1, Math.floor(1000 / fps));
+      this.artifactTimer = setInterval(() => {
+        this.captureArtifactFrame().catch(() => {
+          // best-effort
+        });
+      }, intervalMs);
+    }
+  }
+
+  /**
+   * Disable failure artifact buffer and stop background capture.
+   */
+  disableFailureArtifacts(): void {
+    if (this.artifactTimer) {
+      clearInterval(this.artifactTimer);
+      this.artifactTimer = null;
+    }
+  }
+
+  /**
+   * Record an action in the artifact timeline and capture a frame if enabled.
+   */
+  async recordAction(action: string, url?: string): Promise<void> {
+    if (!this.artifactBuffer) {
+      return;
+    }
+    this.artifactBuffer.recordStep(action, this.stepId, this.stepIndex, url);
+    if (this.artifactBuffer.getOptions().captureOnAction) {
+      await this.captureArtifactFrame();
+    }
+  }
+
+  private async captureArtifactFrame(): Promise<void> {
+    if (!this.artifactBuffer) {
+      return;
+    }
+    try {
+      const image = await this.page.screenshot({ type: 'jpeg', quality: 80 });
+      await this.artifactBuffer.addFrame(image, 'jpeg');
+    } catch {
+      // best-effort
+    }
+  }
+
+  /**
+   * Finalize artifact buffer at end of run.
+   */
+  async finalizeRun(success: boolean): Promise<void> {
+    if (!this.artifactBuffer) {
+      return;
+    }
+    if (success) {
+      if (this.artifactBuffer.getOptions().persistMode === 'always') {
+        await this.artifactBuffer.persist('success', 'success');
+      }
+      await this.artifactBuffer.cleanup();
+    } else {
+      await this.persistFailureArtifacts('finalize_failure');
+    }
+  }
+
+  private async persistFailureArtifacts(reason: string): Promise<void> {
+    if (!this.artifactBuffer) {
+      return;
+    }
+    await this.artifactBuffer.persist(reason, 'failure');
+    await this.artifactBuffer.cleanup();
+    if (this.artifactBuffer.getOptions().persistMode === 'onFail') {
+      this.disableFailureArtifacts();
+    }
+  }
+
+  /**
    * Begin a new step in the verification loop.
    *
    * This:
@@ -476,6 +576,11 @@ export class AgentRuntime {
   assert(predicate: Predicate, label: string, required: boolean = false): boolean {
     const outcome = predicate(this.ctx());
     this._recordOutcome(outcome, label, required, null, true);
+    if (required && !outcome.passed) {
+      this.persistFailureArtifacts(`assert_failed:${label}`).catch(() => {
+        // best-effort
+      });
+    }
     return outcome.passed;
   }
 

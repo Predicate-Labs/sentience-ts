@@ -83,6 +83,17 @@ if (runtime.assertDone(exists("text~'Example'"), 'task_complete')) {
 console.log(`Task done: ${runtime.isTaskDone}`);
 ```
 
+### Failure Artifact Buffer (Phase 1)
+
+Capture a short ring buffer of screenshots and persist them when a required assertion fails.
+
+```typescript
+runtime.enableFailureArtifacts({ bufferSeconds: 15, captureOnAction: true, fps: 0 });
+
+// After each action, record it (best-effort).
+await runtime.recordAction('CLICK');
+```
+
 **See examples:** [`examples/asserts/`](examples/asserts/)
 
 ## 🚀 Quick Start: Choose Your Abstraction Level
