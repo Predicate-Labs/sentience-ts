@@ -1,8 +1,24 @@
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 export type PersistMode = 'onFail' | 'always';
+export type ClipMode = 'off' | 'auto' | 'on';
+
+export interface ClipOptions {
+  /**
+   * Clip generation mode:
+   * - "off": Never generate clips
+   * - "auto": Generate only if ffmpeg is available on PATH (default)
+   * - "on": Always attempt to generate (will warn if ffmpeg missing)
+   */
+  mode?: ClipMode;
+  /** Frames per second for the generated video (default: 8) */
+  fps?: number;
+  /** Duration of clip in seconds. If undefined, uses bufferSeconds */
+  seconds?: number;
+}
 
 export interface FailureArtifactsOptions {
   bufferSeconds?: number;
@@ -12,6 +28,7 @@ export interface FailureArtifactsOptions {
   outputDir?: string;
   onBeforePersist?: ((ctx: RedactionContext) => RedactionResult) | null;
   redactSnapshotValues?: boolean;
+  clip?: ClipOptions;
 }
 
 interface FrameRecord {
@@ -41,6 +58,103 @@ async function writeJsonAtomic(filePath: string, data: any): Promise<void> {
   const tmpPath = `${filePath}.tmp`;
   await fs.promises.writeFile(tmpPath, JSON.stringify(data, null, 2));
   await fs.promises.rename(tmpPath, filePath);
+}
+
+/**
+ * Check if ffmpeg is available on the system PATH.
+ */
+function isFfmpegAvailable(): boolean {
+  try {
+    const result = spawnSync('ffmpeg', ['-version'], {
+      timeout: 5000,
+      stdio: 'pipe',
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Generate an MP4 video clip from a directory of frames using ffmpeg.
+ */
+async function generateClipFromFrames(
+  framesDir: string,
+  outputPath: string,
+  fps: number = 8
+): Promise<boolean> {
+  // Find all frame files and sort them
+  const files = fs
+    .readdirSync(framesDir)
+    .filter(
+      f =>
+        f.startsWith('frame_') && (f.endsWith('.png') || f.endsWith('.jpeg') || f.endsWith('.jpg'))
+    )
+    .sort();
+
+  if (files.length === 0) {
+    console.warn('No frame files found for clip generation');
+    return false;
+  }
+
+  // Create a temporary file list for ffmpeg concat demuxer
+  const listFile = path.join(framesDir, 'frames_list.txt');
+  const frameDuration = 1.0 / fps;
+
+  try {
+    // Write the frames list file
+    const listContent =
+      files.map(f => `file '${f}'\nduration ${frameDuration}`).join('\n') +
+      `\nfile '${files[files.length - 1]}'`; // ffmpeg concat quirk
+
+    fs.writeFileSync(listFile, listContent);
+
+    // Run ffmpeg to generate the clip
+    const result = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        listFile,
+        '-vsync',
+        'vfr',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:v',
+        'libx264',
+        '-crf',
+        '23',
+        outputPath,
+      ],
+      {
+        timeout: 60000, // 1 minute timeout
+        cwd: framesDir,
+        stdio: 'pipe',
+      }
+    );
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString('utf-8').slice(0, 500) ?? '';
+      console.warn(`ffmpeg failed with return code ${result.status}: ${stderr}`);
+      return false;
+    }
+
+    return fs.existsSync(outputPath);
+  } catch (err) {
+    console.warn(`Error generating clip: ${err}`);
+    return false;
+  } finally {
+    // Clean up the list file
+    try {
+      fs.unlinkSync(listFile);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 function redactSnapshotDefaults(payload: any): any {
@@ -86,6 +200,11 @@ export class FailureArtifactBuffer {
       outputDir: options.outputDir ?? '.sentience/artifacts',
       onBeforePersist: options.onBeforePersist ?? null,
       redactSnapshotValues: options.redactSnapshotValues ?? true,
+      clip: {
+        mode: options.clip?.mode ?? 'auto',
+        fps: options.clip?.fps ?? 8,
+        seconds: options.clip?.seconds,
+      },
     };
     this.timeNow = timeNow;
     this.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentience-artifacts-'));
@@ -218,6 +337,42 @@ export class FailureArtifactBuffer {
       diagnosticsWritten = true;
     }
 
+    // Generate video clip from frames (optional, requires ffmpeg)
+    let clipGenerated = false;
+    const clipOptions = this.options.clip;
+
+    if (!dropFrames && framePaths.length > 0 && clipOptions.mode !== 'off') {
+      let shouldGenerate = false;
+
+      if (clipOptions.mode === 'auto') {
+        // Only generate if ffmpeg is available
+        shouldGenerate = isFfmpegAvailable();
+        if (!shouldGenerate) {
+          // Silent in auto mode - just skip
+        }
+      } else if (clipOptions.mode === 'on') {
+        // Always attempt to generate
+        shouldGenerate = true;
+        if (!isFfmpegAvailable()) {
+          console.warn(
+            "ffmpeg not found on PATH but clip.mode='on'. " +
+              'Install ffmpeg to generate video clips.'
+          );
+          shouldGenerate = false;
+        }
+      }
+
+      if (shouldGenerate) {
+        const clipPath = path.join(runDir, 'failure.mp4');
+        clipGenerated = await generateClipFromFrames(framesOut, clipPath, clipOptions.fps ?? 8);
+        if (clipGenerated) {
+          console.log(`Generated failure clip: ${clipPath}`);
+        } else {
+          console.warn('Failed to generate video clip');
+        }
+      }
+    }
+
     const manifest = {
       run_id: this.runId,
       created_at_ms: ts,
@@ -228,6 +383,8 @@ export class FailureArtifactBuffer {
       frames: dropFrames ? [] : framePaths.map(p => ({ file: path.basename(p), ts: null })),
       snapshot: snapshotWritten ? 'snapshot.json' : null,
       diagnostics: diagnosticsWritten ? 'diagnostics.json' : null,
+      clip: clipGenerated ? 'failure.mp4' : null,
+      clip_fps: clipGenerated ? (clipOptions.fps ?? 8) : null,
       metadata: metadata ?? {},
       frames_redacted: !dropFrames && Boolean(this.options.onBeforePersist),
       frames_dropped: dropFrames,
