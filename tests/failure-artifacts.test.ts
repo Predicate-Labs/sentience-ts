@@ -155,4 +155,75 @@ describe('FailureArtifactBuffer', () => {
     expect(opts.clip.fps).toBe(15);
     expect(opts.clip.seconds).toBe(30);
   });
+
+  // -------------------- Phase 5: Cloud upload tests --------------------
+
+  it('uploadToCloud returns null when no artifacts directory', async () => {
+    const tmp = makeTempDir('sentience-test-');
+    const buf = new FailureArtifactBuffer('run-upload-1', {
+      outputDir: path.join(tmp, 'nonexistent'),
+    });
+
+    const result = await buf.uploadToCloud('test-key');
+    expect(result).toBeNull();
+  });
+
+  it('uploadToCloud returns null when no manifest', async () => {
+    const tmp = makeTempDir('sentience-test-');
+    // Create a directory but no manifest
+    const runDir = path.join(tmp, 'run-upload-2-123');
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const buf = new FailureArtifactBuffer('run-upload-2', { outputDir: tmp });
+
+    const result = await buf.uploadToCloud('test-key', undefined, runDir);
+    expect(result).toBeNull();
+  });
+
+  it('collectArtifactsForUpload collects correct files', async () => {
+    const tmp = makeTempDir('sentience-test-');
+    const buf = new FailureArtifactBuffer('run-collect', { outputDir: tmp });
+    await buf.addFrame(Buffer.from('frame1'), 'png');
+
+    const runDir = await buf.persist('fail', 'failure', { status: 'success' }, { confidence: 0.9 });
+    expect(runDir).toBeTruthy();
+
+    // Read manifest
+    const manifest = JSON.parse(fs.readFileSync(path.join(runDir!, 'manifest.json'), 'utf-8'));
+
+    // Use private method to collect artifacts (access via any)
+    const artifacts = (buf as any).collectArtifactsForUpload(runDir, manifest);
+
+    // Should have: manifest.json, steps.json, snapshot.json, diagnostics.json, and 1 frame
+    const artifactNames = artifacts.map((a: any) => a.name);
+    expect(artifactNames).toContain('manifest.json');
+    expect(artifactNames).toContain('steps.json');
+    expect(artifactNames).toContain('snapshot.json');
+    expect(artifactNames).toContain('diagnostics.json');
+    expect(artifactNames.some((n: string) => n.startsWith('frames/'))).toBe(true);
+
+    // Verify all files have valid properties
+    for (const artifact of artifacts) {
+      expect(fs.existsSync(artifact.filePath)).toBe(true);
+      expect(artifact.sizeBytes).toBeGreaterThan(0);
+      expect(['application/json', 'image/png', 'image/jpeg']).toContain(artifact.contentType);
+    }
+  });
+
+  it('uploadToCloud handles missing frames gracefully', async () => {
+    const tmp = makeTempDir('sentience-test-');
+    const buf = new FailureArtifactBuffer('run-no-frames', { outputDir: tmp });
+
+    // Persist without adding frames - should still work
+    const runDir = await buf.persist('fail', 'failure', { status: 'success' });
+    expect(runDir).toBeTruthy();
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(runDir!, 'manifest.json'), 'utf-8'));
+    expect(manifest.frame_count).toBe(0);
+
+    // Should still be able to collect artifacts (just no frames)
+    const artifacts = (buf as any).collectArtifactsForUpload(runDir, manifest);
+    const hasFrames = artifacts.some((a: any) => a.name.startsWith('frames/'));
+    expect(hasFrames).toBe(false);
+  });
 });
