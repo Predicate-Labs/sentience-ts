@@ -239,6 +239,9 @@ async function snapshotViaApi(
   // Use raw_elements (raw data) instead of elements (processed data)
   // Server validates API key and applies proprietary ranking logic
   const clientMetrics = rawResult?.diagnostics?.metrics;
+  const clientDiagnostics = rawResult?.diagnostics?.captcha
+    ? { captcha: rawResult.diagnostics.captcha }
+    : undefined;
   const payload = {
     raw_elements: rawResult.raw_elements || [], // Raw data needed for server processing
     url: rawResult.url || '',
@@ -249,6 +252,7 @@ async function snapshotViaApi(
       filter: options.filter,
     },
     client_metrics: clientMetrics || undefined,
+    client_diagnostics: clientDiagnostics,
   };
 
   // Check payload size before sending (server has 10MB limit)

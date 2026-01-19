@@ -157,10 +157,25 @@ export interface SnapshotDiagnosticsMetrics {
   raw_elements_count?: number | null;
 }
 
+export interface CaptchaEvidence {
+  text_hits: string[];
+  selector_hits: string[];
+  iframe_src_hits: string[];
+  url_hits: string[];
+}
+
+export interface CaptchaDiagnostics {
+  detected: boolean;
+  provider_hint?: 'recaptcha' | 'hcaptcha' | 'turnstile' | 'unknown' | null;
+  confidence: number;
+  evidence: CaptchaEvidence;
+}
+
 export interface SnapshotDiagnostics {
   confidence?: number | null;
   reasons?: string[];
   metrics?: SnapshotDiagnosticsMetrics;
+  captcha?: CaptchaDiagnostics;
 }
 
 /**
