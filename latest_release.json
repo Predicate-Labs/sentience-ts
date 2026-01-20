@@ -1,9 +1,9 @@
 {
-  "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277691523",
-  "assets_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277691523/assets",
-  "upload_url": "https://uploads.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277691523/assets{?name,label}",
-  "html_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/tag/v2.6.0",
-  "id": 277691523,
+  "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277802850",
+  "assets_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277802850/assets",
+  "upload_url": "https://uploads.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/277802850/assets{?name,label}",
+  "html_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/tag/v2.7.0",
+  "id": 277802850,
   "author": {
     "login": "rcholic",
     "id": 135060,
@@ -25,21 +25,21 @@
     "user_view_type": "public",
     "site_admin": false
   },
-  "node_id": "RE_kwDOQshiJ84QjTyD",
-  "tag_name": "v2.6.0",
+  "node_id": "RE_kwDOQshiJ84Qju9i",
+  "tag_name": "v2.7.0",
   "target_commitish": "main",
-  "name": "Release v2.6.0",
+  "name": "Release v2.7.0",
   "draft": false,
   "immutable": false,
   "prerelease": false,
-  "created_at": "2026-01-18T08:03:53Z",
-  "updated_at": "2026-01-18T08:05:04Z",
-  "published_at": "2026-01-18T08:04:24Z",
+  "created_at": "2026-01-19T05:08:35Z",
+  "updated_at": "2026-01-19T05:09:41Z",
+  "published_at": "2026-01-19T05:09:31Z",
   "assets": [
     {
-      "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/assets/342221644",
-      "id": 342221644,
-      "node_id": "RA_kwDOQshiJ84UZeNM",
+      "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/assets/342599449",
+      "id": 342599449,
+      "node_id": "RA_kwDOQshiJ84Ua6cZ",
       "name": "extension-files.tar.gz",
       "label": "",
       "uploader": {
@@ -65,17 +65,17 @@
       },
       "content_type": "application/gzip",
       "state": "uploaded",
-      "size": 77212,
-      "digest": "sha256:82d79bfb011dbdf6ecd81b30689da13ee2045ac3df93534bee4b3c9ae3717670",
-      "download_count": 2,
-      "created_at": "2026-01-18T08:05:04Z",
-      "updated_at": "2026-01-18T08:05:04Z",
-      "browser_download_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/download/v2.6.0/extension-files.tar.gz"
+      "size": 79222,
+      "digest": "sha256:e0cad96e20e539d62a4777f1c5baedb1c8bd02cd26a8e38f7c1b9c804325f068",
+      "download_count": 3,
+      "created_at": "2026-01-19T05:09:41Z",
+      "updated_at": "2026-01-19T05:09:41Z",
+      "browser_download_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/download/v2.7.0/extension-files.tar.gz"
     },
     {
-      "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/assets/342221645",
-      "id": 342221645,
-      "node_id": "RA_kwDOQshiJ84UZeNN",
+      "url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/assets/342599448",
+      "id": 342599448,
+      "node_id": "RA_kwDOQshiJ84Ua6cY",
       "name": "extension-package.zip",
       "label": "",
       "uploader": {
@@ -101,15 +101,15 @@
       },
       "content_type": "application/zip",
       "state": "uploaded",
-      "size": 79031,
-      "digest": "sha256:1f8fe71aeedf7143064afafadc19d83577932d125b66de3eb70e1f302173d172",
+      "size": 80692,
+      "digest": "sha256:83de4c4c54f401fc6404c27ef01a9205cf8e3566e81f62a7bc08f7103a2b0cc5",
       "download_count": 0,
-      "created_at": "2026-01-18T08:05:04Z",
-      "updated_at": "2026-01-18T08:05:04Z",
-      "browser_download_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/download/v2.6.0/extension-package.zip"
+      "created_at": "2026-01-19T05:09:41Z",
+      "updated_at": "2026-01-19T05:09:41Z",
+      "browser_download_url": "https://github.com/SentienceAPI/Sentience-Geometry-Chrome-Extension/releases/download/v2.7.0/extension-package.zip"
     }
   ],
-  "tarball_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/tarball/v2.6.0",
-  "zipball_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/zipball/v2.6.0",
+  "tarball_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/tarball/v2.7.0",
+  "zipball_url": "https://api.github.com/repos/SentienceAPI/Sentience-Geometry-Chrome-Extension/zipball/v2.7.0",
   "body": ""
 }
