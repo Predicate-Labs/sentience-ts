@@ -211,10 +211,17 @@ export class SentienceAgent {
       this.tracer.emitStepStart(stepId, this.stepCount, goal, 0, currentUrl);
     }
 
+    // Track data collected during step execution for step_end emission on failure
+    let stepSnapWithDiff: Snapshot | null = null;
+    let stepPreUrl: string | null = null;
+    let stepLlmResponse: LLMResponse | null = null;
+    let stepStartTime: number = Date.now();
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         // 1. OBSERVE: Get refined semantic snapshot
         const startTime = Date.now();
+        stepStartTime = startTime;
 
         const snapOpts: SnapshotOptions = {
           ...snapshotOptions,
@@ -246,6 +253,10 @@ export class SentienceAgent {
         const snapWithDiff = processed.withDiff;
         const filteredSnap = processed.filtered;
 
+        // Track for step_end emission on failure
+        stepSnapWithDiff = snapWithDiff;
+        stepPreUrl = snap.url;
+
         // Emit snapshot event
         if (this.tracer) {
           const snapshotData = SnapshotEventBuilder.buildSnapshotEventData(snapWithDiff, stepId);
@@ -257,6 +268,9 @@ export class SentienceAgent {
 
         // 3. THINK: Query LLM for next action
         const llmResponse = await this.llmHandler.queryLLM(context, goal);
+
+        // Track for step_end emission on failure
+        stepLlmResponse = llmResponse;
 
         if (this.verbose) {
           console.log(`🧠 LLM Decision: ${llmResponse.content}`);
@@ -357,6 +371,28 @@ export class SentienceAgent {
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         } else {
+          // Emit step_end with whatever data we collected before failure
+          // This ensures diff_status and other fields are preserved in traces
+          if (this.tracer && stepSnapWithDiff) {
+            const postUrl = this.browser.getPage()?.url() || null;
+            const durationMs = Date.now() - stepStartTime;
+
+            const stepEndData = TraceEventBuilder.buildPartialStepEndData({
+              stepId,
+              stepIndex: this.stepCount,
+              goal,
+              attempt,
+              preUrl: stepPreUrl,
+              postUrl,
+              snapshot: stepSnapWithDiff,
+              llmResponse: stepLlmResponse,
+              error: error.message,
+              durationMs,
+            });
+
+            this.tracer.emit('step_end', stepEndData, stepId);
+          }
+
           const errorResult: AgentActResult = {
             success: false,
             goal,

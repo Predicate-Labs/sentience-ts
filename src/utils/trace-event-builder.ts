@@ -279,4 +279,119 @@ export class TraceEventBuilder {
 
     return data;
   }
+
+  /**
+   * Build partial step_end event data for failed steps
+   *
+   * This is used when a step fails after collecting some data (snapshot, LLM response, etc.)
+   * but before completing execution. It ensures diff_status and other fields are preserved
+   * in traces even when the agent run fails.
+   *
+   * @param params - Parameters for building partial step_end event
+   * @returns Partial step_end event data
+   */
+  static buildPartialStepEndData(params: {
+    stepId: string;
+    stepIndex: number;
+    goal: string;
+    attempt: number;
+    preUrl: string | null;
+    postUrl: string | null;
+    snapshot?: Snapshot | null;
+    llmResponse?: LLMResponse | null;
+    error: string;
+    durationMs: number;
+  }): TraceEventData {
+    const {
+      stepId,
+      stepIndex,
+      goal,
+      attempt,
+      preUrl,
+      postUrl,
+      snapshot,
+      llmResponse,
+      error,
+      durationMs,
+    } = params;
+
+    // Build pre data
+    const preData: TraceEventData['pre'] = {
+      url: preUrl || undefined,
+      snapshot_digest: snapshot ? this.buildSnapshotDigest(snapshot) : undefined,
+    };
+
+    // Add elements with diff_status if snapshot is available
+    if (snapshot && snapshot.elements.length > 0) {
+      const importanceValues = snapshot.elements.map(el => el.importance);
+      const minImportance = importanceValues.length > 0 ? Math.min(...importanceValues) : 0;
+      const maxImportance = importanceValues.length > 0 ? Math.max(...importanceValues) : 0;
+      const importanceRange = maxImportance - minImportance;
+
+      preData.elements = snapshot.elements.map(el => {
+        let importanceScore: number;
+        if (importanceRange > 0) {
+          importanceScore = (el.importance - minImportance) / importanceRange;
+        } else {
+          importanceScore = 0.5;
+        }
+
+        return {
+          id: el.id,
+          role: el.role,
+          text: el.text,
+          bbox: el.bbox,
+          importance: el.importance,
+          importance_score: importanceScore,
+          visual_cues: el.visual_cues,
+          in_viewport: el.in_viewport,
+          is_occluded: el.is_occluded,
+          z_index: el.z_index,
+          rerank_index: el.rerank_index,
+          heuristic_index: el.heuristic_index,
+          ml_probability: el.ml_probability,
+          ml_score: el.ml_score,
+          diff_status: el.diff_status,
+        };
+      });
+    }
+
+    // Build LLM data if available
+    let llmData: TraceEventData['llm'] | undefined;
+    if (llmResponse) {
+      llmData = this.buildLLMData(llmResponse);
+    }
+
+    // Build exec data for failure
+    const execData: TraceEventData['exec'] = {
+      success: false,
+      action: 'error',
+      outcome: error,
+      duration_ms: durationMs,
+      error: error,
+    };
+
+    // Build verify data for failure
+    const verifyData: TraceEventData['verify'] = {
+      passed: false,
+      signals: {
+        error: error,
+      },
+    };
+
+    return {
+      v: 1,
+      step_id: stepId,
+      step_index: stepIndex,
+      goal: goal,
+      attempt: attempt,
+      pre: preData,
+      llm: llmData,
+      exec: execData,
+      post: {
+        url: postUrl || undefined,
+      },
+      verify: verifyData,
+    };
+  }
 }

@@ -596,6 +596,11 @@ Return ONLY the integer ID number from the label, nothing else.`;
 
     const startTime = Date.now();
 
+    // Track data collected during step execution for step_end emission on failure
+    let stepSnapWithDiff: Snapshot | null = null;
+    let stepPreUrl: string | null = null;
+    let stepLlmResponse: LLMResponse | null = null;
+
     try {
       // Ensure screenshot is enabled
       const snapOpts: SnapshotOptions = {
@@ -633,6 +638,10 @@ Return ONLY the integer ID number from the label, nothing else.`;
       (this as any).previousSnapshot = snap;
 
       const snapWithDiff = processed.withDiff;
+
+      // Track for step_end emission on failure
+      stepSnapWithDiff = snapWithDiff;
+      stepPreUrl = snap.url;
 
       // Emit snapshot event
       if (tracer) {
@@ -709,6 +718,9 @@ Return ONLY the integer ID number from the label, nothing else.`;
       }
 
       const llmResponse = await this.queryLLMWithVision(labeledImageDataUrl, goal);
+
+      // Track for step_end emission on failure
+      stepLlmResponse = llmResponse;
 
       // Emit LLM query event
       if (tracer) {
@@ -846,6 +858,29 @@ Return ONLY the integer ID number from the label, nothing else.`;
       // Emit error event
       if (tracer) {
         tracer.emitError(stepId, error.message, 0);
+      }
+
+      // Emit step_end with whatever data we collected before failure
+      // This ensures diff_status and other fields are preserved in traces
+      if (tracer && stepSnapWithDiff) {
+        const page = (this as any).browser.getPage();
+        const postUrl = page ? page.url() || null : null;
+        const durationMs = Date.now() - startTime;
+
+        const stepEndData = TraceEventBuilder.buildPartialStepEndData({
+          stepId,
+          stepIndex: stepCount,
+          goal,
+          attempt: 0,
+          preUrl: stepPreUrl,
+          postUrl,
+          snapshot: stepSnapWithDiff,
+          llmResponse: stepLlmResponse,
+          error: error.message,
+          durationMs,
+        });
+
+        tracer.emit('step_end', stepEndData, stepId);
       }
 
       if ((this as any).verbose) {

@@ -105,6 +105,31 @@ function isFfmpegAvailable(): boolean {
 }
 
 /**
+ * Get ffmpeg version as a tuple [major, minor] or null if unable to determine.
+ * Used to determine which flags to use (e.g., -vsync vs -fps_mode).
+ */
+function getFfmpegVersion(): [number, number] | null {
+  try {
+    const result = spawnSync('ffmpeg', ['-version'], {
+      timeout: 5000,
+      stdio: 'pipe',
+    });
+    if (result.status !== 0) {
+      return null;
+    }
+    const output = result.stdout?.toString('utf-8') || '';
+    // Parse version from output like "ffmpeg version 7.0.1 ..." or "ffmpeg version n7.0.1 ..."
+    const match = output.match(/ffmpeg version [n]?(\d+)\.(\d+)/i);
+    if (match) {
+      return [parseInt(match[1], 10), parseInt(match[2], 10)];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Generate an MP4 video clip from a directory of frames using ffmpeg.
  */
 function generateClipFromFrames(framesDir: string, outputPath: string, fps: number = 8): boolean {
@@ -123,7 +148,9 @@ function generateClipFromFrames(framesDir: string, outputPath: string, fps: numb
   }
 
   // Create a temporary file list for ffmpeg concat demuxer
-  const listFile = path.join(framesDir, 'frames_list.txt');
+  // Use relative path (just filename) since we run ffmpeg with cwd=framesDir
+  const listFile = 'frames_list.txt';
+  const listFilePath = path.join(framesDir, listFile);
   const frameDuration = 1.0 / fps;
 
   try {
@@ -132,7 +159,19 @@ function generateClipFromFrames(framesDir: string, outputPath: string, fps: numb
       files.map(f => `file '${f}'\nduration ${frameDuration}`).join('\n') +
       `\nfile '${files[files.length - 1]}'`; // ffmpeg concat quirk
 
-    fs.writeFileSync(listFile, listContent);
+    fs.writeFileSync(listFilePath, listContent);
+
+    // Determine which vsync/fps_mode flag to use based on ffmpeg version
+    // -vsync is deprecated in ffmpeg 7.0+, use -fps_mode instead (available since 5.1)
+    const version = getFfmpegVersion();
+    let syncArgs: string[];
+    if (version && (version[0] > 5 || (version[0] === 5 && version[1] >= 1))) {
+      // ffmpeg 5.1+: use -fps_mode
+      syncArgs = ['-fps_mode', 'vfr'];
+    } else {
+      // ffmpeg < 5.1: use legacy -vsync
+      syncArgs = ['-vsync', 'vfr'];
+    }
 
     // Run ffmpeg to generate the clip
     const result = spawnSync(
@@ -145,8 +184,7 @@ function generateClipFromFrames(framesDir: string, outputPath: string, fps: numb
         '0',
         '-i',
         listFile,
-        '-vsync',
-        'vfr',
+        ...syncArgs,
         '-pix_fmt',
         'yuv420p',
         '-c:v',
@@ -175,7 +213,7 @@ function generateClipFromFrames(framesDir: string, outputPath: string, fps: numb
   } finally {
     // Clean up the list file
     try {
-      fs.unlinkSync(listFile);
+      fs.unlinkSync(listFilePath);
     } catch {
       // ignore
     }
