@@ -40,6 +40,52 @@ function makeElement(
   } as Element;
 }
 
+describe('AgentRuntime.beginStep() stepId format', () => {
+  it('generates stepId in step-N format', () => {
+    const sink = new MockSink();
+    const tracer = new Tracer('test-run', sink);
+    const page = new MockPage('https://example.com') as any;
+    const browserLike = {
+      snapshot: async () => ({
+        status: 'success',
+        url: 'https://example.com',
+        elements: [],
+        timestamp: 't1',
+      }),
+    };
+
+    const runtime = new AgentRuntime(browserLike as any, page as any, tracer);
+
+    const stepId1 = runtime.beginStep('Step 1');
+    expect(stepId1).toBe('step-1');
+    expect(runtime.stepIndex).toBe(1);
+
+    const stepId2 = runtime.beginStep('Step 2');
+    expect(stepId2).toBe('step-2');
+    expect(runtime.stepIndex).toBe(2);
+  });
+
+  it('generates stepId matching explicit stepIndex', () => {
+    const sink = new MockSink();
+    const tracer = new Tracer('test-run', sink);
+    const page = new MockPage('https://example.com') as any;
+    const browserLike = {
+      snapshot: async () => ({
+        status: 'success',
+        url: 'https://example.com',
+        elements: [],
+        timestamp: 't1',
+      }),
+    };
+
+    const runtime = new AgentRuntime(browserLike as any, page as any, tracer);
+
+    const stepId = runtime.beginStep('Custom step', 10);
+    expect(stepId).toBe('step-10');
+    expect(runtime.stepIndex).toBe(10);
+  });
+});
+
 describe('AgentRuntime.assert() with state predicates', () => {
   it('uses snapshot context for enabled/disabled/value assertions', () => {
     const sink = new MockSink();

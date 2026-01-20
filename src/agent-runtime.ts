@@ -39,7 +39,6 @@
  */
 
 import { Page } from 'playwright';
-import { v4 as uuidv4 } from 'uuid';
 import { Snapshot } from './types';
 import { AssertContext, Predicate } from './verification';
 import { Tracer } from './tracing/tracer';
@@ -741,14 +740,11 @@ export class AgentRuntime {
    *
    * @param goal - Description of what this step aims to achieve
    * @param stepIndex - Optional explicit step index (otherwise auto-increments)
-   * @returns Generated stepId
+   * @returns Generated stepId in format 'step-N' where N is the step index
    */
   beginStep(goal: string, stepIndex?: number): string {
     // Clear previous step state
     this.assertionsThisStep = [];
-
-    // Generate new stepId
-    this.stepId = uuidv4();
 
     // Update step index
     if (stepIndex !== undefined) {
@@ -756,6 +752,9 @@ export class AgentRuntime {
     } else {
       this.stepIndex += 1;
     }
+
+    // Generate stepId in 'step-N' format for Studio compatibility
+    this.stepId = `step-${this.stepIndex}`;
 
     return this.stepId;
   }
