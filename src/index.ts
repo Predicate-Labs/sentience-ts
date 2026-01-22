@@ -70,6 +70,8 @@ export {
   isCollapsed,
 } from './verification';
 export { AgentRuntime, AssertionHandle, AssertionRecord, EventuallyOptions } from './agent-runtime';
+export { RuntimeAgent } from './runtime-agent';
+export type { RuntimeStep, StepVerification } from './runtime-agent';
 export * from './captcha/types';
 export * from './captcha/strategies';
 
