@@ -845,13 +845,18 @@
             let diagnostics;
             try {
                 const lastMutationTs = window.__sentience_lastMutationTs, now = performance.now(), quietMs = "number" == typeof lastMutationTs && Number.isFinite(lastMutationTs) ? Math.max(0, now - lastMutationTs) : null, nodeCount = document.querySelectorAll("*").length;
+                let requiresVision = !1, requiresVisionReason = null;
+                const canvasCount = document.getElementsByTagName("canvas").length;
+                canvasCount > 0 && (requiresVision = !0, requiresVisionReason = `canvas:${canvasCount}`), 
                 diagnostics = {
                     metrics: {
                         ready_state: document.readyState || null,
                         quiet_ms: quietMs,
                         node_count: nodeCount
                     },
-                    captcha: detectCaptcha()
+                    captcha: detectCaptcha(),
+                    requires_vision: requiresVision,
+                    requires_vision_reason: requiresVisionReason
                 };
             } catch (e) {}
             return {
