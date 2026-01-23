@@ -1,4 +1,4 @@
-import init, { analyze_page_with_options, analyze_page, prune_for_api } from "../pkg/sentience_core.js";
+import init, { analyze_page_with_options, analyze_page, prune_for_api } from "./pkg/sentience_core.js";
 
 let wasmReady = !1, wasmInitPromise = null;
 
