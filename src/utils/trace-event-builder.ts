@@ -262,7 +262,7 @@ export class TraceEventBuilder {
     postSnapshotDigest?: string;
     execData: TraceEventData['exec'];
     verifyData: TraceEventData['verify'];
-    assertions?: TraceEventData['verify']['signals']['assertions'];
+    assertions?: NonNullable<TraceEventData['verify']>['signals']['assertions'];
     taskDone?: boolean;
     taskDoneLabel?: string;
   }): TraceEventData {
@@ -282,7 +282,7 @@ export class TraceEventBuilder {
       taskDoneLabel,
     } = params;
 
-    const signals = { ...(verifyData.signals || {}) } as Record<string, any>;
+    const signals = { ...(verifyData?.signals || {}) } as Record<string, any>;
     if (assertions && assertions.length > 0) {
       signals.assertions = assertions;
     }
@@ -310,7 +310,7 @@ export class TraceEventBuilder {
         snapshot_digest: postSnapshotDigest,
       },
       verify: {
-        passed: verifyData.passed,
+        passed: verifyData?.passed ?? false,
         signals,
       },
     };

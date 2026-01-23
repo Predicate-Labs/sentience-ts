@@ -131,6 +131,16 @@ export interface GridInfo {
   label?: string | null;
   /** Whether this grid is the dominant group (main content area) */
   is_dominant?: boolean;
+
+  // Z-index and modal detection fields (from gateway/sentience-core)
+  /** Z-index of this grid (max among elements in this grid) */
+  z_index?: number;
+  /** Global max z-index across ALL grids (for comparison) */
+  z_index_max?: number;
+  /** Whether this grid blocks interaction with content behind it */
+  blocks_interaction?: boolean;
+  /** Ratio of grid area to viewport area (0.0-1.0) */
+  viewport_coverage?: number;
 }
 
 export interface Snapshot {
@@ -147,6 +157,11 @@ export interface Snapshot {
   dominant_group_key?: string; // The most common group_key (main content group)
   // Phase 2: Runtime stability/debug info (confidence/reasons/metrics)
   diagnostics?: SnapshotDiagnostics;
+  // Modal detection fields (from gateway)
+  /** True if a modal/overlay grid was detected */
+  modal_detected?: boolean;
+  /** Array of GridInfo for detected modal grids */
+  modal_grids?: GridInfo[];
 }
 
 export interface SnapshotDiagnosticsMetrics {

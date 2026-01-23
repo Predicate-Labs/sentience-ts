@@ -2,7 +2,15 @@
  * Tests for getGridBounds functionality
  */
 
-import { getGridBounds, Snapshot, Element, BBox, LayoutHints, GridPosition } from '../src';
+import {
+  getGridBounds,
+  Snapshot,
+  Element,
+  BBox,
+  LayoutHints,
+  GridPosition,
+  GridInfo,
+} from '../src';
 
 /**
  * Helper to create test elements with layout data
@@ -310,5 +318,103 @@ describe('getGridBounds', () => {
     expect(result[0].grid_id).toBe(0);
     expect(result[1].grid_id).toBe(1);
     expect(result[2].grid_id).toBe(2);
+  });
+});
+
+describe('GridInfo modal detection fields', () => {
+  it('should accept GridInfo with z-index and modal fields', () => {
+    // Test that GridInfo type accepts the new optional fields
+    const gridInfo = {
+      grid_id: 1,
+      bbox: { x: 100, y: 100, width: 500, height: 400 } as BBox,
+      row_count: 2,
+      col_count: 3,
+      item_count: 6,
+      confidence: 0.95,
+      z_index: 1000,
+      z_index_max: 1000,
+      blocks_interaction: true,
+      viewport_coverage: 0.25,
+    };
+
+    expect(gridInfo.z_index).toBe(1000);
+    expect(gridInfo.z_index_max).toBe(1000);
+    expect(gridInfo.blocks_interaction).toBe(true);
+    expect(gridInfo.viewport_coverage).toBe(0.25);
+  });
+
+  it('should accept GridInfo without optional modal fields', () => {
+    // Test backward compatibility - new fields are optional
+    const gridInfo = {
+      grid_id: 0,
+      bbox: { x: 0, y: 0, width: 100, height: 100 } as BBox,
+      row_count: 1,
+      col_count: 1,
+      item_count: 1,
+      confidence: 1.0,
+    };
+
+    expect(gridInfo.grid_id).toBe(0);
+    expect(gridInfo.confidence).toBe(1.0);
+    // Optional fields should be undefined
+    expect((gridInfo as any).z_index).toBeUndefined();
+    expect((gridInfo as any).z_index_max).toBeUndefined();
+    expect((gridInfo as any).blocks_interaction).toBeUndefined();
+    expect((gridInfo as any).viewport_coverage).toBeUndefined();
+  });
+});
+
+describe('Snapshot modal detection fields', () => {
+  it('should accept snapshot without modal fields', () => {
+    const snapshot: Snapshot = {
+      status: 'success',
+      url: 'https://example.com',
+      elements: [],
+    };
+
+    // modal_detected and modal_grids should be undefined by default
+    expect(snapshot.modal_detected).toBeUndefined();
+    expect(snapshot.modal_grids).toBeUndefined();
+  });
+
+  it('should accept snapshot with modal_detected true', () => {
+    const modalGrid = {
+      grid_id: 1,
+      bbox: { x: 200, y: 150, width: 600, height: 400 } as BBox,
+      row_count: 1,
+      col_count: 2,
+      item_count: 5,
+      confidence: 1.0,
+      z_index: 1000,
+      z_index_max: 1000,
+      blocks_interaction: true,
+      viewport_coverage: 0.2,
+    };
+
+    const snapshot: Snapshot = {
+      status: 'success',
+      url: 'https://example.com',
+      elements: [],
+      modal_detected: true,
+      modal_grids: [modalGrid],
+    };
+
+    expect(snapshot.modal_detected).toBe(true);
+    expect(snapshot.modal_grids).toBeDefined();
+    expect(snapshot.modal_grids!.length).toBe(1);
+    expect(snapshot.modal_grids![0].z_index).toBe(1000);
+    expect(snapshot.modal_grids![0].blocks_interaction).toBe(true);
+  });
+
+  it('should accept snapshot with modal_detected false', () => {
+    const snapshot: Snapshot = {
+      status: 'success',
+      url: 'https://example.com',
+      elements: [],
+      modal_detected: false,
+    };
+
+    expect(snapshot.modal_detected).toBe(false);
+    expect(snapshot.modal_grids).toBeUndefined();
   });
 });
