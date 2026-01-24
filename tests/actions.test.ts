@@ -8,6 +8,8 @@ import {
   check,
   clear,
   click,
+  search,
+  sendKeys,
   typeText,
   press,
   scrollTo,
@@ -132,6 +134,98 @@ describe('Actions', () => {
         const result = await press(browser, 'Enter');
         expect(result.success).toBe(true);
         expect(result.duration_ms).toBeGreaterThan(0);
+      } finally {
+        await browser.close();
+      }
+    }, 60000);
+  });
+
+  describe('sendKeys', () => {
+    it('should send key sequences', async () => {
+      const browser = await createTestBrowser();
+      try {
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        const result = await sendKeys(browser, 'CTRL+L');
+        expect(result.success).toBe(true);
+        expect(result.duration_ms).toBeGreaterThan(0);
+      } finally {
+        await browser.close();
+      }
+    }, 60000);
+
+    it('should throw on empty sequence', async () => {
+      const browser = await createTestBrowser();
+      try {
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        await expect(sendKeys(browser, '')).rejects.toThrow('empty');
+      } finally {
+        await browser.close();
+      }
+    }, 60000);
+  });
+
+  describe('search', () => {
+    it('should build search URLs', async () => {
+      const browser = await createTestBrowser();
+      try {
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        const result = await search(browser, 'sentience sdk', 'duckduckgo');
+        expect(result.success).toBe(true);
+        expect(result.duration_ms).toBeGreaterThan(0);
+
+        expect((await search(browser, 'sentience sdk', 'google')).success).toBe(true);
+        expect((await search(browser, 'sentience sdk', 'bing')).success).toBe(true);
+        expect((await search(browser, 'sentience sdk', 'google.com')).success).toBe(true);
+      } finally {
+        await browser.close();
+      }
+    }, 90000);
+
+    it('should reject empty query', async () => {
+      const browser = await createTestBrowser();
+      try {
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        await expect(search(browser, '')).rejects.toThrow('empty');
+      } finally {
+        await browser.close();
+      }
+    }, 60000);
+
+    it('should reject disallowed domains', async () => {
+      const browser = new SentienceBrowser(
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['example.com']
+      );
+      try {
+        await browser.start();
+        const page = getPageOrThrow(browser);
+        await page.goto('https://example.com');
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+        await expect(search(browser, 'sentience sdk', 'duckduckgo')).rejects.toThrow(
+          'domain not allowed'
+        );
       } finally {
         await browser.close();
       }

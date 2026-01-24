@@ -114,13 +114,13 @@ export function registerDefaultTools(
   runtime?: ToolContext | AgentRuntime
 ): ToolRegistry {
   registry.register(
-    defineTool({
+    defineTool<{ limit: number }, Snapshot, ToolContext | null>({
       name: 'snapshot_state',
       description: 'Capture a snapshot of the current page state.',
       input: snapshotInput,
       output: snapshotSchema,
       handler: async (ctx, params): Promise<Snapshot> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const snap = await runtimeRef.snapshot({
           limit: params.limit,
           goal: 'tool_snapshot_state',
@@ -134,13 +134,13 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<{ element_id: number }, ActionResult, ToolContext | null>({
       name: 'click',
       description: 'Click an element by id from the latest snapshot.',
       input: clickInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const snap = runtimeRef.lastSnapshot ?? (await runtimeRef.snapshot({ goal: 'tool_click' }));
         if (!snap) throw new Error('snapshot() returned null');
@@ -166,13 +166,17 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<
+      { element_id: number; text: string; clear_first: boolean },
+      ActionResult,
+      ToolContext | null
+    >({
       name: 'type',
       description: 'Type text into an element by id from the latest snapshot.',
       input: typeInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const snap = runtimeRef.lastSnapshot ?? (await runtimeRef.snapshot({ goal: 'tool_type' }));
         if (!snap) throw new Error('snapshot() returned null');
@@ -199,13 +203,13 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<{ delta_y: number; x?: number; y?: number }, ActionResult, ToolContext | null>({
       name: 'scroll',
       description: 'Scroll the page by a delta amount.',
       input: scrollInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const start = Date.now();
         const urlBefore = page.url();
@@ -234,13 +238,17 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<
+      { element_id: number; behavior: string; block: string },
+      ActionResult,
+      ToolContext | null
+    >({
       name: 'scroll_to_element',
       description: 'Scroll the page to bring an element into view.',
       input: scrollToElementInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const start = Date.now();
         const urlBefore = page.url();
@@ -264,13 +272,17 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<
+      { x: number; y: number; width: number; height: number },
+      ActionResult,
+      ToolContext | null
+    >({
       name: 'click_rect',
       description: 'Click at the center of a rectangle.',
       input: clickRectInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const start = Date.now();
         const urlBefore = page.url();
@@ -288,13 +300,13 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<{ key: string }, ActionResult, ToolContext | null>({
       name: 'press',
       description: 'Press a key (e.g., Enter).',
       input: pressInput,
       output: actionResultSchema,
       handler: async (ctx, params): Promise<ActionResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         const page = runtimeRef.page;
         const start = Date.now();
         const urlBefore = page.url();
@@ -310,13 +322,17 @@ export function registerDefaultTools(
   );
 
   registry.register(
-    defineTool({
+    defineTool<
+      { code: string; max_output_chars: number; truncate: boolean },
+      EvaluateJsResult,
+      ToolContext | null
+    >({
       name: 'evaluate_js',
       description: 'Execute JavaScript in the browser context.',
       input: evaluateJsInput,
       output: evaluateJsOutput,
       handler: async (ctx, params): Promise<EvaluateJsResult> => {
-        const runtimeRef = getRuntime(ctx as ToolContext | null, runtime);
+        const runtimeRef = getRuntime(ctx, runtime);
         return await runtimeRef.evaluateJs({
           code: params.code,
           max_output_chars: params.max_output_chars,

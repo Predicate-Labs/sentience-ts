@@ -80,6 +80,7 @@ function makePage(url: string, pages: any[], context: any) {
   const page: any = {
     url: jest.fn().mockReturnValue(url),
     title: jest.fn().mockResolvedValue(`Title ${url}`),
+    goto: jest.fn().mockResolvedValue(undefined),
     bringToFront: jest.fn().mockResolvedValue(undefined),
     isClosed: jest.fn().mockReturnValue(false),
     close: jest.fn().mockImplementation(async () => {

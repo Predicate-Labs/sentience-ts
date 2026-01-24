@@ -159,7 +159,7 @@ export async function extract(
 
   try {
     const payload = extractJsonPayload(raw);
-    const parsed = (schema as z.ZodTypeAny).safeParse(payload);
+    const parsed = schema.safeParse(payload);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.message, raw };
     }
