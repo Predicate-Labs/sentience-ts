@@ -12,6 +12,63 @@ import { SnapshotOptions } from './snapshot';
 import { IBrowser } from './protocols/browser-protocol';
 import { snapshot as snapshotFunction } from './snapshot';
 
+export function normalizeDomain(domain: string): string {
+  const raw = domain.trim();
+  let host = raw;
+  if (raw.includes('://')) {
+    try {
+      host = new URL(raw).hostname || '';
+    } catch {
+      host = raw;
+    }
+  } else {
+    host = raw.split('/', 1)[0];
+  }
+  host = host.split(':', 1)[0];
+  return host.trim().toLowerCase().replace(/^\./, '');
+}
+
+export function domainMatches(host: string, pattern: string): boolean {
+  const hostNorm = normalizeDomain(host);
+  let pat = normalizeDomain(pattern);
+  if (pat.startsWith('*.')) {
+    pat = pat.slice(2);
+  }
+  return hostNorm === pat || hostNorm.endsWith(`.${pat}`);
+}
+
+export function extractHost(url: string): string | null {
+  let raw = url.trim();
+  if (!raw.includes('://')) {
+    raw = `https://${raw}`;
+  }
+  try {
+    const parsed = new URL(raw);
+    return parsed.hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+export function isDomainAllowed(
+  host: string | null,
+  allowed?: string[],
+  prohibited?: string[]
+): boolean {
+  if (!host) return false;
+  if (prohibited && prohibited.length > 0) {
+    for (const pattern of prohibited) {
+      if (domainMatches(host, pattern)) {
+        return false;
+      }
+    }
+  }
+  if (allowed && allowed.length > 0) {
+    return allowed.some(pattern => domainMatches(host, pattern));
+  }
+  return true;
+}
+
 export class SentienceBrowser implements IBrowser {
   private context: BrowserContext | null = null;
   private browser: Browser | null = null;
@@ -28,6 +85,9 @@ export class SentienceBrowser implements IBrowser {
   private _recordVideoSize?: { width: number; height: number };
   private _viewport?: { width: number; height: number };
   private _deviceScaleFactor?: number;
+  private _allowedDomains?: string[];
+  private _prohibitedDomains?: string[];
+  private _keepAlive: boolean;
 
   /**
    * Create a new SentienceBrowser instance
@@ -44,6 +104,9 @@ export class SentienceBrowser implements IBrowser {
    * @param deviceScaleFactor - Optional device scale factor to emulate high-DPI (Retina) screens.
    *                          Examples: 1.0 (default, standard DPI), 2.0 (Retina/high-DPI, like MacBook Pro), 3.0 (very high DPI)
    *                          If undefined, defaults to 1.0 (standard DPI).
+   * @param allowedDomains - Optional list of allowed domains for navigation.
+   * @param prohibitedDomains - Optional list of prohibited domains for navigation.
+   * @param keepAlive - Keep browser alive after close() (no teardown).
    */
   constructor(
     apiKey?: string,
@@ -55,7 +118,10 @@ export class SentienceBrowser implements IBrowser {
     recordVideoDir?: string,
     recordVideoSize?: { width: number; height: number },
     viewport?: { width: number; height: number },
-    deviceScaleFactor?: number
+    deviceScaleFactor?: number,
+    allowedDomains?: string[],
+    prohibitedDomains?: string[],
+    keepAlive: boolean = false
   ) {
     this._apiKey = apiKey;
 
@@ -93,6 +159,9 @@ export class SentienceBrowser implements IBrowser {
 
     // Device scale factor for high-DPI emulation
     this._deviceScaleFactor = deviceScaleFactor;
+    this._allowedDomains = allowedDomains;
+    this._prohibitedDomains = prohibitedDomains;
+    this._keepAlive = keepAlive;
   }
 
   async start(): Promise<void> {
@@ -488,6 +557,10 @@ export class SentienceBrowser implements IBrowser {
     if (!page) {
       throw new Error('Browser not started. Call start() first.');
     }
+    const host = extractHost(url);
+    if (!isDomainAllowed(host, this._allowedDomains, this._prohibitedDomains)) {
+      throw new Error(`domain not allowed: ${host}`);
+    }
     await page.goto(url, { waitUntil: 'domcontentloaded' });
 
     if (!(await this.waitForExtension(page, 15000))) {
@@ -782,6 +855,9 @@ export class SentienceBrowser implements IBrowser {
   }
 
   async close(outputPath?: string): Promise<string | null> {
+    if (this._keepAlive) {
+      return null;
+    }
     let tempVideoPath: string | null = null;
 
     // Get video path before closing (if recording was enabled)

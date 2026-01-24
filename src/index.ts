@@ -13,8 +13,10 @@ export {
   clickRect,
   ClickRect,
   press,
+  search,
   scrollTo,
   selectOption,
+  sendKeys,
   submit,
   typeText,
   uncheck,
@@ -26,7 +28,7 @@ export { expect, Expectation } from './expect';
 export { Inspector, inspect } from './inspector';
 export { Recorder, Trace, TraceStep, record } from './recorder';
 export { ScriptGenerator, generate } from './generator';
-export { read, ReadOptions, ReadResult } from './read';
+export { read, extract, ReadOptions, ReadResult } from './read';
 export { screenshot, ScreenshotOptions } from './screenshot';
 export { showOverlay, clearOverlay } from './overlay';
 export { findTextRect } from './textSearch';
@@ -90,6 +92,7 @@ export type { RuntimeStep, StepVerification } from './runtime-agent';
 export { parseVisionExecutorAction, executeVisionExecutorAction } from './vision-executor';
 export * from './captcha/types';
 export * from './captcha/strategies';
+export * from './tools';
 
 // Ordinal Support (Phase 3)
 export {

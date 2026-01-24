@@ -4,7 +4,7 @@
 
 import { IBrowser } from './protocols/browser-protocol';
 import { ActionResult, Snapshot, BBox } from './types';
-import { snapshot } from './snapshot';
+import { snapshot, SnapshotOptions } from './snapshot';
 import { BrowserEvaluator } from './utils/browser-evaluator';
 import { CursorPolicy, buildHumanCursorPath } from './cursor-policy';
 
@@ -997,6 +997,153 @@ export async function press(
   let snapshotAfter: Snapshot | undefined;
   if (takeSnapshot) {
     snapshotAfter = await snapshot(browser);
+  }
+
+  return {
+    success: true,
+    duration_ms: durationMs,
+    outcome,
+    url_changed: urlChanged,
+    snapshot_after: snapshotAfter,
+  };
+}
+
+function normalizeKeyToken(token: string): string {
+  const lookup: Record<string, string> = {
+    CMD: 'Meta',
+    COMMAND: 'Meta',
+    CTRL: 'Control',
+    CONTROL: 'Control',
+    ALT: 'Alt',
+    OPTION: 'Alt',
+    SHIFT: 'Shift',
+    ESC: 'Escape',
+    ESCAPE: 'Escape',
+    ENTER: 'Enter',
+    RETURN: 'Enter',
+    TAB: 'Tab',
+    SPACE: 'Space',
+  };
+  const upper = token.trim().toUpperCase();
+  return lookup[upper] ?? token.trim();
+}
+
+function parseKeySequence(sequence: string): string[] {
+  const parts: string[] = [];
+  for (const rawPart of sequence.replace(/,/g, ' ').split(/\s+/)) {
+    let raw = rawPart.trim();
+    if (!raw) continue;
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      raw = raw.slice(1, -1);
+    }
+    if (raw.includes('+')) {
+      const combo = raw
+        .split('+')
+        .filter(Boolean)
+        .map(token => normalizeKeyToken(token))
+        .join('+');
+      parts.push(combo);
+    } else {
+      parts.push(normalizeKeyToken(raw));
+    }
+  }
+  return parts;
+}
+
+/**
+ * Send a sequence of key presses (e.g., "CMD+H", "CTRL+SHIFT+P").
+ */
+export async function sendKeys(
+  browser: IBrowser,
+  sequence: string,
+  takeSnapshot: boolean = false,
+  delayMs: number = 50
+): Promise<ActionResult> {
+  const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
+
+  const startTime = Date.now();
+  const urlBefore = page.url();
+
+  const keys = parseKeySequence(sequence);
+  if (keys.length === 0) {
+    throw new Error('send_keys sequence is empty');
+  }
+  for (const key of keys) {
+    await page.keyboard.press(key);
+    if (delayMs > 0) {
+      await page.waitForTimeout(delayMs);
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+  const urlAfter = page.url();
+  const urlChanged = urlBefore !== urlAfter;
+  const outcome = urlChanged ? 'navigated' : 'dom_updated';
+
+  let snapshotAfter: Snapshot | undefined;
+  if (takeSnapshot) {
+    snapshotAfter = await snapshot(browser);
+  }
+
+  return {
+    success: true,
+    duration_ms: durationMs,
+    outcome,
+    url_changed: urlChanged,
+    snapshot_after: snapshotAfter,
+  };
+}
+
+function buildSearchUrl(query: string, engine: string): string {
+  const q = encodeURIComponent(query).replace(/%20/g, '+');
+  const key = engine.trim().toLowerCase();
+  if (key === 'duckduckgo' || key === 'ddg') {
+    return `https://duckduckgo.com/?q=${q}`;
+  }
+  if (key === 'google.com' || key === 'google') {
+    return `https://www.google.com/search?q=${q}`;
+  }
+  if (key === 'bing') {
+    return `https://www.bing.com/search?q=${q}`;
+  }
+  throw new Error(`unsupported search engine: ${engine}`);
+}
+
+/**
+ * Navigate to a search results page for the given query.
+ */
+export async function search(
+  browser: IBrowser,
+  query: string,
+  engine: string = 'duckduckgo',
+  takeSnapshot: boolean = false,
+  snapshotOptions: SnapshotOptions | undefined = undefined
+): Promise<ActionResult> {
+  const page = browser.getPage();
+  if (!page) {
+    throw new Error('Browser not started. Call start() first.');
+  }
+  if (!query.trim()) {
+    throw new Error('search query is empty');
+  }
+
+  const startTime = Date.now();
+  const urlBefore = page.url();
+  const url = buildSearchUrl(query, engine);
+  await browser.goto(url);
+  await page.waitForLoadState('networkidle');
+
+  const durationMs = Date.now() - startTime;
+  const urlAfter = page.url();
+  const urlChanged = urlBefore !== urlAfter;
+  const outcome = urlChanged ? 'navigated' : 'dom_updated';
+
+  let snapshotAfter: Snapshot | undefined;
+  if (takeSnapshot) {
+    snapshotAfter = await snapshot(browser, snapshotOptions);
   }
 
   return {

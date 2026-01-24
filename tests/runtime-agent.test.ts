@@ -5,7 +5,7 @@ import { TraceSink } from '../src/tracing/sink';
 import { MockPage } from './mocks/browser-mock';
 import { LLMProvider } from '../src/llm-provider';
 import type { LLMResponse } from '../src/llm-provider';
-import type { Element, Snapshot } from '../src/types';
+import type { Element, Snapshot, StepHookContext } from '../src/types';
 import type { Predicate } from '../src/verification';
 
 class MockSink extends TraceSink {
@@ -344,5 +344,46 @@ describe('RuntimeAgent (runtime-backed agent)', () => {
     expect(executor.calls.length).toBe(0);
     expect(vision.visionCalls.length).toBe(1);
     expect(page.mouseClickCalls).toEqual([{ x: 100, y: 200 }]);
+  });
+
+  it('invokes step hooks once per step', async () => {
+    const sink = new MockSink();
+    const tracer = new Tracer('run', sink);
+    const page = new MockPage('https://example.com/start') as any;
+
+    const snapshots: Snapshot[] = [
+      {
+        status: 'success',
+        url: 'https://example.com/start',
+        elements: [makeClickableElement(1)],
+        timestamp: 't1',
+      },
+    ];
+
+    const browserLike = {
+      snapshot: async () => snapshots.shift() as Snapshot,
+    };
+
+    const runtime = new AgentRuntime(browserLike as any, page as any, tracer);
+    const executor = new ProviderStub(['CLICK(1)']);
+    const agent = new RuntimeAgent({ runtime, executor });
+
+    const started: StepHookContext[] = [];
+    const ended: StepHookContext[] = [];
+
+    const ok = await agent.runStep({
+      taskGoal: 'test',
+      step: { goal: 'click once', maxSnapshotAttempts: 1 },
+      onStepStart: ctx => {
+        started.push(ctx);
+      },
+      onStepEnd: ctx => {
+        ended.push(ctx);
+      },
+    });
+
+    expect(ok).toBe(true);
+    expect(started).toHaveLength(1);
+    expect(ended).toHaveLength(1);
   });
 });

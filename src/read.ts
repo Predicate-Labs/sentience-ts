@@ -2,9 +2,13 @@
  * Read page content - supports raw HTML, text, and markdown formats
  */
 
+import { ZodTypeAny } from 'zod';
 import { SentienceBrowser } from './browser';
 import TurndownService from 'turndown';
 import { BrowserEvaluator } from './utils/browser-evaluator';
+import { LLMProvider } from './llm-provider';
+import type { ExtractResult } from './types';
+import { zodToJsonSchema } from './utils/zod';
 
 export interface ReadOptions {
   format?: 'raw' | 'text' | 'markdown';
@@ -18,6 +22,18 @@ export interface ReadResult {
   content: string;
   length: number;
   error?: string;
+}
+
+function extractJsonPayload(text: string): Record<string, any> {
+  const fenced = text.match(/```json\s*(\{[\s\S]*?\})\s*```/i);
+  if (fenced && fenced[1]) {
+    return JSON.parse(fenced[1]);
+  }
+  const inline = text.match(/(\{[\s\S]*\})/);
+  if (inline && inline[1]) {
+    return JSON.parse(inline[1]);
+  }
+  return JSON.parse(text);
 }
 
 /**
@@ -113,4 +129,42 @@ export async function read(
   )) as ReadResult;
 
   return result;
+}
+
+/**
+ * Extract structured data from the current page using read() markdown + LLM.
+ */
+export async function extract(
+  browser: SentienceBrowser,
+  llm: LLMProvider,
+  query: string,
+  schema?: ZodTypeAny,
+  maxChars: number = 12000
+): Promise<ExtractResult> {
+  const result = await read(browser, { format: 'markdown', enhanceMarkdown: true });
+  if (result.status !== 'success') {
+    return { ok: false, error: result.error ?? 'read failed' };
+  }
+
+  const content = result.content.slice(0, maxChars);
+  const schemaDesc = schema ? JSON.stringify(zodToJsonSchema(schema)) : '';
+  const system = 'You extract structured data from markdown content. Return only JSON. No prose.';
+  const user = `QUERY:\n${query}\n\nSCHEMA:\n${schemaDesc}\n\nCONTENT:\n${content}`;
+  const response = await llm.generate(system, user);
+  const raw = response.content.trim();
+
+  if (!schema) {
+    return { ok: true, data: { text: raw }, raw };
+  }
+
+  try {
+    const payload = extractJsonPayload(raw);
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.message, raw };
+    }
+    return { ok: true, data: parsed.data, raw };
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message ?? err), raw };
+  }
 }

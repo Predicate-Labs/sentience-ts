@@ -5,7 +5,7 @@
 
 import { SentienceBrowser } from './browser';
 import { snapshot, SnapshotOptions } from './snapshot';
-import { Snapshot } from './types';
+import { Snapshot, StepHookContext } from './types';
 import { LLMProvider, LLMResponse } from './llm-provider';
 import { Tracer } from './tracing/tracer';
 import { randomUUID } from 'crypto';
@@ -192,7 +192,9 @@ export class SentienceAgent {
   async act(
     goal: string,
     maxRetries: number = 2,
-    snapshotOptions?: SnapshotOptions
+    snapshotOptions?: SnapshotOptions,
+    onStepStart?: (ctx: StepHookContext) => void | Promise<void>,
+    onStepEnd?: (ctx: StepHookContext) => void | Promise<void>
   ): Promise<AgentActResult> {
     if (this.verbose) {
       console.log('\n' + '='.repeat(70));
@@ -205,11 +207,18 @@ export class SentienceAgent {
     const stepId = randomUUID();
 
     // Emit step_start event
+    const pageRef = this.browser.getPage();
+    const currentUrl = typeof pageRef?.url === 'function' ? pageRef.url() : 'unknown';
     if (this.tracer) {
-      const page = this.browser.getPage();
-      const currentUrl = page ? page.url() : 'unknown';
       this.tracer.emitStepStart(stepId, this.stepCount, goal, 0, currentUrl);
     }
+    await this.runHook(onStepStart, {
+      stepId,
+      stepIndex: this.stepCount,
+      goal,
+      attempt: 0,
+      url: currentUrl,
+    });
 
     // Track data collected during step execution for step_end emission on failure
     let stepSnapWithDiff: Snapshot | null = null;
@@ -336,9 +345,10 @@ export class SentienceAgent {
         }
 
         // Emit step_end event if tracer is enabled
+        const postPage = this.browser.getPage();
+        const postUrl = typeof postPage?.url === 'function' ? postPage.url() : null;
         if (this.tracer) {
           const preUrl = snap.url;
-          const postUrl = this.browser.getPage()?.url() || null;
           let postSnapshotDigest: string | undefined;
           try {
             const postSnap = await snapshot(this.browser, {
@@ -371,6 +381,16 @@ export class SentienceAgent {
           this.tracer.emit('step_end', stepEndData, stepId);
         }
 
+        await this.runHook(onStepEnd, {
+          stepId,
+          stepIndex: this.stepCount,
+          goal,
+          attempt,
+          url: postUrl,
+          success: result.success,
+          outcome: result.outcome,
+          error: result.error,
+        });
         return result;
       } catch (error: any) {
         // Emit error event
@@ -388,7 +408,8 @@ export class SentienceAgent {
           // Emit step_end with whatever data we collected before failure
           // This ensures diff_status and other fields are preserved in traces
           if (this.tracer && stepSnapWithDiff) {
-            const postUrl = this.browser.getPage()?.url() || null;
+            const postPage = this.browser.getPage();
+            const postUrl = typeof postPage?.url === 'function' ? postPage.url() : null;
             const durationMs = Date.now() - stepStartTime;
 
             const stepEndData = TraceEventBuilder.buildPartialStepEndData({
@@ -415,6 +436,16 @@ export class SentienceAgent {
             durationMs: 0,
           };
           this.history.push(errorResult as any);
+          await this.runHook(onStepEnd, {
+            stepId,
+            stepIndex: this.stepCount,
+            goal,
+            attempt,
+            url: stepPreUrl,
+            success: false,
+            outcome: 'exception',
+            error: error.message,
+          });
           throw new Error(`Failed after ${maxRetries} retries: ${error.message}`);
         }
       }
@@ -490,5 +521,17 @@ export class SentienceAgent {
    */
   getTracer(): Tracer | undefined {
     return this.tracer;
+  }
+
+  private async runHook(
+    hook: ((ctx: StepHookContext) => void | Promise<void>) | undefined,
+    ctx: StepHookContext
+  ): Promise<void> {
+    if (!hook) return;
+    try {
+      await Promise.resolve(hook(ctx));
+    } catch {
+      // best-effort hook; ignore errors
+    }
   }
 }

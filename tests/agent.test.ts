@@ -6,7 +6,15 @@
 import { LLMProvider, LLMResponse, OpenAIProvider, AnthropicProvider } from '../src/llm-provider';
 import { SentienceAgent } from '../src/agent';
 import { SentienceBrowser } from '../src/browser';
-import { Snapshot, Element, BBox, VisualCues, Viewport, ActionResult } from '../src/types';
+import {
+  Snapshot,
+  Element,
+  BBox,
+  VisualCues,
+  Viewport,
+  ActionResult,
+  StepHookContext,
+} from '../src/types';
 import * as agentModule from '../src/agent';
 import * as snapshotModule from '../src/snapshot';
 import * as actionsModule from '../src/actions';
@@ -347,6 +355,44 @@ describe('SentienceAgent', () => {
 
       // Check tokens
       expect(agent.getTokenStats().totalTokens).toBeGreaterThan(0);
+    });
+
+    it('should invoke step hooks once per act()', async () => {
+      const browser = createMockBrowser();
+      const llm = new MockLLMProvider(['CLICK(1)']);
+      const agent = new SentienceAgent(browser, llm, 50, false);
+
+      const mockSnapshot = jest.fn().mockResolvedValue(createMockSnapshot());
+      jest.spyOn(snapshotModule, 'snapshot').mockImplementation(mockSnapshot);
+
+      const mockClick = jest.fn().mockResolvedValue({
+        success: true,
+        duration_ms: 150,
+        outcome: 'dom_updated',
+        url_changed: false,
+      } as ActionResult);
+      jest.spyOn(actionsModule, 'click').mockImplementation(mockClick);
+
+      const started: StepHookContext[] = [];
+      const ended: StepHookContext[] = [];
+
+      const result = await agent.act(
+        'Click the button',
+        0,
+        undefined,
+        ctx => {
+          started.push(ctx);
+        },
+        ctx => {
+          ended.push(ctx);
+        }
+      );
+
+      expect(result.success).toBe(true);
+      expect(started).toHaveLength(1);
+      expect(ended).toHaveLength(1);
+      expect(started[0].goal).toBe('Click the button');
+      expect(ended[0].success).toBe(true);
     });
   });
 

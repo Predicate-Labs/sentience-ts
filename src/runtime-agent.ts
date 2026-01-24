@@ -10,7 +10,7 @@
 import { AgentRuntime } from './agent-runtime';
 import { LLMProvider } from './llm-provider';
 import { LLMInteractionHandler } from './utils/llm-interaction-handler';
-import type { Snapshot, Element, BBox } from './types';
+import type { Snapshot, Element, BBox, StepHookContext } from './types';
 import type { Predicate } from './verification';
 
 export interface StepVerification {
@@ -74,17 +74,33 @@ export class RuntimeAgent {
     this.structuredLLM = new LLMInteractionHandler(this.executor, false);
   }
 
-  async runStep(opts: { taskGoal: string; step: RuntimeStep }): Promise<boolean> {
-    const { taskGoal, step } = opts;
-    this.runtime.beginStep(step.goal);
+  async runStep(opts: {
+    taskGoal: string;
+    step: RuntimeStep;
+    onStepStart?: (ctx: StepHookContext) => void | Promise<void>;
+    onStepEnd?: (ctx: StepHookContext) => void | Promise<void>;
+  }): Promise<boolean> {
+    const { taskGoal, step, onStepStart, onStepEnd } = opts;
+    const stepId = this.runtime.beginStep(step.goal);
+
+    await this.runHook(onStepStart, {
+      stepId,
+      stepIndex: this.runtime.stepIndex,
+      goal: step.goal,
+      attempt: 0,
+      url: this.runtime.lastSnapshot?.url ?? this.runtime.page?.url?.() ?? null,
+    });
 
     let ok = false;
     let emitted = false;
+    let outcome: string | null = null;
+    let errorMessage: string | null = null;
     try {
       const snap = await this.snapshotWithRamp(step);
 
       if (await this.shouldShortCircuitToVision(step, snap)) {
         ok = await this.visionExecutorAttempt({ taskGoal, step, snap });
+        outcome = ok ? 'ok' : 'verification_failed';
         return ok;
       }
 
@@ -92,22 +108,29 @@ export class RuntimeAgent {
       const action = await this.proposeStructuredAction({ taskGoal, step, snap });
       await this.executeAction(action, snap);
       ok = await this.applyVerifications(step);
-      if (ok) return true;
+      if (ok) {
+        outcome = 'ok';
+        return true;
+      }
 
       // 2) Optional vision executor fallback (bounded).
       const enabled = step.visionExecutorEnabled ?? true;
       const maxAttempts = step.maxVisionExecutorAttempts ?? 1;
       if (enabled && maxAttempts > 0) {
         ok = await this.visionExecutorAttempt({ taskGoal, step, snap });
+        outcome = ok ? 'ok' : 'verification_failed';
         return ok;
       }
 
+      outcome = 'verification_failed';
       return false;
     } catch (error: any) {
+      errorMessage = String(error?.message ?? error);
+      outcome = 'exception';
       this.runtime.emitStepEnd({
         success: false,
         verifyPassed: false,
-        error: String(error?.message ?? error),
+        error: errorMessage,
         outcome: 'exception',
       });
       emitted = true;
@@ -120,6 +143,28 @@ export class RuntimeAgent {
           outcome: ok ? 'ok' : 'verification_failed',
         });
       }
+      await this.runHook(onStepEnd, {
+        stepId,
+        stepIndex: this.runtime.stepIndex,
+        goal: step.goal,
+        attempt: 0,
+        url: this.runtime.lastSnapshot?.url ?? this.runtime.page?.url?.() ?? null,
+        success: ok,
+        outcome,
+        error: errorMessage,
+      });
+    }
+  }
+
+  private async runHook(
+    hook: ((ctx: StepHookContext) => void | Promise<void>) | undefined,
+    ctx: StepHookContext
+  ): Promise<void> {
+    if (!hook) return;
+    try {
+      await Promise.resolve(hook(ctx));
+    } catch {
+      // best-effort hook; ignore errors
     }
   }
 

@@ -2,7 +2,7 @@
  * Test browser proxy support and Phase 2 features (viewport, from_existing, from_page)
  */
 
-import { SentienceBrowser } from '../src/browser';
+import { SentienceBrowser, domainMatches, extractHost, isDomainAllowed } from '../src/browser';
 import { chromium, BrowserContext, Page } from 'playwright';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -332,5 +332,71 @@ describe('Browser Proxy Support', () => {
         await browserInstance.close();
       }
     }, 30000);
+  });
+});
+
+describe('Browser Domain Policies', () => {
+  it('should match domains with suffix rules', () => {
+    expect(domainMatches('sub.example.com', 'example.com')).toBe(true);
+    expect(domainMatches('example.com', 'example.com')).toBe(true);
+    expect(domainMatches('example.com', '*.example.com')).toBe(true);
+    expect(domainMatches('other.com', 'example.com')).toBe(false);
+    expect(domainMatches('example.com', 'https://example.com')).toBe(true);
+    expect(domainMatches('localhost', 'http://localhost:3000')).toBe(true);
+  });
+
+  it('should enforce allow/deny lists', () => {
+    expect(isDomainAllowed('a.example.com', ['example.com'], [])).toBe(true);
+    expect(isDomainAllowed('a.example.com', ['example.com'], ['bad.com'])).toBe(true);
+    expect(isDomainAllowed('bad.example.com', [], ['example.com'])).toBe(false);
+    expect(isDomainAllowed('x.com', ['example.com'], [])).toBe(false);
+    expect(isDomainAllowed('example.com', ['https://example.com'], [])).toBe(true);
+  });
+
+  it('should extract host from ports', () => {
+    expect(extractHost('http://localhost:3000')).toBe('localhost');
+    expect(extractHost('localhost:3000')).toBe('localhost');
+  });
+});
+
+describe('Browser keepAlive', () => {
+  it('should skip close when keepAlive is true', async () => {
+    const browser = new SentienceBrowser(
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+
+    const dummyContext = {
+      closed: false,
+      close: jest.fn().mockImplementation(() => {
+        dummyContext.closed = true;
+      }),
+    };
+    const dummyBrowser = {
+      closed: false,
+      close: jest.fn().mockImplementation(() => {
+        dummyBrowser.closed = true;
+      }),
+    };
+    (browser as any).context = dummyContext;
+    (browser as any).browser = dummyBrowser;
+    (browser as any).extensionPath = null;
+    (browser as any).userDataDir = null;
+
+    const result = await browser.close();
+    expect(result).toBeNull();
+    expect(dummyContext.closed).toBe(false);
+    expect(dummyBrowser.closed).toBe(false);
   });
 });
