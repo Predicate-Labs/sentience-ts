@@ -787,6 +787,16 @@ export class AgentRuntime {
     if (!captcha || !captcha.detected) {
       return false;
     }
+    // Many pages load CAPTCHA libraries proactively. Only block when we have
+    // evidence it's actually present/active (iframe/url/text hits), otherwise
+    // interactive runs can "do nothing" and time out.
+    const evidence = captcha.evidence;
+    const iframeHits = evidence?.iframe_src_hits ?? [];
+    const urlHits = evidence?.url_hits ?? [];
+    const textHits = evidence?.text_hits ?? [];
+    if (iframeHits.length === 0 && urlHits.length === 0 && textHits.length === 0) {
+      return false;
+    }
     const confidence = captcha.confidence ?? 0;
     const minConfidence = options.minConfidence ?? DEFAULT_CAPTCHA_OPTIONS.minConfidence;
     return confidence >= minConfidence;
