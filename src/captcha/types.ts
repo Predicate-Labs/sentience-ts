@@ -16,6 +16,8 @@ export interface CaptchaContext {
   snapshotPath?: string;
   liveSessionUrl?: string;
   meta?: Record<string, string>;
+  evaluateJs?: (code: string) => Promise<any>;
+  pageControl?: PageControlHook;
 }
 
 export interface CaptchaResolution {
@@ -24,6 +26,11 @@ export interface CaptchaResolution {
   handledBy?: 'human' | 'customer_system' | 'unknown';
   timeoutMs?: number;
   pollMs?: number;
+}
+
+export interface PageControlHook {
+  evaluateJs: (code: string) => Promise<any>;
+  getUrl?: () => Promise<string>;
 }
 
 export type CaptchaHandler = (

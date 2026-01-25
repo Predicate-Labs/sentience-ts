@@ -809,6 +809,13 @@ export class AgentRuntime {
       url: snapshot.url,
       source,
       captcha: snapshot.diagnostics?.captcha ?? null,
+      evaluateJs: async (code: string) => {
+        const result = await this.evaluateJs({ code });
+        if (!result.ok) {
+          throw new Error(result.error ?? 'evaluateJs failed');
+        }
+        return result.value;
+      },
     };
   }
 
