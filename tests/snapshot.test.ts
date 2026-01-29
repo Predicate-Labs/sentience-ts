@@ -95,7 +95,7 @@ describe('Element ML Fields', () => {
     };
 
     expect(element.id).toBe(1);
-    expect(element).not.toHaveProperty('rerank_index');
+    expect(element).not.toHaveProperty('fused_rank_index');
     expect(element).not.toHaveProperty('heuristic_index');
     expect(element).not.toHaveProperty('ml_probability');
     expect(element).not.toHaveProperty('ml_score');
@@ -112,13 +112,13 @@ describe('Element ML Fields', () => {
       in_viewport: true,
       is_occluded: false,
       z_index: 1,
-      rerank_index: 0,
+      fused_rank_index: 0,
       heuristic_index: 5,
       ml_probability: 0.95,
       ml_score: 2.34,
     };
 
-    expect(element.rerank_index).toBe(0);
+    expect(element.fused_rank_index).toBe(0);
     expect(element.heuristic_index).toBe(5);
     expect(element.ml_probability).toBe(0.95);
     expect(element.ml_score).toBe(2.34);
@@ -135,13 +135,46 @@ describe('Element ML Fields', () => {
       in_viewport: true,
       is_occluded: false,
       z_index: 0,
-      rerank_index: 1,
+      fused_rank_index: 1,
       ml_probability: 0.87,
     };
 
-    expect(element.rerank_index).toBe(1);
+    expect(element.fused_rank_index).toBe(1);
     expect(element).not.toHaveProperty('heuristic_index');
     expect(element.ml_probability).toBe(0.87);
     expect(element).not.toHaveProperty('ml_score');
+  });
+});
+
+describe('Snapshot ML Rerank Metadata', () => {
+  it('should accept snapshot with ml_rerank metadata', () => {
+    const snap = {
+      status: 'success' as const,
+      url: 'https://example.com',
+      elements: [],
+      ml_rerank: {
+        enabled: true,
+        applied: false,
+        reason: 'low_confidence',
+        candidate_count: 25,
+        top_probability: 0.42,
+        min_confidence: 0.6,
+        is_high_confidence: false,
+        tags: {
+          repeated: true,
+          sponsored_ish: true,
+          non_sponsored: false,
+          pos: true,
+          occ: true,
+          vocc: false,
+          short: true,
+          action_ish: false,
+          nav_ish: false,
+        },
+      },
+    };
+
+    expect(snap.ml_rerank.enabled).toBe(true);
+    expect(snap.ml_rerank.is_high_confidence).toBe(false);
   });
 });

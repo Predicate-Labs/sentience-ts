@@ -39,7 +39,7 @@ export interface TraceElement {
   in_viewport?: boolean;
   is_occluded?: boolean;
   z_index?: number;
-  rerank_index?: number;
+  fused_rank_index?: number;
   heuristic_index?: number;
   ml_probability?: number;
   ml_score?: number;

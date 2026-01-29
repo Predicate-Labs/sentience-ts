@@ -47,7 +47,7 @@ export class SnapshotEventBuilder {
         in_viewport: el.in_viewport,
         is_occluded: el.is_occluded,
         z_index: el.z_index,
-        rerank_index: el.rerank_index,
+        fused_rank_index: el.fused_rank_index,
         heuristic_index: el.heuristic_index,
         ml_probability: el.ml_probability,
         ml_score: el.ml_score,

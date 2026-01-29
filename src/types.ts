@@ -33,7 +33,7 @@ export interface Element {
   z_index: number;
 
   // ML reranking metadata (optional - can be absent or null)
-  rerank_index?: number; // 0-based, The rank after ML reranking
+  fused_rank_index?: number; // 0-based, The rank after ML reranking
   heuristic_index?: number; // 0-based, Where it would have been without ML
   ml_probability?: number; // Confidence score from ONNX model (0.0 - 1.0)
   ml_score?: number; // Raw logit score (optional, for debugging)
@@ -143,6 +143,30 @@ export interface GridInfo {
   viewport_coverage?: number;
 }
 
+export interface MlRerankTags {
+  repeated: boolean;
+  sponsored_ish: boolean;
+  non_sponsored: boolean;
+  pos: boolean;
+  occ: boolean;
+  vocc: boolean;
+  short: boolean;
+  action_ish: boolean;
+  nav_ish: boolean;
+}
+
+export interface MlRerankInfo {
+  enabled: boolean;
+  applied: boolean;
+  reason?: string | null;
+  candidate_count?: number | null;
+  top_probability?: number | null;
+  min_confidence?: number | null;
+  is_high_confidence?: boolean | null;
+  tags?: MlRerankTags | null;
+  error?: string | null;
+}
+
 export interface Snapshot {
   status: 'success' | 'error';
   timestamp?: string;
@@ -162,6 +186,8 @@ export interface Snapshot {
   modal_detected?: boolean;
   /** Array of GridInfo for detected modal grids */
   modal_grids?: GridInfo[];
+  /** ML rerank metadata (optional) */
+  ml_rerank?: MlRerankInfo;
 }
 
 export interface StepHookContext {
