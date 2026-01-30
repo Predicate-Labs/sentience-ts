@@ -1,6 +1,6 @@
 {
   "name": "sentienceapi",
-  "version": "0.99.5",
+  "version": "0.99.6",
   "description": "TypeScript SDK for Sentience AI Agent Browser Automation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
