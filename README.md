@@ -78,6 +78,68 @@ async function main(): Promise<void> {
 void main();
 ```
 
+## SentienceDebugger: attach to your existing agent framework (sidecar mode)
+
+If you already have an agent loop (LangGraph, custom planner/executor), keep it and attach Sentience as a **verifier + trace layer**.
+
+Key idea: your agent still executes actions — Sentience **snapshots and verifies outcomes**.
+
+```ts
+import type { Page } from 'playwright';
+import { SentienceDebugger, Tracer, JsonlTraceSink, exists, urlContains } from 'sentienceapi';
+
+async function runExistingAgent(page: Page): Promise<void> {
+  const tracer = new Tracer('run-123', new JsonlTraceSink('trace.jsonl'));
+  const dbg = SentienceDebugger.attach(page, tracer);
+
+  await dbg.step('agent_step: navigate + verify', async () => {
+    // 1) Let your framework do whatever it does
+    await yourAgent.step();
+
+    // 2) Snapshot what the agent produced
+    await dbg.snapshot({ limit: 60 });
+
+    // 3) Verify outcomes (with bounded retries)
+    await dbg
+      .check(urlContains('example.com'), 'on_domain', true)
+      .eventually({ timeoutMs: 10_000 });
+    await dbg.check(exists('role=heading'), 'has_heading').eventually({ timeoutMs: 10_000 });
+  });
+}
+```
+
+## SDK-driven full loop (snapshots + actions)
+
+If you want Sentience to drive the loop end-to-end, you can use the SDK primitives directly: take a snapshot, select elements, act, then verify.
+
+```ts
+import { SentienceBrowser, snapshot, find, typeText, click, waitFor } from 'sentienceapi';
+
+async function loginExample(): Promise<void> {
+  const browser = new SentienceBrowser();
+  await browser.start();
+  const page = browser.getPage();
+  if (!page) throw new Error('no page');
+
+  await page.goto('https://example.com/login');
+
+  const snap = await snapshot(browser);
+  const email = find(snap, "role=textbox text~'email'");
+  const password = find(snap, "role=textbox text~'password'");
+  const submit = find(snap, "role=button text~'sign in'");
+  if (!email || !password || !submit) throw new Error('login form not found');
+
+  await typeText(browser, email.id, 'user@example.com');
+  await typeText(browser, password.id, 'password123');
+  await click(browser, submit.id);
+
+  const ok = await waitFor(browser, "role=heading text~'Dashboard'", 10_000);
+  if (!ok.found) throw new Error('login failed');
+
+  await browser.close();
+}
+```
+
 ## Capabilities (lifecycle guarantees)
 
 ### Controlled perception
