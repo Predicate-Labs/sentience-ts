@@ -55,6 +55,7 @@ import { Tracer } from './tracing/tracer';
 import { TraceEventBuilder } from './utils/trace-event-builder';
 import { LLMProvider } from './llm-provider';
 import { FailureArtifactBuffer, FailureArtifactsOptions } from './failure-artifacts';
+import { SentienceBrowser } from './browser';
 import type { ToolRegistry } from './tools/registry';
 import {
   CaptchaContext,
@@ -67,6 +68,13 @@ import {
 // Define a minimal browser interface to avoid circular dependencies
 interface BrowserLike {
   snapshot(page: Page, options?: Record<string, any>): Promise<Snapshot>;
+}
+
+export interface AttachOptions {
+  apiKey?: string;
+  apiUrl?: string;
+  toolRegistry?: ToolRegistry;
+  browser?: BrowserLike;
 }
 
 const DEFAULT_CAPTCHA_OPTIONS: Required<Omit<CaptchaOptions, 'handler' | 'resetSession'>> = {
@@ -462,6 +470,30 @@ export class AgentRuntime {
 
   check(predicate: Predicate, label: string, required: boolean = false): AssertionHandle {
     return new AssertionHandle(this, predicate, label, required);
+  }
+
+  /**
+   * Create AgentRuntime from a raw Playwright Page (sidecar mode).
+   */
+  static fromPlaywrightPage(page: Page, tracer: Tracer, options?: AttachOptions): AgentRuntime {
+    const browser =
+      options?.browser ??
+      ((): BrowserLike => {
+        const sentienceBrowser = SentienceBrowser.fromPage(page, options?.apiKey, options?.apiUrl);
+        return {
+          snapshot: async (_page: Page, snapshotOptions?: Record<string, any>) =>
+            sentienceBrowser.snapshot(snapshotOptions),
+        };
+      })();
+
+    return new AgentRuntime(browser, page, tracer, options?.toolRegistry);
+  }
+
+  /**
+   * Sidecar alias for fromPlaywrightPage().
+   */
+  static attach(page: Page, tracer: Tracer, options?: AttachOptions): AgentRuntime {
+    return AgentRuntime.fromPlaywrightPage(page, tracer, options);
   }
 
   /**

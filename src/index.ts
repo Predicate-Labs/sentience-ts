@@ -87,6 +87,7 @@ export {
   isCollapsed,
 } from './verification';
 export { AgentRuntime, AssertionHandle, AssertionRecord, EventuallyOptions } from './agent-runtime';
+export { SentienceDebugger } from './debugger';
 export { RuntimeAgent } from './runtime-agent';
 export type { RuntimeStep, StepVerification } from './runtime-agent';
 export { parseVisionExecutorAction, executeVisionExecutorAction } from './vision-executor';
