@@ -424,9 +424,10 @@ async function snapshotViaApi(
     if (e instanceof SnapshotGatewayError) {
       throw e;
     }
+    const errType = e instanceof Error ? e.name : typeof e;
     const errMsg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     throw new SnapshotGatewayError(
-      `Server-side snapshot API failed: url=${gatewayUrl} err=${SnapshotGatewayError.snip(errMsg, 220)}. Try using use_api: false to use local extension instead.`,
+      `Server-side snapshot API failed: url=${gatewayUrl} err_type=${SnapshotGatewayError.snip(errType, 80)} err=${SnapshotGatewayError.snip(errMsg, 220)}. Try using use_api: false to use local extension instead.`,
       { url: gatewayUrl, cause: e }
     );
   }
