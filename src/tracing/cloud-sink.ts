@@ -774,6 +774,57 @@ export class CloudTraceSink extends TraceSink {
   }
 
   /**
+   * Normalize screenshot data by extracting base64 from data URL if needed.
+   *
+   * Handles both formats:
+   * - Data URL: "data:image/jpeg;base64,/9j/4AAQ..."
+   * - Pure base64: "/9j/4AAQ..."
+   *
+   * @param screenshotRaw - Raw screenshot data (data URL or base64)
+   * @param defaultFormat - Default format if not detected from data URL
+   * @returns Tuple of [base64String, formatString]
+   */
+  private _normalizeScreenshotData(
+    screenshotRaw: string,
+    defaultFormat: string = 'jpeg'
+  ): [string, string] {
+    if (!screenshotRaw) {
+      return ['', defaultFormat];
+    }
+
+    // Check if it's a data URL
+    if (screenshotRaw.startsWith('data:image')) {
+      // Extract format from "data:image/jpeg;base64,..." or "data:image/png;base64,..."
+      try {
+        // Split on comma to get the base64 part
+        if (screenshotRaw.includes(',')) {
+          const [header, base64Data] = screenshotRaw.split(',', 2);
+          // Extract format from header: "data:image/jpeg;base64"
+          if (header.includes('/') && header.includes(';')) {
+            const formatPart = header.split('/')[1]?.split(';')[0];
+            if (formatPart === 'jpeg' || formatPart === 'jpg') {
+              return [base64Data, 'jpeg'];
+            } else if (formatPart === 'png') {
+              return [base64Data, 'png'];
+            }
+          }
+          return [base64Data, defaultFormat];
+        } else {
+          // Malformed data URL - return as-is with warning
+          this.logger?.warn('Malformed data URL in screenshot_base64 (missing comma)');
+          return [screenshotRaw, defaultFormat];
+        }
+      } catch (error: any) {
+        this.logger?.warn(`Error parsing screenshot data URL: ${error.message}`);
+        return [screenshotRaw, defaultFormat];
+      }
+    }
+
+    // Already pure base64
+    return [screenshotRaw, defaultFormat];
+  }
+
+  /**
    * Extract screenshots from trace events.
    *
    * @returns Map of sequence number to screenshot data
@@ -798,15 +849,24 @@ export class CloudTraceSink extends TraceSink {
           // Check if this is a snapshot event with screenshot
           if (event.type === 'snapshot') {
             const data = event.data || {};
-            const screenshotBase64 = data.screenshot_base64;
+            const screenshotRaw = data.screenshot_base64;
 
-            if (screenshotBase64) {
-              sequence += 1;
-              screenshots.set(sequence, {
-                base64: screenshotBase64,
-                format: data.screenshot_format || 'jpeg',
-                stepId: event.step_id,
-              });
+            if (screenshotRaw) {
+              // Normalize: extract base64 from data URL if needed
+              // Handles both "data:image/jpeg;base64,..." and pure base64
+              const [screenshotBase64, screenshotFormat] = this._normalizeScreenshotData(
+                screenshotRaw,
+                data.screenshot_format || 'jpeg'
+              );
+
+              if (screenshotBase64) {
+                sequence += 1;
+                screenshots.set(sequence, {
+                  base64: screenshotBase64,
+                  format: screenshotFormat,
+                  stepId: event.step_id,
+                });
+              }
             }
           }
         } catch {

@@ -339,6 +339,96 @@ describe('CloudTraceSink', () => {
     });
   });
 
+  describe('Screenshot data URL handling', () => {
+    it('should normalize screenshot data URLs to pure base64', async () => {
+      const runId = 'test-run-' + Date.now();
+      const sink = new CloudTraceSink(uploadUrl, runId);
+
+      // Test the private _normalizeScreenshotData method via type casting
+      const sinkAny = sink as any;
+
+      // Test JPEG data URL
+      const [jpegBase64, jpegFormat] = sinkAny._normalizeScreenshotData(
+        'data:image/jpeg;base64,/9j/4AAQSkZJRg...',
+        'png'
+      );
+      expect(jpegBase64).toBe('/9j/4AAQSkZJRg...');
+      expect(jpegFormat).toBe('jpeg');
+
+      // Test PNG data URL
+      const [pngBase64, pngFormat] = sinkAny._normalizeScreenshotData(
+        'data:image/png;base64,iVBORw0KGgoAAAA...',
+        'jpeg'
+      );
+      expect(pngBase64).toBe('iVBORw0KGgoAAAA...');
+      expect(pngFormat).toBe('png');
+
+      // Test pure base64 (should pass through unchanged)
+      const [pureBase64, pureFormat] = sinkAny._normalizeScreenshotData(
+        '/9j/4AAQSkZJRg...',
+        'jpeg'
+      );
+      expect(pureBase64).toBe('/9j/4AAQSkZJRg...');
+      expect(pureFormat).toBe('jpeg');
+
+      // Test empty string
+      const [emptyBase64, emptyFormat] = sinkAny._normalizeScreenshotData('', 'jpeg');
+      expect(emptyBase64).toBe('');
+      expect(emptyFormat).toBe('jpeg');
+
+      // Clean up
+      await sink.close();
+    });
+
+    it('should handle data URL screenshots when extracting from trace', async () => {
+      const runId = 'test-run-' + Date.now();
+      const sink = new CloudTraceSink(uploadUrl, runId);
+
+      // Create test screenshot as a data URL (how some demos send it)
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAE=';
+      const dataUrl = `data:image/png;base64,${testImageBase64}`;
+
+      // Emit snapshot event with data URL
+      sink.emit({
+        v: 1,
+        type: 'snapshot',
+        ts: new Date().toISOString(),
+        run_id: runId,
+        seq: 1,
+        step_id: 'step-1',
+        data: {
+          url: 'https://example.com',
+          element_count: 10,
+          screenshot_base64: dataUrl, // Data URL, not pure base64
+          screenshot_format: 'png',
+        },
+      });
+
+      // Close the write stream first
+      const sinkAny = sink as any;
+      if (sinkAny.writeStream && !sinkAny.writeStream.destroyed) {
+        await new Promise<void>(resolve => {
+          sinkAny.writeStream.end(() => resolve());
+        });
+      }
+
+      // Extract screenshots - should normalize data URL to pure base64
+      const screenshots = await sinkAny._extractScreenshotsFromTrace();
+
+      expect(screenshots.size).toBe(1);
+      expect(screenshots.has(1)).toBe(true);
+
+      const screenshot = screenshots.get(1);
+      // Verify the base64 was extracted from data URL (no "data:image" prefix)
+      expect(screenshot.base64).toBe(testImageBase64);
+      expect(screenshot.base64.startsWith('data:')).toBe(false);
+      expect(screenshot.format).toBe('png');
+
+      // Clean up
+      await sink.close();
+    });
+  });
+
   describe('Index upload', () => {
     let indexServer: http.Server;
     let indexServerPort: number;
