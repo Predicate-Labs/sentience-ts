@@ -305,6 +305,7 @@ describe('createTracer', () => {
     it('should work with agent workflow (Free tier)', async () => {
       const tracer = await createTracer({
         runId: 'agent-test',
+        autoEmitRunStart: false, // Disable auto-emit since we're manually emitting
       });
 
       tracer.emitRunStart('SentienceAgent', 'gpt-4');
