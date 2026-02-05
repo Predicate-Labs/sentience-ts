@@ -104,6 +104,8 @@ export interface SnapshotOptions {
   gridId?: number | null;
   /** Use server-side API (Pro/Enterprise tier) */
   useApi?: boolean;
+  /** Gateway snapshot timeout (milliseconds) */
+  gatewayTimeoutMs?: number;
   /** API key for server-side processing */
   sentienceApiKey?: string;
   /** Goal/task description for ordinal support and gateway reranking */
