@@ -863,7 +863,41 @@ export class AgentRuntime {
     const iframeHits = evidence?.iframe_src_hits ?? [];
     const urlHits = evidence?.url_hits ?? [];
     const textHits = evidence?.text_hits ?? [];
+    const selectorHits = evidence?.selector_hits ?? [];
     if (iframeHits.length === 0 && urlHits.length === 0 && textHits.length === 0) {
+      return false;
+    }
+    // Heuristic: many sites include passive reCAPTCHA badges (v3) that should not block.
+    // Only block when there is evidence of an interactive challenge.
+    const hitsAll = [...iframeHits, ...urlHits, ...textHits, ...selectorHits];
+    const hitsLower = hitsAll.map(hit => String(hit || '').toLowerCase()).filter(Boolean);
+    const joinedHits = hitsLower.join(' ');
+    const strongText = [
+      "i'm not a robot",
+      'verify you are human',
+      'human verification',
+      'complete the security check',
+      'please verify',
+    ].some(needle => joinedHits.includes(needle));
+    const strongIframe = hitsLower.some(hit =>
+      ['api2/bframe', 'hcaptcha', 'turnstile'].some(needle => hit.includes(needle))
+    );
+    const strongSelector = hitsLower.some(hit =>
+      [
+        'g-recaptcha-response',
+        'h-captcha-response',
+        'cf-turnstile-response',
+        'recaptcha-checkbox',
+        'hcaptcha-checkbox',
+      ].some(needle => hit.includes(needle))
+    );
+    const onlyGeneric =
+      !strongText &&
+      !strongIframe &&
+      !strongSelector &&
+      hitsLower.length > 0 &&
+      hitsLower.every(hit => hit.includes('captcha') || hit.includes('recaptcha'));
+    if (onlyGeneric) {
       return false;
     }
     const confidence = captcha.confidence ?? 0;

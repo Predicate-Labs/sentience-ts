@@ -58,6 +58,7 @@ export interface SnapshotOptions {
     min_z_index?: number;
   };
   use_api?: boolean; // Force use of server-side API if True, local extension if False
+  gatewayTimeoutMs?: number; // Gateway snapshot timeout in milliseconds
   save_trace?: boolean; // Save raw_elements to JSON for benchmarking/training
   trace_path?: string; // Path to save trace file (default: "trace_{timestamp}.json")
   goal?: string; // Optional goal/task description for the snapshot
@@ -317,11 +318,20 @@ async function snapshotViaApi(
   };
 
   try {
-    const response = await fetch(gatewayUrl, {
-      method: 'POST',
-      headers,
-      body: payloadJson,
-    });
+    const timeoutMs = options.gatewayTimeoutMs ?? 30000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(gatewayUrl, {
+        method: 'POST',
+        headers,
+        body: payloadJson,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       let errorText: string | undefined = undefined;
