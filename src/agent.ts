@@ -535,3 +535,9 @@ export class SentienceAgent {
     }
   }
 }
+
+/**
+ * Predicate rebrand alias for SentienceAgent.
+ * Kept as a runtime alias to avoid breaking existing integrations.
+ */
+export const PredicateAgent = SentienceAgent;

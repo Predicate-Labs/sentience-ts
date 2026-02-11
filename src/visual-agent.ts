@@ -906,3 +906,9 @@ Return ONLY the integer ID number from the label, nothing else.`;
     }
   }
 }
+
+/**
+ * Predicate rebrand alias for SentienceVisualAgent.
+ * Kept as a runtime alias to avoid breaking existing integrations.
+ */
+export const PredicateVisualAgent = SentienceVisualAgent;
