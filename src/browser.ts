@@ -1021,3 +1021,9 @@ export class SentienceBrowser implements IBrowser {
     return finalPath;
   }
 }
+
+/**
+ * Predicate rebrand alias for SentienceBrowser.
+ * Kept as a runtime alias to avoid breaking existing integrations.
+ */
+export const PredicateBrowser = SentienceBrowser;

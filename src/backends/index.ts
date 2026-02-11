@@ -108,6 +108,7 @@ export {
 // SentienceContext (Token-Slasher Context Middleware)
 export {
   SentienceContext,
+  PredicateContext,
   SentienceContextState,
   SentienceContextOptions,
   TopElementSelector,

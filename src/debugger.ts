@@ -131,3 +131,9 @@ export class SentienceDebugger {
     return new DebuggerAssertionHandle(this, predicate, label, required, true, openedStepId);
   }
 }
+
+/**
+ * Predicate rebrand alias for SentienceDebugger.
+ * Kept as a runtime alias to avoid breaking existing integrations.
+ */
+export const PredicateDebugger = SentienceDebugger;

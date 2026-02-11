@@ -1,5 +1,10 @@
 # Running Tests - TypeScript SDK
 
+## Naming for new tests
+
+Use `Predicate*` names in new test code (for example `PredicateBrowser`, `PredicateAgent`, `PredicateDebugger`).
+Legacy `Sentience*` names still work as compatibility aliases, but new tests should prefer the rebranded names.
+
 ## Prerequisites
 
 ```bash
@@ -82,30 +87,30 @@ Create test files in `tests/` directory:
 ### Example: `tests/inspector.test.ts`
 
 ```typescript
-import { SentienceBrowser, inspect } from '../src';
+import { PredicateBrowser, inspect } from '../src';
 
 describe('Inspector', () => {
   it('should start and stop', async () => {
-    const browser = new SentienceBrowser(undefined, undefined, false);
+    const browser = new PredicateBrowser(undefined, undefined, false);
     await browser.start();
-    
+
     try {
       await browser.getPage().goto('https://example.com');
       await browser.getPage().waitForLoadState('networkidle');
-      
+
       const inspector = inspect(browser);
       await inspector.start();
-      
-      const active = await browser.getPage().evaluate(
-        () => (window as any).__sentience_inspector_active === true
-      );
+
+      const active = await browser
+        .getPage()
+        .evaluate(() => (window as any).__sentience_inspector_active === true);
       expect(active).toBe(true);
-      
+
       await inspector.stop();
-      
-      const inactive = await browser.getPage().evaluate(
-        () => (window as any).__sentience_inspector_active === true
-      );
+
+      const inactive = await browser
+        .getPage()
+        .evaluate(() => (window as any).__sentience_inspector_active === true);
       expect(inactive).toBe(false);
     } finally {
       await browser.close();
@@ -117,27 +122,27 @@ describe('Inspector', () => {
 ### Example: `tests/recorder.test.ts`
 
 ```typescript
-import { SentienceBrowser, record } from '../src';
+import { PredicateBrowser, record } from '../src';
 
 describe('Recorder', () => {
   it('should record click events', async () => {
-    const browser = new SentienceBrowser(undefined, undefined, false);
+    const browser = new PredicateBrowser(undefined, undefined, false);
     await browser.start();
-    
+
     try {
       await browser.getPage().goto('https://example.com');
       await browser.getPage().waitForLoadState('networkidle');
-      
+
       const rec = record(browser);
       rec.start();
-      
+
       rec.recordClick(1, 'role=button');
-      
+
       const trace = rec.getTrace();
       expect(trace.steps.length).toBe(1);
       expect(trace.steps[0].type).toBe('click');
       expect(trace.steps[0].element_id).toBe(1);
-      
+
       rec.stop();
     } finally {
       await browser.close();
@@ -202,25 +207,29 @@ npm test -- tests/inspector.test.ts -t "should start"
 ## Troubleshooting
 
 ### TypeScript compilation errors
+
 ```bash
 npm run build
 ```
 
 ### Browser not found
+
 ```bash
 npx playwright install chromium
 ```
 
 ### Extension not found
+
 Make sure the extension is built:
+
 ```bash
 cd ../sentience-chrome
 ./build.sh
 ```
 
 ### Module not found errors
+
 ```bash
 npm install
 npm run build
 ```
-

@@ -474,3 +474,9 @@ export class SentienceContext {
     return this._selector;
   }
 }
+
+/**
+ * Predicate rebrand alias for SentienceContext.
+ * Kept as a runtime alias to avoid breaking existing integrations.
+ */
+export const PredicateContext = SentienceContext;

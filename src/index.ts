@@ -2,7 +2,7 @@
  * Sentience TypeScript SDK - AI Agent Browser Automation
  */
 
-export { SentienceBrowser, PermissionPolicy } from './browser';
+export { SentienceBrowser, PredicateBrowser, PermissionPolicy } from './browser';
 export { snapshot, SnapshotOptions, SnapshotGatewayError } from './snapshot';
 export { query, find, parseSelector } from './query';
 export {
@@ -46,8 +46,8 @@ export {
   AnthropicProvider,
   GLMProvider,
 } from './llm-provider';
-export { SentienceAgent, AgentActResult, HistoryEntry, TokenStats } from './agent';
-export { SentienceVisualAgent } from './visual-agent';
+export { SentienceAgent, PredicateAgent, AgentActResult, HistoryEntry, TokenStats } from './agent';
+export { SentienceVisualAgent, PredicateVisualAgent } from './visual-agent';
 
 // Conversational Agent Layer (v0.3.0+)
 export {
@@ -87,7 +87,7 @@ export {
   isCollapsed,
 } from './verification';
 export { AgentRuntime, AssertionHandle, AssertionRecord, EventuallyOptions } from './agent-runtime';
-export { SentienceDebugger } from './debugger';
+export { SentienceDebugger, PredicateDebugger } from './debugger';
 export { RuntimeAgent } from './runtime-agent';
 export type { RuntimeStep, StepVerification } from './runtime-agent';
 export { parseVisionExecutorAction, executeVisionExecutorAction } from './vision-executor';
