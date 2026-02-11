@@ -400,7 +400,7 @@ async function main() {
       '  sentience record --proxy http://user:pass@proxy.com:8000 --url https://example.com'
     );
     console.log('  sentience gen trace.json --lang py --output script.py');
-    console.log('  sentience driver --url https://example.com');
+    console.log('  predicate driver --url https://example.com');
     process.exit(1);
   }
 }

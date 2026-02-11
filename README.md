@@ -28,7 +28,7 @@ The core loop is:
 ## Install
 
 ```bash
-npm install sentienceapi
+npm install @predicatelabs/sdk
 npx playwright install chromium
 ```
 
@@ -41,9 +41,9 @@ npx playwright install chromium
 ## Quickstart: a verification-first loop
 
 ```ts
-import { SentienceBrowser, AgentRuntime } from 'sentienceapi';
-import { JsonlTraceSink, Tracer } from 'sentienceapi';
-import { exists, urlContains } from 'sentienceapi';
+import { SentienceBrowser, AgentRuntime } from '@predicatelabs/sdk';
+import { JsonlTraceSink, Tracer } from '@predicatelabs/sdk';
+import { exists, urlContains } from '@predicatelabs/sdk';
 import type { Page } from 'playwright';
 
 async function main(): Promise<void> {
@@ -86,7 +86,7 @@ Key idea: your agent still executes actions — Sentience **snapshots and verifi
 
 ```ts
 import type { Page } from 'playwright';
-import { SentienceDebugger, Tracer, JsonlTraceSink, exists, urlContains } from 'sentienceapi';
+import { SentienceDebugger, Tracer, JsonlTraceSink, exists, urlContains } from '@predicatelabs/sdk';
 
 async function runExistingAgent(page: Page): Promise<void> {
   const tracer = new Tracer('run-123', new JsonlTraceSink('trace.jsonl'));
@@ -113,7 +113,7 @@ async function runExistingAgent(page: Page): Promise<void> {
 If you want Sentience to drive the loop end-to-end, you can use the SDK primitives directly: take a snapshot, select elements, act, then verify.
 
 ```ts
-import { SentienceBrowser, snapshot, find, typeText, click, waitFor } from 'sentienceapi';
+import { SentienceBrowser, snapshot, find, typeText, click, waitFor } from '@predicatelabs/sdk';
 
 async function loginExample(): Promise<void> {
   const browser = new SentienceBrowser();
@@ -173,7 +173,7 @@ async function loginExample(): Promise<void> {
 ## ToolRegistry (LLM-callable tools)
 
 ```ts
-import { ToolRegistry, registerDefaultTools } from 'sentienceapi';
+import { ToolRegistry, registerDefaultTools } from '@predicatelabs/sdk';
 
 const registry = new ToolRegistry();
 registerDefaultTools(registry);
@@ -185,8 +185,8 @@ const toolsForLLM = registry.llmTools();
 Chrome permission prompts are outside the DOM and can be invisible to snapshots. Prefer setting a policy **before navigation**.
 
 ```ts
-import { SentienceBrowser } from 'sentienceapi';
-import type { PermissionPolicy } from 'sentienceapi';
+import { SentienceBrowser } from '@predicatelabs/sdk';
+import type { PermissionPolicy } from '@predicatelabs/sdk';
 
 const policy: PermissionPolicy = {
   default: 'clear',
@@ -220,7 +220,7 @@ If your backend supports it, you can also use ToolRegistry permission tools (`gr
 ## Downloads (verification predicate)
 
 ```ts
-import { downloadCompleted } from 'sentienceapi';
+import { downloadCompleted } from '@predicatelabs/sdk';
 
 runtime.assert(downloadCompleted('report.csv'), 'download_ok', true);
 ```
@@ -230,7 +230,7 @@ runtime.assert(downloadCompleted('report.csv'), 'download_ok', true);
 - **Manual driver CLI**:
 
 ```bash
-npx sentience driver --url https://example.com
+npx predicate driver --url https://example.com
 ```
 
 - **Verification + artifacts + debugging with time-travel traces (Sentience Studio demo)**:

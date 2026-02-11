@@ -1,5 +1,5 @@
 {
-  "name": "sentienceapi",
+  "name": "@predicatelabs/sdk",
   "version": "0.99.7",
   "description": "TypeScript SDK for Sentience AI Agent Browser Automation",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "cli": "ts-node src/cli.ts"
   },
   "bin": {
-    "sentience": "./dist/cli.js"
+    "predicate": "./dist/cli.js"
   },
   "dependencies": {
     "canvas": "^3.2.1",

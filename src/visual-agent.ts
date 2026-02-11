@@ -675,7 +675,7 @@ Return ONLY the integer ID number from the label, nothing else.`;
           playgroundPath = path.join(cwd, 'playground', 'images');
         } else {
           // Check if we're in a playground context via module path
-          const modulePaths = require.resolve.paths('sentienceapi') || [];
+          const modulePaths = require.resolve.paths('@predicatelabs/sdk') || [];
           for (const modulePath of modulePaths) {
             const potentialPlayground = path.join(modulePath, '..', 'playground', 'images');
             if (fs.existsSync(path.dirname(potentialPlayground))) {
