@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sentience Semantic Visual Grounding Extractor",
-  "version": "2.8.6",
+  "version": "2.9.0",
   "description": "Extract semantic visual grounding data from web pages",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],

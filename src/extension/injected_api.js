@@ -558,7 +558,103 @@
             }(options.waitForStability || {});
             const rawData = [];
             window.sentience_registry = [];
-            getAllElements().forEach((el, idx) => {
+            const nodes = getAllElements(), parseAriaInt = (el, attr) => {
+                try {
+                    const raw = el.getAttribute ? el.getAttribute(attr) : null;
+                    if (!raw) return null;
+                    const n = parseInt(String(raw), 10);
+                    return Number.isFinite(n) ? n : null;
+                } catch (e) {
+                    return null;
+                }
+            }, safeKeyPart = (s, maxLen = 48) => String(s || "").replace(/\s+/g, " ").trim().slice(0, maxLen) || null, buildContainerKey = container => {
+                try {
+                    const tag = container.tagName ? container.tagName.toLowerCase() : "div", role = container.getAttribute ? container.getAttribute("role") : null, id = container.id ? `#${safeKeyPart(container.id, 32)}` : null, cls = (() => {
+                        if (!container.className) return null;
+                        const parts = String(container.className).split(/\s+/).filter(Boolean).slice(0, 2);
+                        return parts.length ? `.${safeKeyPart(parts.join("."), 48)}` : null;
+                    })(), ariaLabel = container.getAttribute && container.getAttribute("aria-label") ? `aria=${safeKeyPart(container.getAttribute("aria-label"), 40)}` : null, parts = [ safeKeyPart(tag, 16), role ? `role=${safeKeyPart(role, 24)}` : null, id, cls, ariaLabel ].filter(Boolean);
+                    return parts.length ? parts.join("|") : null;
+                } catch (e) {
+                    return null;
+                }
+            }, computeContainerInfo = el => {
+                try {
+                    if (!("A" === el.tagName && (el.getAttribute("href") || el.href) || "BUTTON" === el.tagName || el.getAttribute && ("link" === el.getAttribute("role") || "button" === el.getAttribute("role")) || isInteractableElement(el))) return null;
+                    const candidates = [];
+                    let node = el;
+                    for (let depth = 0; depth < 6 && node && node.parentElement; depth++) {
+                        const p = node.parentElement, tag = p.tagName ? p.tagName.toLowerCase() : "", role = p.getAttribute ? p.getAttribute("role") : null, isExplicit = "ul" === tag || "ol" === tag || "table" === tag || "tbody" === tag || "list" === role || "feed" === role || "grid" === role || "table" === role, childCount = p.children ? p.children.length : 0;
+                        (isExplicit || childCount >= 6) && candidates.push({
+                            p: p,
+                            depth: depth,
+                            tag: tag,
+                            role: role,
+                            childCount: childCount
+                        }), node = p;
+                    }
+                    if (!candidates.length) return null;
+                    const pickItemNodes = (container, tag, role) => {
+                        if ("ul" === tag || "ol" === tag || "list" === role) {
+                            const lis = Array.from(container.children || []).filter(c => c && "LI" === c.tagName), filtered = lis.filter(li => {
+                                if (!li || !li.querySelector) return !1;
+                                const a = li.querySelector("a[href]");
+                                if (!a) return !1;
+                                return (a.textContent || "").replace(/\s+/g, " ").trim().length >= 8;
+                            });
+                            return filtered.length ? filtered : lis;
+                        }
+                        if ("table" === tag || "tbody" === tag || "table" === role || "grid" === role) {
+                            const rows = Array.from(container.children || []).filter(c => c && "TR" === c.tagName), allRows = rows.length ? rows : Array.from(container.querySelectorAll("tr")), filtered = allRows.filter(tr => {
+                                if (!tr || !tr.querySelector) return !1;
+                                const links = Array.from(tr.querySelectorAll("a[href]"));
+                                let bestLen = 0;
+                                for (const a of links) {
+                                    const t = (a.textContent || "").replace(/\s+/g, " ").trim();
+                                    t.length > bestLen && (bestLen = t.length);
+                                }
+                                return bestLen >= 12;
+                            });
+                            return filtered.length ? filtered : allRows;
+                        }
+                        const kids = Array.from(container.children || []), items = kids.filter(c => {
+                            if (!c || !c.querySelector) return !1;
+                            if (!c.querySelector('a[href],button,[role="link"],[role="button"]')) return !1;
+                            return (c.textContent || "").replace(/\s+/g, " ").trim().length >= 8;
+                        });
+                        return items.length ? items : kids;
+                    };
+                    let best = null;
+                    for (const c of candidates) {
+                        const items = pickItemNodes(c.p, c.tag, c.role), size = items.length || 0;
+                        if (size < 4) continue;
+                        let itemIndex = null;
+                        for (let i = 0; i < items.length; i++) {
+                            const it = items[i];
+                            if (it && (it === el || it.contains(el))) {
+                                itemIndex = i;
+                                break;
+                            }
+                        }
+                        if (null === itemIndex) continue;
+                        const score = size + ("ul" === c.tag || "ol" === c.tag || "table" === c.tag || c.role ? 2 : 0) - .4 * c.depth;
+                        (!best || score > best.score) && (best = {
+                            key: buildContainerKey(c.p),
+                            index: itemIndex,
+                            size: size,
+                            score: score
+                        });
+                    }
+                    return best && best.key ? {
+                        container_key: best.key,
+                        index_in_container: best.index,
+                        container_item_count: best.size
+                    } : null;
+                } catch (e) {
+                    return null;
+                }
+            };
+            nodes.forEach((el, idx) => {
                 if (!el.getBoundingClientRect) return;
                 const rect = el.getBoundingClientRect();
                 if (rect.width < 5 || rect.height < 5) return;
@@ -722,7 +818,7 @@
                     return text.length > maxLen && (text = text.slice(0, maxLen).trim()), text || null;
                 }(el, {
                     maxLen: 80
-                }) : null;
+                }) : null, containerInfo = computeContainerInfo(el);
                 rawData.push({
                     id: idx,
                     tag: tagName,
@@ -762,8 +858,15 @@
                         disabled: void 0 !== el.disabled ? String(el.disabled) : null,
                         aria_checked: toSafeString(el.getAttribute("aria-checked")),
                         aria_disabled: toSafeString(el.getAttribute("aria-disabled")),
-                        aria_expanded: toSafeString(el.getAttribute("aria-expanded"))
+                        aria_expanded: toSafeString(el.getAttribute("aria-expanded")),
+                        aria_posinset: parseAriaInt(el, "aria-posinset"),
+                        aria_setsize: parseAriaInt(el, "aria-setsize"),
+                        aria_rowindex: parseAriaInt(el, "aria-rowindex"),
+                        aria_colindex: parseAriaInt(el, "aria-colindex")
                     },
+                    container_key: containerInfo ? containerInfo.container_key : null,
+                    index_in_container: containerInfo ? containerInfo.index_in_container : null,
+                    container_item_count: containerInfo ? containerInfo.container_item_count : null,
                     text: toSafeString(textVal),
                     in_viewport: inView,
                     is_occluded: occluded,
