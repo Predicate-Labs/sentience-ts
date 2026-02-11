@@ -32,6 +32,26 @@ npm install @predicatelabs/sdk
 npx playwright install chromium
 ```
 
+## Naming migration (Predicate rebrand)
+
+Use the new `Predicate*` class names for all new code:
+
+- `PredicateBrowser`
+- `PredicateAgent`
+- `PredicateVisualAgent`
+- `PredicateDebugger`
+- `backends.PredicateContext`
+
+The legacy `Sentience*` names are still available as runtime aliases for compatibility, but are now soft-deprecated and planned for removal after **1-2 releases**.
+
+Mapping:
+
+- `SentienceBrowser` -> `PredicateBrowser`
+- `SentienceAgent` -> `PredicateAgent`
+- `SentienceVisualAgent` -> `PredicateVisualAgent`
+- `SentienceDebugger` -> `PredicateDebugger`
+- `backends.SentienceContext` -> `backends.PredicateContext`
+
 ## Conceptual example (why this exists)
 
 - Steps are **gated by verifiable UI assertions**

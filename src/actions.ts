@@ -1134,7 +1134,13 @@ export async function search(
   const urlBefore = page.url();
   const url = buildSearchUrl(query, engine);
   await browser.goto(url);
-  await page.waitForLoadState('networkidle');
+  // Some search engines keep long-lived background requests open in CI,
+  // so treat networkidle as a best-effort signal instead of a hard requirement.
+  try {
+    await page.waitForLoadState('networkidle', { timeout: 5000 });
+  } catch {
+    // no-op: page is already loaded enough for URL/result assertions
+  }
 
   const durationMs = Date.now() - startTime;
   const urlAfter = page.url();
