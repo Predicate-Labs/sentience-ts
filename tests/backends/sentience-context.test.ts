@@ -75,7 +75,7 @@ describe('SentienceContext', () => {
 
     it('should use custom values', () => {
       const ctx = new SentienceContext({
-        sentienceApiKey: 'test-key',
+        predicateApiKey: 'test-key',
         maxElements: 100,
         showOverlay: true,
         topElementSelector: {

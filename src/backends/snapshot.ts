@@ -106,7 +106,9 @@ export interface SnapshotOptions {
   useApi?: boolean;
   /** Gateway snapshot timeout (milliseconds) */
   gatewayTimeoutMs?: number;
-  /** API key for server-side processing */
+  /** Canonical API key for server-side processing */
+  predicateApiKey?: string;
+  /** Backward-compatible API key alias */
   sentienceApiKey?: string;
   /** Goal/task description for ordinal support and gateway reranking */
   goal?: string;

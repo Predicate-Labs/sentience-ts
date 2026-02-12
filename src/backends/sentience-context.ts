@@ -51,7 +51,9 @@ export interface SentienceContextState {
  * Options for SentienceContext initialization.
  */
 export interface SentienceContextOptions {
-  /** Sentience API key for gateway mode */
+  /** Canonical API key for gateway mode */
+  predicateApiKey?: string;
+  /** Backward-compatible API key alias */
   sentienceApiKey?: string;
   /** Force API vs extension mode (auto-detected if undefined) */
   useApi?: boolean;
@@ -121,7 +123,7 @@ export class SentienceContext {
   private _selector: Required<TopElementSelector>;
 
   constructor(options: SentienceContextOptions = {}) {
-    this._apiKey = options.sentienceApiKey;
+    this._apiKey = options.predicateApiKey ?? options.sentienceApiKey;
     this._useApi = options.useApi;
     this._maxElements = options.maxElements ?? 60;
     this._showOverlay = options.showOverlay ?? false;
@@ -165,7 +167,7 @@ export class SentienceContext {
 
       // Set API options
       if (this._apiKey) {
-        snapshotOptions.sentienceApiKey = this._apiKey;
+        snapshotOptions.predicateApiKey = this._apiKey;
       }
       if (this._useApi !== undefined) {
         snapshotOptions.useApi = this._useApi;
