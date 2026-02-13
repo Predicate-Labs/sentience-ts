@@ -81,12 +81,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/SentienceAPI/sentience-ts.git"
+    "url": "https://github.com/Predicate-Labs/sdk-typescript.git"
   },
   "bugs": {
-    "url": "https://github.com/SentienceAPI/sentience-ts/issues"
+    "url": "https://github.com/Predicate-Labs/sdk-typescript/issues"
   },
-  "homepage": "https://github.com/SentienceAPI/sentience-ts#readme",
+  "homepage": "https://github.com/Predicate-Labs/sdk-typescript#readme",
   "license": "(MIT OR Apache-2.0)",
   "engines": {
     "node": ">=20.0.0"
