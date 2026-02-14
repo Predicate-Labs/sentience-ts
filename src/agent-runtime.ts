@@ -501,7 +501,8 @@ export class AgentRuntime {
     label: string,
     required: boolean,
     extra: Record<string, any> | null,
-    recordInStep: boolean
+    recordInStep: boolean,
+    kind: 'assert' | 'task_done' | 'captcha' | 'scroll' = 'assert'
   ): void {
     const details = { ...(outcome.details || {}) } as Record<string, any>;
 
@@ -541,7 +542,7 @@ export class AgentRuntime {
     this.tracer.emit(
       'verification',
       {
-        kind: 'assert',
+        kind,
         ...record,
       },
       this.stepId || undefined
@@ -781,6 +782,139 @@ export class AgentRuntime {
       };
     } catch (err: any) {
       return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
+  private async getScrollTop(): Promise<number> {
+    try {
+      const v = await this.page.evaluate(
+        "(() => { const el = document.scrollingElement || document.documentElement || document.body; return (el && typeof el.scrollTop === 'number') ? el.scrollTop : (typeof window.scrollY === 'number' ? window.scrollY : 0); })()"
+      );
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Scroll and (optionally) verify the scroll had effect (delta in scrollTop).
+   *
+   * This targets a common drift failure mode: "we scrolled" but the UI didn't advance.
+   */
+  async scrollBy(
+    deltaY: number,
+    opts?: {
+      verify?: boolean;
+      minDeltaPx?: number;
+      label?: string;
+      required?: boolean;
+      timeoutMs?: number;
+      pollMs?: number;
+      x?: number;
+      y?: number;
+      jsFallback?: boolean;
+    }
+  ): Promise<boolean> {
+    const verify = opts?.verify ?? true;
+    const minDeltaPx = opts?.minDeltaPx ?? 50;
+    const label = opts?.label ?? 'scroll_effective';
+    const required = opts?.required ?? true;
+    const timeoutMs = opts?.timeoutMs ?? 10_000;
+    const pollMs = opts?.pollMs ?? 250;
+    const jsFallback = opts?.jsFallback ?? true;
+
+    await this.recordAction(`scrollBy(deltaY=${deltaY})`, this.page?.url?.());
+
+    const doWheel = async (): Promise<void> => {
+      const mouse: any = (this.page as any)?.mouse;
+      if (mouse && typeof mouse.wheel === 'function') {
+        // Playwright: mouse.wheel(deltaX, deltaY)
+        await mouse.wheel(opts?.x ?? 0, deltaY);
+        return;
+      }
+      // Fallback: request scroll via JS (best-effort)
+      await this.page.evaluate(`window.scrollBy(0, ${Number(deltaY)})`);
+    };
+
+    if (!verify) {
+      await doWheel();
+      return true;
+    }
+
+    const beforeTop = await this.getScrollTop();
+    await doWheel();
+
+    const start = Date.now();
+    let usedJsFallback = false;
+
+    while (true) {
+      const afterTop = await this.getScrollTop();
+      const delta = afterTop - beforeTop;
+      const passed = Math.abs(delta) >= minDeltaPx;
+
+      if (passed) {
+        this._recordOutcome(
+          {
+            passed: true,
+            reason: '',
+            details: {
+              deltaY,
+              min_delta_px: minDeltaPx,
+              before_top: beforeTop,
+              after_top: afterTop,
+              delta_px: delta,
+              js_fallback_used: usedJsFallback,
+            },
+          } as any,
+          label,
+          required,
+          null,
+          true,
+          'scroll'
+        );
+        return true;
+      }
+
+      if (Date.now() - start >= timeoutMs) {
+        this._recordOutcome(
+          {
+            passed: false,
+            reason: `scroll delta ${delta.toFixed(1)}px < min_delta_px=${minDeltaPx.toFixed(1)}px`,
+            details: {
+              deltaY,
+              min_delta_px: minDeltaPx,
+              before_top: beforeTop,
+              after_top: afterTop,
+              delta_px: delta,
+              js_fallback_used: usedJsFallback,
+              timeout_ms: timeoutMs,
+            },
+          } as any,
+          label,
+          required,
+          null,
+          true,
+          'scroll'
+        );
+        if (required) {
+          this.persistFailureArtifacts(`scroll_failed:${label}`).catch(() => {
+            // best-effort
+          });
+        }
+        return false;
+      }
+
+      if (jsFallback && !usedJsFallback && Math.abs(delta) < 1.0) {
+        usedJsFallback = true;
+        try {
+          await this.page.evaluate(`window.scrollBy(0, ${Number(deltaY)})`);
+        } catch {
+          // ignore
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollMs));
     }
   }
 

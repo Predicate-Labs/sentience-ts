@@ -184,7 +184,7 @@ export interface TraceEventData {
   verify?: VerifyData;
 
   // Verification event fields (for assertion loop)
-  kind?: 'assert' | 'task_done' | 'captcha';
+  kind?: 'assert' | 'task_done' | 'captcha' | 'scroll';
   label?: string;
   passed?: boolean;
   required?: boolean;

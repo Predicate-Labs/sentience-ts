@@ -169,6 +169,24 @@ async function loginExample(): Promise<void> {
 - Fluent assertion DSL via `expect(...)`
 - Retrying verification via `runtime.check(...).eventually(...)`
 
+### Scroll verification (prevent no-op scroll drift)
+
+A common agent failure mode is “scrolling” without the UI actually advancing (overlays, nested scrollers, focus issues). Use `AgentRuntime.scrollBy(...)` to deterministically verify scroll _had effect_ via before/after `scrollTop`.
+
+```ts
+runtime.beginStep('Scroll the page and verify it moved');
+const ok = await runtime.scrollBy(600, {
+  verify: true,
+  minDeltaPx: 50,
+  label: 'scroll_effective',
+  required: true,
+  timeoutMs: 5_000,
+});
+if (!ok) {
+  throw new Error('Scroll had no effect (likely blocked by overlay or nested scroller).');
+}
+```
+
 ### Explained failure
 
 - JSONL trace events (`Tracer` + `JsonlTraceSink`)

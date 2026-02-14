@@ -14,11 +14,13 @@ import { Page } from 'playwright';
  */
 export class MockPage implements IPage {
   private _url: string = 'https://example.com';
+  private _scrollTop: number = 0;
   public evaluateCalls: Array<{ script: string | Function; args: any[] }> = [];
   public gotoCalls: Array<{ url: string; options?: any }> = [];
   public waitForFunctionCalls: Array<{ fn: () => boolean | Promise<boolean>; options?: any }> = [];
   public waitForTimeoutCalls: number[] = [];
   public mouseClickCalls: Array<{ x: number; y: number }> = [];
+  public mouseWheelCalls: Array<{ dx: number; dy: number }> = [];
   public keyboardTypeCalls: string[] = [];
   public keyboardPressCalls: string[] = [];
   public screenshotCalls: Array<{ options?: any }> = [];
@@ -51,6 +53,13 @@ export class MockPage implements IPage {
       } as T;
     }
 
+    if (
+      typeof script === 'string' &&
+      (script.includes('scrollTop') || script.includes('scrollY'))
+    ) {
+      return this._scrollTop as any as T;
+    }
+
     return {} as T;
   }
 
@@ -78,6 +87,10 @@ export class MockPage implements IPage {
   mouse = {
     click: async (x: number, y: number): Promise<void> => {
       this.mouseClickCalls.push({ x, y });
+    },
+    wheel: async (dx: number, dy: number): Promise<void> => {
+      this.mouseWheelCalls.push({ dx, dy });
+      this._scrollTop += dy;
     },
   };
 
