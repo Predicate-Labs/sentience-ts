@@ -35,6 +35,17 @@ export interface EventuallyConfig {
   poll?: number;
   /** Max number of retry attempts (default 3) */
   maxRetries?: number;
+  /**
+   * Optional: increase snapshot `limit` across retries (additive schedule).
+   *
+   * This mirrors AgentRuntime's AssertionHandle.eventually() behavior.
+   */
+  snapshotLimitGrowth?: {
+    startLimit?: number;
+    step?: number;
+    maxLimit?: number;
+    applyOn?: 'only_on_fail' | 'all';
+  };
 }
 
 /**
@@ -456,7 +467,12 @@ export const expect = Object.assign(
  */
 export class EventuallyWrapper {
   private _predicate: Predicate;
-  private _config: Required<EventuallyConfig>;
+  private _config: {
+    timeout: number;
+    poll: number;
+    maxRetries: number;
+    snapshotLimitGrowth?: EventuallyConfig['snapshotLimitGrowth'];
+  };
 
   constructor(predicate: Predicate, config: EventuallyConfig = {}) {
     this._predicate = predicate;
@@ -464,6 +480,7 @@ export class EventuallyWrapper {
       timeout: config.timeout ?? DEFAULT_TIMEOUT,
       poll: config.poll ?? DEFAULT_POLL,
       maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
+      snapshotLimitGrowth: config.snapshotLimitGrowth,
     };
   }
 
@@ -481,6 +498,22 @@ export class EventuallyWrapper {
     const startTime = Date.now();
     let lastOutcome: AssertOutcome | null = null;
     let attempts = 0;
+
+    const growth = this._config.snapshotLimitGrowth;
+    const clampLimit = (n: number): number => {
+      if (!Number.isFinite(n)) return 50;
+      if (n < 1) return 1;
+      if (n > 500) return 500;
+      return Math.floor(n);
+    };
+    const growthApplyOn = growth?.applyOn ?? 'only_on_fail';
+    const startLimit = clampLimit(growth?.startLimit ?? 50);
+    const step = clampLimit(growth?.step ?? startLimit);
+    const maxLimit = clampLimit(growth?.maxLimit ?? 500);
+    const limitForAttempt = (attempt1: number): number => {
+      const base = startLimit + step * Math.max(0, attempt1 - 1);
+      return clampLimit(Math.min(maxLimit, base));
+    };
 
     while (true) {
       // Check timeout (higher precedence than maxRetries)
@@ -513,7 +546,21 @@ export class EventuallyWrapper {
       // Take fresh snapshot if not first attempt
       if (attempts > 0) {
         try {
-          const freshSnapshot = await snapshotFn();
+          // If snapshotFn supports kwargs (e.g. runtime.snapshot), pass adaptive limit.
+          let freshSnapshot: AssertContext['snapshot'];
+          const attempt1 = attempts + 1;
+          if (growth) {
+            const apply =
+              growthApplyOn === 'all' || (growthApplyOn === 'only_on_fail' && lastOutcome);
+            const snapLimit = apply ? limitForAttempt(attempt1) : startLimit;
+            try {
+              freshSnapshot = await (snapshotFn as any)({ limit: snapLimit });
+            } catch {
+              freshSnapshot = await snapshotFn();
+            }
+          } else {
+            freshSnapshot = await snapshotFn();
+          }
           ctx = {
             snapshot: freshSnapshot,
             url: freshSnapshot?.url ?? ctx.url,

@@ -100,6 +100,21 @@ export interface EventuallyOptions {
   timeoutMs?: number;
   pollMs?: number;
   snapshotOptions?: Record<string, any>;
+  /**
+   * Optional: increase snapshot `limit` across retries (additive schedule).
+   *
+   * Useful on long/virtualized pages where a small element limit can miss targets.
+   */
+  snapshotLimitGrowth?: {
+    /** Defaults to snapshotOptions.limit if present, else 50. */
+    startLimit?: number;
+    /** Defaults to startLimit. */
+    step?: number;
+    /** Defaults to 500. */
+    maxLimit?: number;
+    /** 'only_on_fail' (default) grows on attempt>1; 'all' always applies schedule. */
+    applyOn?: 'only_on_fail' | 'all';
+  };
   /** If set, `.eventually()` will treat snapshots below this confidence as failures and resnapshot. */
   minConfidence?: number;
   /** Max number of snapshot attempts to get above minConfidence before declaring exhaustion. */
@@ -133,6 +148,7 @@ export class AssertionHandle {
     const timeoutMs = options.timeoutMs ?? 10_000;
     const pollMs = options.pollMs ?? 250;
     const snapshotOptions = options.snapshotOptions;
+    const snapshotLimitGrowth = options.snapshotLimitGrowth;
     const minConfidence = options.minConfidence;
     const maxSnapshotAttempts = options.maxSnapshotAttempts ?? 3;
     const visionProvider = options.visionProvider;
@@ -143,10 +159,45 @@ export class AssertionHandle {
     let attempt = 0;
     let snapshotAttempt = 0;
     let lastOutcome: ReturnType<Predicate> | null = null;
+    let snapshotLimit: number | null = null;
+
+    const clampLimit = (n: number): number => {
+      if (!Number.isFinite(n)) return 50;
+      if (n < 1) return 1;
+      if (n > 500) return 500;
+      return Math.floor(n);
+    };
+
+    const growthApplyOn = snapshotLimitGrowth?.applyOn ?? 'only_on_fail';
+    const startLimit = clampLimit(
+      snapshotLimitGrowth?.startLimit ??
+        (typeof snapshotOptions?.limit === 'number' ? snapshotOptions.limit : 50)
+    );
+    const step = clampLimit(snapshotLimitGrowth?.step ?? startLimit);
+    const maxLimit = clampLimit(snapshotLimitGrowth?.maxLimit ?? 500);
+
+    const limitForAttempt = (attempt1: number): number => {
+      const base = startLimit + step * Math.max(0, attempt1 - 1);
+      return clampLimit(Math.min(maxLimit, base));
+    };
 
     while (true) {
       attempt += 1;
-      await this.runtime.snapshot(snapshotOptions);
+
+      const perAttemptOptions: Record<string, any> = { ...(snapshotOptions ?? {}) };
+      snapshotLimit = null;
+      if (snapshotLimitGrowth) {
+        const apply =
+          growthApplyOn === 'all' ||
+          attempt === 1 ||
+          (lastOutcome !== null && lastOutcome.passed === false);
+        snapshotLimit = apply ? limitForAttempt(attempt) : startLimit;
+        perAttemptOptions.limit = snapshotLimit;
+      } else if (typeof perAttemptOptions.limit === 'number') {
+        snapshotLimit = clampLimit(perAttemptOptions.limit);
+      }
+
+      await this.runtime.snapshot(perAttemptOptions);
       snapshotAttempt += 1;
 
       const diagnostics = this.runtime.lastSnapshot?.diagnostics;
@@ -173,7 +224,13 @@ export class AssertionHandle {
           lastOutcome,
           this.label,
           this.required,
-          { eventually: true, attempt, snapshot_attempt: snapshotAttempt, final: false },
+          {
+            eventually: true,
+            attempt,
+            snapshot_attempt: snapshotAttempt,
+            snapshot_limit: snapshotLimit,
+            final: false,
+          },
           false
         );
 
@@ -215,6 +272,7 @@ export class AssertionHandle {
                   eventually: true,
                   attempt,
                   snapshot_attempt: snapshotAttempt,
+                  snapshot_limit: snapshotLimit,
                   final: true,
                   vision_fallback: true,
                 },
@@ -251,6 +309,7 @@ export class AssertionHandle {
               eventually: true,
               attempt,
               snapshot_attempt: snapshotAttempt,
+              snapshot_limit: snapshotLimit,
               final: true,
               exhausted: true,
             },
@@ -271,6 +330,7 @@ export class AssertionHandle {
               eventually: true,
               attempt,
               snapshot_attempt: snapshotAttempt,
+              snapshot_limit: snapshotLimit,
               final: true,
               timeout: true,
             },
@@ -295,7 +355,13 @@ export class AssertionHandle {
         lastOutcome,
         this.label,
         this.required,
-        { eventually: true, attempt, final: false },
+        {
+          eventually: true,
+          attempt,
+          snapshot_attempt: snapshotAttempt,
+          snapshot_limit: snapshotLimit,
+          final: false,
+        },
         false
       );
 
@@ -305,7 +371,13 @@ export class AssertionHandle {
           lastOutcome,
           this.label,
           this.required,
-          { eventually: true, attempt, final: true },
+          {
+            eventually: true,
+            attempt,
+            snapshot_attempt: snapshotAttempt,
+            snapshot_limit: snapshotLimit,
+            final: true,
+          },
           true
         );
         return true;
@@ -317,7 +389,14 @@ export class AssertionHandle {
           lastOutcome,
           this.label,
           this.required,
-          { eventually: true, attempt, final: true, timeout: true },
+          {
+            eventually: true,
+            attempt,
+            snapshot_attempt: snapshotAttempt,
+            snapshot_limit: snapshotLimit,
+            final: true,
+            timeout: true,
+          },
           true
         );
         if (this.required) {
