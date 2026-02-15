@@ -136,6 +136,22 @@ jobs:
         echo "✅ Extension files verified in package"
         echo "📦 Extension files that will be published:"
         find src/extension -type f | head -20
+
+    - name: npm publish preflight (auth + registry)
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: |
+        set -euo pipefail
+        echo "=== Toolchain ==="
+        node --version
+        npm --version
+        echo ""
+        echo "=== Registry ==="
+        npm config get registry
+        npm ping --registry https://registry.npmjs.org
+        echo ""
+        echo "=== Auth ==="
+        npm whoami --registry https://registry.npmjs.org
         
     - name: Publish to npm
       run: |
