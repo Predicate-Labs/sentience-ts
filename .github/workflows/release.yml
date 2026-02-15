@@ -166,8 +166,11 @@ jobs:
         # Treat this as best-effort diagnostics; do not block publishing.
         npm access list packages @predicatesystems --registry https://registry.npmjs.org --json || echo "WARN: cannot list org packages for @predicatesystems (may be restricted; continuing)"
         echo ""
-        echo "=== Sanity: packages visible to current user ==="
-        npm access list packages "$(npm whoami --registry https://registry.npmjs.org)" --registry https://registry.npmjs.org --json
+        echo "=== Sanity: npm profile (should succeed) ==="
+        npm profile get --registry https://registry.npmjs.org --json || echo "WARN: cannot read npm profile (continuing)"
+        echo ""
+        echo "=== Sanity: does package already exist? (ok if 404) ==="
+        npm view @predicatesystems/sdk version --registry https://registry.npmjs.org --json || echo "INFO: @predicatesystems/sdk not found yet (expected for first publish)"
         
     - name: Publish to npm
       run: |
