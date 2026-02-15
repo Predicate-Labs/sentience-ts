@@ -1,7 +1,7 @@
 import type { Snapshot, StepHookContext } from '../types';
 import type { PermissionPolicy } from '../browser';
 import type { AgentRuntime } from '../agent-runtime';
-import type { LLMProvider } from '../llm-provider';
+import { LLMProvider } from '../llm-provider';
 import { RuntimeAgent } from '../runtime-agent';
 import type { RuntimeStep } from '../runtime-agent';
 import type { CaptchaOptions } from '../captcha/types';
@@ -45,6 +45,9 @@ export interface PredicateBrowserAgentConfig {
 
   // Prompt / token controls
   historyLastN?: number; // 0 disables LLM-facing step history
+
+  // Opt-in: track token usage from LLM provider responses (best-effort).
+  tokenUsageEnabled?: boolean;
 
   // Compact prompt customization
   // builder(taskGoal, stepGoal, domContext, snapshot, historySummary) -> {systemPrompt, userPrompt}
@@ -97,6 +100,113 @@ function applyCaptchaConfigToRuntime(runtime: AgentRuntime, cfg: CaptchaConfig |
   } satisfies CaptchaOptions);
 }
 
+type TokenUsageTotals = {
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+class TokenUsageCollector {
+  private byRole: Record<string, TokenUsageTotals> = {};
+  private byModel: Record<string, TokenUsageTotals> = {};
+
+  record(role: string, resp: any): void {
+    const pt = typeof resp?.promptTokens === 'number' ? resp.promptTokens : 0;
+    const ct = typeof resp?.completionTokens === 'number' ? resp.completionTokens : 0;
+    const tt = typeof resp?.totalTokens === 'number' ? resp.totalTokens : pt + ct;
+    const model = String(resp?.modelName ?? 'unknown') || 'unknown';
+
+    const bump = (dst: Record<string, TokenUsageTotals>, key: string) => {
+      const cur =
+        dst[key] ??
+        ({ calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 } as TokenUsageTotals);
+      cur.calls += 1;
+      cur.promptTokens += Math.max(0, pt);
+      cur.completionTokens += Math.max(0, ct);
+      cur.totalTokens += Math.max(0, tt);
+      dst[key] = cur;
+    };
+
+    bump(this.byRole, role);
+    bump(this.byModel, model);
+  }
+
+  reset(): void {
+    this.byRole = {};
+    this.byModel = {};
+  }
+
+  summary(): {
+    total: TokenUsageTotals;
+    byRole: Record<string, TokenUsageTotals>;
+    byModel: Record<string, TokenUsageTotals>;
+  } {
+    const sum = (src: Record<string, TokenUsageTotals>): TokenUsageTotals => {
+      return Object.values(src).reduce(
+        (acc, v) => ({
+          calls: acc.calls + v.calls,
+          promptTokens: acc.promptTokens + v.promptTokens,
+          completionTokens: acc.completionTokens + v.completionTokens,
+          totalTokens: acc.totalTokens + v.totalTokens,
+        }),
+        { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      );
+    };
+    return { total: sum(this.byRole), byRole: this.byRole, byModel: this.byModel };
+  }
+}
+
+class TokenAccountingProvider extends LLMProvider {
+  constructor(
+    private inner: LLMProvider,
+    private collector: TokenUsageCollector,
+    private role: string
+  ) {
+    super();
+  }
+  get modelName(): string {
+    return this.inner.modelName;
+  }
+  supportsJsonMode(): boolean {
+    return this.inner.supportsJsonMode();
+  }
+  supportsVision(): boolean {
+    return this.inner.supportsVision?.() ?? false;
+  }
+  async generate(
+    systemPrompt: string,
+    userPrompt: string,
+    options: Record<string, any> = {}
+  ): Promise<any> {
+    const resp = await this.inner.generate(systemPrompt, userPrompt, options);
+    try {
+      this.collector.record(this.role, resp);
+    } catch {
+      // best-effort
+    }
+    return resp;
+  }
+  async generateWithImage(
+    systemPrompt: string,
+    userPrompt: string,
+    imageBase64: string,
+    options: Record<string, any> = {}
+  ): Promise<any> {
+    const fn = (this.inner as any).generateWithImage;
+    if (typeof fn !== 'function') {
+      throw new Error('Inner provider does not implement generateWithImage');
+    }
+    const resp = await fn.call(this.inner, systemPrompt, userPrompt, imageBase64, options);
+    try {
+      this.collector.record(this.role, resp);
+    } catch {
+      // best-effort
+    }
+    return resp;
+  }
+}
+
 export type StepOutcome = { stepGoal: string; ok: boolean };
 
 export class PredicateBrowserAgent {
@@ -109,6 +219,7 @@ export class PredicateBrowserAgent {
   private history: string[] = [];
   private visionCallsUsed = 0;
   private runner: RuntimeAgent;
+  private tokenUsage: TokenUsageCollector | null = null;
 
   constructor(opts: {
     runtime: AgentRuntime;
@@ -117,10 +228,22 @@ export class PredicateBrowserAgent {
     visionVerifier?: LLMProvider;
     config?: PredicateBrowserAgentConfig;
   }) {
+    const tokenUsageEnabled = Boolean(opts.config?.tokenUsageEnabled);
+    const collector = tokenUsageEnabled ? new TokenUsageCollector() : null;
+
     this.runtime = opts.runtime;
-    this.executor = opts.executor;
-    this.visionExecutor = opts.visionExecutor;
-    this.visionVerifier = opts.visionVerifier;
+    this.tokenUsage = collector;
+    this.executor = collector
+      ? new TokenAccountingProvider(opts.executor, collector, 'executor')
+      : opts.executor;
+    this.visionExecutor =
+      collector && opts.visionExecutor
+        ? new TokenAccountingProvider(opts.visionExecutor, collector, 'vision_executor')
+        : opts.visionExecutor;
+    this.visionVerifier =
+      collector && opts.visionVerifier
+        ? new TokenAccountingProvider(opts.visionVerifier, collector, 'vision_verifier')
+        : opts.visionVerifier;
     this.config = {
       permissionStartup: null,
       permissionRecovery: null,
@@ -146,6 +269,17 @@ export class PredicateBrowserAgent {
         return historySummary(slice);
       },
     } as any);
+  }
+
+  getTokenUsage(): any {
+    if (!this.tokenUsage) {
+      return { enabled: false, reason: 'tokenUsageEnabled is false' };
+    }
+    return { enabled: true, ...this.tokenUsage.summary() };
+  }
+
+  resetTokenUsage(): void {
+    this.tokenUsage?.reset();
   }
 
   private recordHistory(stepGoal: string, ok: boolean) {

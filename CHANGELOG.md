@@ -88,6 +88,31 @@ const agent = new PredicateBrowserAgent({
 - `domContextPostprocessor(...)`
 - `historySummaryProvider(...)`
 
+#### PredicateBrowserAgent: opt-in token usage accounting (best-effort)
+
+If you want to measure token spend, you can enable best-effort accounting (depends on provider reporting token counts):
+
+```ts
+const agent = new PredicateBrowserAgent({
+  runtime,
+  executor: llm,
+  config: {
+    tokenUsageEnabled: true,
+  },
+});
+
+const usage = agent.getTokenUsage();
+agent.resetTokenUsage();
+```
+
+#### RuntimeAgent: actOnce without step lifecycle (orchestrators)
+
+`RuntimeAgent` now exposes `actOnce(...)` helpers that execute exactly one action **without** calling `runtime.beginStep()` / `runtime.emitStepEnd()`. This is intended for external orchestrators (e.g. WebBench) that already own step lifecycle and just want the SDK’s snapshot-first propose+execute block.
+
+- `await agent.actOnce(...) -> string`
+- `await agent.actOnceWithSnapshot(...) -> { action, snap }`
+- `await agent.actOnceResult(...) -> { action, snap, usedVision }`
+
 ### 2026-02-13
 
 #### Expanded deterministic verifications (adaptive resnapshotting)

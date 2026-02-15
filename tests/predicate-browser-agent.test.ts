@@ -44,7 +44,13 @@ class ProviderStub extends LLMProvider {
   ): Promise<LLMResponse> {
     this.calls.push({ system: systemPrompt, user: userPrompt, options });
     const content = this.responses.length ? (this.responses.shift() as string) : 'FINISH()';
-    return { content, modelName: this.modelName };
+    return {
+      content,
+      modelName: this.modelName,
+      promptTokens: 11,
+      completionTokens: 7,
+      totalTokens: 18,
+    };
   }
 }
 
@@ -102,5 +108,48 @@ describe('PredicateBrowserAgent', () => {
     expect(executor.calls.length).toBe(1);
     expect(executor.calls[0].system).toContain('SYSTEM_CUSTOM');
     expect(executor.calls[0].user).toBe('USER_CUSTOM');
+  });
+
+  it('tracks token usage when opt-in enabled', async () => {
+    const sink = new MockSink();
+    const tracer = new Tracer('run', sink);
+    const page = new MockPage('https://example.com/start') as any;
+
+    const snapshots: Snapshot[] = [
+      {
+        status: 'success',
+        url: 'https://example.com/start',
+        elements: [makeClickableElement(1)],
+        timestamp: 't1',
+      },
+    ];
+
+    const browserLike = {
+      snapshot: async () => snapshots.shift() as Snapshot,
+    };
+
+    const runtime = new AgentRuntime(browserLike as any, page as any, tracer);
+    const executor = new ProviderStub(['FINISH()']);
+
+    const agent = new PredicateBrowserAgent({
+      runtime,
+      executor,
+      config: { tokenUsageEnabled: true, captcha: { policy: 'abort' } },
+    });
+
+    const out = await agent.step({
+      taskGoal: 'test',
+      step: { goal: 'No-op', maxSnapshotAttempts: 1 },
+    });
+    expect(out.ok).toBe(true);
+
+    const usage = agent.getTokenUsage();
+    expect(usage.enabled).toBe(true);
+    expect(usage.total.totalTokens).toBeGreaterThanOrEqual(18);
+    expect(usage.byRole.executor.calls).toBeGreaterThanOrEqual(1);
+
+    agent.resetTokenUsage();
+    const usage2 = agent.getTokenUsage();
+    expect(usage2.total.totalTokens).toBe(0);
   });
 });
