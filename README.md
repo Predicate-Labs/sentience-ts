@@ -28,7 +28,7 @@ The core loop is:
 ## Install
 
 ```bash
-npm install @predicate/sdk
+npm install @predicatesystems/sdk
 npx playwright install chromium
 ```
 
@@ -51,9 +51,9 @@ Use the new `Predicate*` class names for all new code:
 ## Quickstart: a verification-first loop
 
 ```ts
-import { PredicateBrowser, AgentRuntime } from '@predicate/sdk';
-import { JsonlTraceSink, Tracer } from '@predicate/sdk';
-import { exists, urlContains } from '@predicate/sdk';
+import { PredicateBrowser, AgentRuntime } from '@predicatesystems/sdk';
+import { JsonlTraceSink, Tracer } from '@predicatesystems/sdk';
+import { exists, urlContains } from '@predicatesystems/sdk';
 import type { Page } from 'playwright';
 
 async function main(): Promise<void> {
@@ -96,7 +96,13 @@ Key idea: your agent still executes actions — Predicate **snapshots and verifi
 
 ```ts
 import type { Page } from 'playwright';
-import { PredicateDebugger, Tracer, JsonlTraceSink, exists, urlContains } from '@predicate/sdk';
+import {
+  PredicateDebugger,
+  Tracer,
+  JsonlTraceSink,
+  exists,
+  urlContains,
+} from '@predicatesystems/sdk';
 
 async function runExistingAgent(page: Page): Promise<void> {
   const tracer = new Tracer('run-123', new JsonlTraceSink('trace.jsonl'));
@@ -123,7 +129,7 @@ async function runExistingAgent(page: Page): Promise<void> {
 If you want Predicate to drive the loop end-to-end, you can use the SDK primitives directly: take a snapshot, select elements, act, then verify.
 
 ```ts
-import { PredicateBrowser, snapshot, find, typeText, click, waitFor } from '@predicate/sdk';
+import { PredicateBrowser, snapshot, find, typeText, click, waitFor } from '@predicatesystems/sdk';
 
 async function loginExample(): Promise<void> {
   const browser = new PredicateBrowser();
@@ -201,7 +207,7 @@ if (!ok) {
 ## ToolRegistry (LLM-callable tools)
 
 ```ts
-import { ToolRegistry, registerDefaultTools } from '@predicate/sdk';
+import { ToolRegistry, registerDefaultTools } from '@predicatesystems/sdk';
 
 const registry = new ToolRegistry();
 registerDefaultTools(registry);
@@ -213,8 +219,8 @@ const toolsForLLM = registry.llmTools();
 Chrome permission prompts are outside the DOM and can be invisible to snapshots. Prefer setting a policy **before navigation**.
 
 ```ts
-import { PredicateBrowser } from '@predicate/sdk';
-import type { PermissionPolicy } from '@predicate/sdk';
+import { PredicateBrowser } from '@predicatesystems/sdk';
+import type { PermissionPolicy } from '@predicatesystems/sdk';
 
 const policy: PermissionPolicy = {
   default: 'clear',
@@ -248,7 +254,7 @@ If your backend supports it, you can also use ToolRegistry permission tools (`gr
 ## Downloads (verification predicate)
 
 ```ts
-import { downloadCompleted } from '@predicate/sdk';
+import { downloadCompleted } from '@predicatesystems/sdk';
 
 runtime.assert(downloadCompleted('report.csv'), 'download_ok', true);
 ```

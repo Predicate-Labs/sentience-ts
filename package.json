@@ -1,5 +1,5 @@
 {
-  "name": "@predicate/sdk",
+  "name": "@predicatesystems/sdk",
   "version": "1.1.0",
   "description": "TypeScript SDK for Sentience AI Agent Browser Automation",
   "main": "dist/index.js",

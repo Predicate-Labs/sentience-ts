@@ -23,7 +23,7 @@ jobs:
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
-        scope: '@predicate'
+        scope: '@predicatesystems'
         always-auth: true
         
     - name: Extract version from tag or input
@@ -158,11 +158,11 @@ jobs:
         echo "=== Auth ==="
         npm whoami --registry https://registry.npmjs.org
         echo ""
-        echo "=== Scope access (@predicate) ==="
+        echo "=== Scope access (@predicatesystems) ==="
         # npm v10 syntax:
         # - `npm access list packages <scope>` checks whether the user can see/publish packages in that scope
         # - if you are not a member/owner of the npm org, this typically fails (403/404) which is what we want surfaced
-        npm access list packages @predicate --registry https://registry.npmjs.org --json
+        npm access list packages @predicatesystems --registry https://registry.npmjs.org --json
         echo ""
         echo "=== Sanity: packages visible to current user ==="
         npm access list packages "$(npm whoami --registry https://registry.npmjs.org)" --registry https://registry.npmjs.org --json
@@ -180,11 +180,11 @@ jobs:
         tag_name: v${{ steps.version.outputs.version }}
         name: Release v${{ steps.version.outputs.version }}
         body: |
-          Release v${{ steps.version.outputs.version }} of @predicate/sdk
+          Release v${{ steps.version.outputs.version }} of @predicatesystems/sdk
 
           ## Installation
           ```bash
-          npm install @predicate/sdk@${{ steps.version.outputs.version }}
+          npm install @predicatesystems/sdk@${{ steps.version.outputs.version }}
           ```
         draft: false
         prerelease: false
