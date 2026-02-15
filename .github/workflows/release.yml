@@ -23,6 +23,8 @@ jobs:
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
+        scope: '@predicate'
+        always-auth: true
         
     - name: Extract version from tag or input
       id: version
@@ -142,6 +144,9 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         set -euo pipefail
+        echo "=== Token presence (non-secret) ==="
+        node -e "console.log('NODE_AUTH_TOKEN set:', !!process.env.NODE_AUTH_TOKEN, 'len:', (process.env.NODE_AUTH_TOKEN||'').length)"
+        echo ""
         echo "=== Toolchain ==="
         node --version
         npm --version
@@ -152,6 +157,9 @@ jobs:
         echo ""
         echo "=== Auth ==="
         npm whoami --registry https://registry.npmjs.org
+        echo ""
+        echo "=== Scope access (@predicate) ==="
+        npm access ls-packages @predicate --registry https://registry.npmjs.org
         
     - name: Publish to npm
       run: |
