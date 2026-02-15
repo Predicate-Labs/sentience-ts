@@ -58,6 +58,17 @@ export class RuntimeAgent {
   readonly shortCircuitCanvas: boolean;
 
   private structuredLLM: LLMInteractionHandler;
+  private structuredPromptBuilder?:
+    | ((
+        taskGoal: string,
+        stepGoal: string,
+        domContext: string,
+        snap: Snapshot,
+        historySummary: string
+      ) => { systemPrompt: string; userPrompt: string })
+    | undefined;
+  private domContextPostprocessor?: ((domContext: string) => string) | undefined;
+  private historySummaryProvider?: (() => string) | undefined;
 
   constructor(opts: {
     runtime: AgentRuntime;
@@ -65,6 +76,15 @@ export class RuntimeAgent {
     visionExecutor?: LLMProvider;
     visionVerifier?: LLMProvider;
     shortCircuitCanvas?: boolean;
+    structuredPromptBuilder?: (
+      taskGoal: string,
+      stepGoal: string,
+      domContext: string,
+      snap: Snapshot,
+      historySummary: string
+    ) => { systemPrompt: string; userPrompt: string };
+    domContextPostprocessor?: (domContext: string) => string;
+    historySummaryProvider?: () => string;
   }) {
     this.runtime = opts.runtime;
     this.executor = opts.executor;
@@ -72,6 +92,9 @@ export class RuntimeAgent {
     this.visionVerifier = opts.visionVerifier;
     this.shortCircuitCanvas = opts.shortCircuitCanvas ?? true;
     this.structuredLLM = new LLMInteractionHandler(this.executor, false);
+    this.structuredPromptBuilder = opts.structuredPromptBuilder;
+    this.domContextPostprocessor = opts.domContextPostprocessor;
+    this.historySummaryProvider = opts.historySummaryProvider;
   }
 
   async runStep(opts: {
@@ -210,8 +233,31 @@ export class RuntimeAgent {
     snap: Snapshot;
   }): Promise<string> {
     const { taskGoal, step, snap } = opts;
-    const domContext = this.structuredLLM.buildContext(snap, step.goal);
-    const combinedGoal = `${taskGoal}\n\nSTEP: ${step.goal}`;
+    let domContext = this.structuredLLM.buildContext(snap, step.goal);
+    if (this.domContextPostprocessor) {
+      domContext = this.domContextPostprocessor(domContext);
+    }
+
+    const historySummary = (this.historySummaryProvider?.() ?? '').trim();
+
+    if (this.structuredPromptBuilder) {
+      const { systemPrompt, userPrompt } = this.structuredPromptBuilder(
+        taskGoal,
+        step.goal,
+        domContext,
+        snap,
+        historySummary
+      );
+      const resp = await this.executor.generate(systemPrompt, userPrompt, { temperature: 0.0 });
+      return this.extractActionFromText(resp.content);
+    }
+
+    let combinedGoal = taskGoal;
+    if (historySummary) {
+      combinedGoal = `${taskGoal}\n\nRECENT STEPS:\n${historySummary}`;
+    }
+    combinedGoal = `${combinedGoal}\n\nSTEP: ${step.goal}`;
+
     const resp = await this.structuredLLM.queryLLM(domContext, combinedGoal);
     return this.extractActionFromText(resp.content);
   }

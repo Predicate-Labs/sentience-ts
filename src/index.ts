@@ -91,6 +91,13 @@ export { SentienceDebugger, PredicateDebugger } from './debugger';
 export { RuntimeAgent } from './runtime-agent';
 export type { RuntimeStep, StepVerification } from './runtime-agent';
 export { parseVisionExecutorAction, executeVisionExecutorAction } from './vision-executor';
+export {
+  PredicateBrowserAgent,
+  type PredicateBrowserAgentConfig,
+  type PermissionRecoveryConfig,
+  type VisionFallbackConfig,
+  type CaptchaConfig,
+} from './agents/browser-agent';
 export * from './captcha/types';
 export * from './captcha/strategies';
 export * from './tools';
