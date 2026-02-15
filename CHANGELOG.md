@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@predicatelabs/sdk` will be documented in this file.
+All notable changes to `@predicate/sdk` will be documented in this file.
 
 ## Unreleased
 
@@ -24,7 +24,7 @@ import {
   PredicateBrowserAgent,
   type RuntimeStep,
   LocalLLMProvider, // or OpenAIProvider / AnthropicProvider / DeepInfraProvider
-} from '@predicatelabs/sdk';
+} from '@predicate/sdk';
 
 const runtime = new AgentRuntime(browserLike, page, tracer);
 const llm = new LocalLLMProvider({ model: 'qwen2.5:7b', baseUrl: 'http://localhost:11434/v1' });
@@ -65,7 +65,7 @@ const agent = new PredicateBrowserAgent({
 If you set `captcha.policy="callback"`, you must provide a handler. The SDK does **not** include a public CAPTCHA solver.
 
 ```ts
-import { HumanHandoffSolver } from '@predicatelabs/sdk';
+import { HumanHandoffSolver } from '@predicate/sdk';
 
 const agent = new PredicateBrowserAgent({
   runtime,

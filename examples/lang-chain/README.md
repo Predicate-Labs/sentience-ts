@@ -5,7 +5,7 @@ These examples show how to wrap Sentience TS SDK primitives as LangChain JS tool
 Install (example):
 
 ```bash
-npm install @predicatelabs/sdk @langchain/core zod
+npm install @predicate/sdk @langchain/core zod
 ```
 
 Run:
